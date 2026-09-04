@@ -17,7 +17,7 @@ Simple API Benchmark compares four API stacks with the same endpoints, Docker re
 | Node.js | Fastify |
 | Python | FastAPI |
 
-Each implementation provides the same three benchmark endpoints:
+Each implementation will provide the same three benchmark endpoints:
 
 | Test | Endpoint | Simple explanation |
 |---|---|---|
