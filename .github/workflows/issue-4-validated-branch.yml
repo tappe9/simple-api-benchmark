@@ -1,0 +1,122 @@
+name: Issue 4 validated branch
+
+on:
+  push:
+    branches:
+      - feat/issue-4-rust-actix
+
+permissions:
+  contents: write
+
+concurrency:
+  group: issue-4-validated-branch
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      FEATURE_BRANCH: feat/issue-4-rust-actix
+      VALIDATED_BRANCH: validated/issue-4-rust-actix
+    steps:
+      - name: Check out the latest feature branch
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Synchronize the branch
+        run: |
+          git fetch origin
+          git checkout -B "$FEATURE_BRANCH" "origin/$FEATURE_BRANCH"
+
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component clippy,rustfmt
+          rustup override set 1.98.1
+          rustc --version
+          cargo --version
+          docker version
+          docker compose version
+
+      - name: Reapply available setup and safe fixes
+        run: |
+          if [ -f scripts/apply_issue4.py ]; then
+            python3 scripts/apply_issue4.py
+          fi
+          if [ -f scripts/apply_issue4_docs.py ]; then
+            python3 scripts/apply_issue4_docs.py
+          fi
+          python3 - <<'PY'
+          from pathlib import Path
+
+          database = Path("apps/rust-actix/src/database.rs")
+          if database.exists():
+              content = database.read_text(encoding="utf-8")
+              content = content.replace(
+                  "DatabaseConfigError::InvalidPort(port_value))?;",
+                  "DatabaseConfigError::InvalidPort(port_value.clone()))?;",
+              )
+              database.write_text(content, encoding="utf-8")
+          PY
+          cargo generate-lockfile --manifest-path apps/rust-actix/Cargo.toml
+          cargo fmt --manifest-path apps/rust-actix/Cargo.toml
+          (
+            cd apps/rust-actix
+            cargo clippy --fix --locked --all-targets --all-features --allow-dirty --allow-staged -- -D warnings || true
+            cargo fmt
+          )
+
+      - name: Verify Rust formatting, tests, and lints
+        working-directory: apps/rust-actix
+        run: |
+          cargo fmt --check
+          cargo test --locked
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Validate all static repository contracts
+        run: |
+          python3 tests/test_database_environment.py --static
+          python3 tests/test_go_gin_service.py --static
+          python3 tests/test_rust_actix_service.py --static
+          docker compose config
+          git diff --check
+
+      - name: Verify the shared PostgreSQL environment
+        run: make test-db
+
+      - name: Verify the existing Go Gin service
+        run: make test-go-gin
+
+      - name: Verify the Rust Actix Web service
+        run: make test-rust-actix
+
+      - name: Prepare the clean validated tree
+        run: |
+          git rm -f --ignore-unmatch \
+            .github/workflows/issue-4-validation.yml \
+            .github/workflows/issue-4-docs.yml \
+            .github/workflows/issue-4-finalize.yml \
+            .github/workflows/issue-4-finalize-retry.yml \
+            .github/workflows/issue-4-validated-branch.yml \
+            scripts/issue4-green.py \
+            scripts/apply_issue4.py \
+            scripts/apply_issue4_docs.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --quiet --cached; then
+            git commit -m "chore: prepare the validated Issue 4 tree"
+          fi
+          git diff --check HEAD^ HEAD
+
+      - name: Publish only the validated tree
+        run: |
+          git fetch origin "$VALIDATED_BRANCH" || true
+          git push --force-with-lease origin HEAD:"refs/heads/$VALIDATED_BRANCH"
+
+      - name: Clean up containers
+        if: always()
+        run: |
+          make down || true
+          docker compose ps -a || true
