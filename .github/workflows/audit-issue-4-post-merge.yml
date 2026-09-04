@@ -1,0 +1,121 @@
+name: Audit Issue 4 after merge
+
+on:
+  push:
+    branches:
+      - audit/issue-4-post-merge
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: audit-issue-4-post-merge
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      AUDIT_BRANCH: audit/issue-4-post-merge
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out the audit branch
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Wait for the Issue 4 merge to reach main
+        run: |
+          for attempt in $(seq 1 80); do
+            git fetch origin main
+            if git cat-file -e origin/main:apps/rust-actix/Cargo.toml 2>/dev/null; then
+              git checkout --detach origin/main
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "apps/rust-actix/Cargo.toml did not appear on main" >&2
+          exit 1
+
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component clippy,rustfmt
+          rustup override set 1.98.1
+          rustc --version
+          cargo --version
+          docker version
+          docker compose version
+          python3 --version
+
+      - name: Verify Rust quality gates on main
+        working-directory: apps/rust-actix
+        run: |
+          cargo fmt --check
+          cargo test --locked
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Verify static repository contracts on main
+        run: |
+          python3 tests/test_database_environment.py --static
+          python3 tests/test_go_gin_service.py --static
+          python3 tests/test_rust_actix_service.py --static
+          docker compose config
+          git diff --check
+          test -z "$(git status --porcelain)"
+
+      - name: Verify PostgreSQL, Go, and Rust container contracts on main
+        run: |
+          make test-db
+          make test-go-gin
+          make test-rust-actix
+          make down
+          test -z "$(docker compose ps -a --quiet)"
+
+      - name: Record the verified completion on Issue 4
+        run: |
+          issue_state="$(gh issue view 4 --json state --jq .state)"
+          test "$issue_state" = "CLOSED"
+          main_sha="$(git rev-parse HEAD)"
+          pr_json="$(gh pr list --state merged --search 'Rust Actix Web API in:title' --limit 20 --json number,title,mergedAt,mergeCommit --jq 'sort_by(.mergedAt) | last')"
+          pr_number="$(jq -r '.number // empty' <<<"$pr_json")"
+          merge_sha="$(jq -r '.mergeCommit.oid // empty' <<<"$pr_json")"
+          test -n "$pr_number"
+          test -n "$merge_sha"
+          test "$main_sha" = "$merge_sha"
+
+          body="$(cat <<EOF
+          <!-- issue-4-post-merge-verification -->
+          Post-merge verification passed on \\`main\`.
+
+          - Pull request: #$pr_number
+          - Merge commit: \\`$merge_sha\`
+          - \\`cargo fmt --check\`
+          - \\`cargo test --locked\`
+          - \\`cargo clippy --locked --all-targets --all-features -- -D warnings\`
+          - static database, Go/Gin, and Rust/Actix contract checks
+          - \\`make test-db\`
+          - \\`make test-go-gin\`
+          - \\`make test-rust-actix\`
+          - final Compose cleanup
+          EOF
+          )"
+
+          comment_id="$(gh api "repos/$GITHUB_REPOSITORY/issues/4/comments" --paginate --jq '.[] | select(.body | contains("<!-- issue-4-post-merge-verification -->")) | .id' | tail -n 1)"
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" -f body="$body" >/dev/null
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues/4/comments" -f body="$body" >/dev/null
+          fi
+
+      - name: Delete the audit branch
+        if: success()
+        run: git push origin --delete "$AUDIT_BRANCH" || true
+
+      - name: Clean up containers
+        if: always()
+        run: |
+          make down || true
+          docker compose ps -a || true
