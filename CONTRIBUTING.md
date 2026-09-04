@@ -56,6 +56,22 @@ go vet ./...
 
 `make test-go-gin` additionally builds the production image, starts PostgreSQL and Go / Gin through Compose, verifies every documented endpoint, checks the pool and container constraints, and removes all project containers afterward.
 
+The complete Rust / Actix Web validation is:
+
+```bash
+make test-rust-actix
+```
+
+For a faster source-only check while working under `apps/rust-actix/`, run:
+
+```bash
+cargo fmt --check
+cargo test --locked
+cargo clippy --locked --all-targets --all-features -- -D warnings
+```
+
+`make test-rust-actix` additionally builds the release image, starts PostgreSQL and Rust / Actix Web through Compose, verifies every documented endpoint, checks the worker, pool, and container constraints, and removes all project containers afterward.
+
 The following project-wide commands are added by later v0.1 issues:
 
 ```bash

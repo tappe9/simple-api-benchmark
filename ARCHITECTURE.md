@@ -67,6 +67,14 @@ The process starts one HTTP server on internal port `8080`. Its pgx pool is capp
 
 The production image is built with a multi-stage Dockerfile, contains only the statically linked server binary, and runs as non-root user `65532:65532`. Compose limits the container to 1 CPU and 512 MB, waits for PostgreSQL to become healthy, and publishes API port `8080` only on `127.0.0.1` for local validation. The image's health check invokes the same binary in `healthcheck` mode.
 
+#### Rust / Actix Web
+
+The Rust implementation lives in `apps/rust-actix/`. It uses Rust 1.98.1, Actix Web 4.15.0, and SQLx 0.9.0. `src/main.rs` owns process startup and fixes the Actix worker count at one, `src/api.rs` owns the HTTP contract, `src/database.rs` owns PostgreSQL connection configuration, and `src/item.rs` owns the parameterized item lookup abstraction.
+
+The process listens on internal port `8080`, reads the shared `DATABASE_*` settings, and caps the SQLx pool at 10 connections. `/db/{id}` validates the identifier before binding it to the query, while `/cpu` performs direct, uncached recursion for Fibonacci(30) on every request.
+
+The production image is a release multi-stage build and runs as numeric non-root user `65532:65532`. Compose limits the container to 1 CPU and 512 MB, waits for PostgreSQL to become healthy, and publishes API port `8080` only on `127.0.0.1`. The image health check invokes the same binary in `healthcheck` mode.
+
 ### PostgreSQL
 
 One PostgreSQL container is shared by all implementations. It runs as the `postgres` service on the project-scoped `benchmark` network without a published host port. API services connect on internal port `5432` using the common `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, and `DATABASE_PASSWORD` settings defined in the Compose extension field.

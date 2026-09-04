@@ -23,6 +23,10 @@ v0.1 compares one common framework from each language:
 
 The current Go / Gin implementation baseline uses Go 1.27.1, Gin 1.12.0, and pgx/v5 5.10.0. Exact language, framework, server, and database driver versions are stored with each published result so that later dependency updates remain visible.
 
+## Implemented stack baselines
+
+The current Go baseline uses Go 1.27.1, Gin 1.12.0, and pgx/v5 5.10.0. The current Rust baseline uses Rust 1.98.1, Actix Web 4.15.0, and SQLx 0.9.0. Both implementations use one server process or worker, the shared pool maximum of 10 connections, and the same Compose resource limits. Published result files record these versions so later dependency updates remain visible.
+
 ## Tests
 
 ### JSON

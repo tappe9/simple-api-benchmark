@@ -102,6 +102,25 @@ Run the complete Go formatting, unit-test, vet, container, API-contract, resourc
 make test-go-gin
 ```
 
+## Rust / Actix Web implementation
+
+The Rust implementation lives in `apps/rust-actix/` and uses Rust 1.98.1, Actix Web 4.15.0, and SQLx 0.9.0. It runs exactly one Actix worker with a PostgreSQL pool capped at 10 connections. Docker Compose limits the API container to 1 CPU and 512 MB, runs it as non-root user `65532:65532`, and publishes port `8080` only on the loopback interface.
+
+```bash
+docker compose up --detach --build --wait rust-actix
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/json
+curl http://127.0.0.1:8080/db/42
+curl http://127.0.0.1:8080/cpu
+make down
+```
+
+Run the complete Rust formatting, unit-test, Clippy, container, API-contract, resource-limit, and cleanup checks with:
+
+```bash
+make test-rust-actix
+```
+
 ## Planned usage
 
 The v0.1 target is one command:

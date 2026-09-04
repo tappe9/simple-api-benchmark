@@ -102,6 +102,25 @@ Goのformat、unit test、vet、コンテナ起動、API仕様、リソース制
 make test-go-gin
 ```
 
+## Rust / Actix Web実装
+
+Rust実装は`apps/rust-actix/`にあり、Rust 1.98.1、Actix Web 4.15.0、SQLx 0.9.0を使用します。Actix workerは厳密に1つ、PostgreSQLのpool上限は10接続です。Docker ComposeではAPIコンテナを1 CPU・512 MBに制限し、非rootユーザー`65532:65532`で実行します。ポート`8080`はloopback interfaceだけに公開します。
+
+```bash
+docker compose up --detach --build --wait rust-actix
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/json
+curl http://127.0.0.1:8080/db/42
+curl http://127.0.0.1:8080/cpu
+make down
+```
+
+Rustのformat、unit test、Clippy、コンテナ起動、API仕様、リソース制限、クリーンアップをまとめて確認するには、次を実行します。
+
+```bash
+make test-rust-actix
+```
+
 ## 実行方法の目標
 
 v0.1では、次の1コマンドで実行できる状態を目指します。
