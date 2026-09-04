@@ -59,6 +59,8 @@ The initial v0.1 settings are:
 |---|---:|
 | API container CPU limit | 1 CPU |
 | API container memory limit | 512 MB |
+| API server processes/workers | 1 |
+| PostgreSQL pool maximum | 10 connections |
 | Protocol | HTTP/1.1 |
 | Benchmark duration | 30 seconds |
 | Concurrent connections | 50 |
@@ -66,7 +68,7 @@ The initial v0.1 settings are:
 | Runs per test | 3 |
 | Load generator | `oha` |
 
-All implementations run with the same settings and on the same GitHub Actions job.
+All implementations run with the same settings and on the same GitHub Actions job. A framework may use its normal event loop or runtime threads, but it must expose only one server process or worker and remain within the 1 CPU limit.
 
 ## Measurement sequence
 
@@ -78,11 +80,11 @@ For each backend:
 4. run all contract tests;
 5. warm up the selected endpoint for 5 seconds;
 6. run `oha` for 30 seconds;
-7. repeat until three valid runs exist;
-8. collect the API container's peak memory;
+7. perform exactly three measured runs;
+8. collect the API container's peak memory for each run;
 9. stop and remove the API container.
 
-The complete run is repeated for JSON, PostgreSQL, and CPU tests.
+The complete sequence is run for JSON, PostgreSQL, and CPU tests.
 
 ## Displayed values
 
@@ -114,16 +116,15 @@ Displayed run: 10,100 requests/s
 
 ## Valid result rules
 
-A run is invalid when any of the following occurs:
+A test result is invalid when any of its three measured runs has one of the following problems:
 
 - a contract test fails;
 - an HTTP response has an unexpected status;
 - `oha` reports connection errors or timeouts;
 - the API container exits or restarts;
-- memory collection fails;
-- fewer than three valid measurements are produced.
+- memory collection fails.
 
-An invalid or incomplete scheduled benchmark must not replace the latest verified result.
+An invalid or incomplete scheduled benchmark must not replace the latest verified result. Failed runs are not retried until a preferred number appears.
 
 ## GitHub Actions limitations
 
