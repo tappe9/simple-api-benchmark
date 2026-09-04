@@ -38,10 +38,10 @@ The latest verified results will be generated automatically here after v0.1 is i
 | Node.js / Fastify | — | — | — | — |
 | Python / FastAPI | — | — | — | — |
 
-How to read the table:
+How to read the published results:
 
 - More requests per second is better.
-- Lower response time is better.
+- Lower average response time is better and will be shown in the detailed results.
 - Lower peak memory is better.
 - Results only describe the documented test environment.
 
@@ -52,7 +52,8 @@ Every implementation uses:
 - the same API contract;
 - the same input and expected output;
 - the same CPU and memory limits;
-- the same PostgreSQL data and SQL;
+- one server process or worker;
+- the same PostgreSQL data, SQL, and pool limit;
 - the same load settings;
 - three benchmark runs, with the middle result shown.
 
