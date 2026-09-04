@@ -162,6 +162,7 @@ def check_dynamic_contract() -> None:
     primary_error: BaseException | None = None
     try:
         run(["make", "db-up"], timeout=300)
+        run(["make", "db-up"], timeout=300)
 
         container_id = run(
             ["docker", "compose", "ps", "--quiet", "postgres"]
@@ -189,10 +190,14 @@ def check_dynamic_contract() -> None:
             query("SELECT COUNT(*) FROM items WHERE id = 99;") == "0",
             "db-reset retained data from the previous environment",
         )
+
+        run(["make", "db-reset"], timeout=300)
+        check_fixture()
     except BaseException as exc:  # Preserve the first failure while still checking cleanup.
         primary_error = exc
     finally:
         cleanup = run(["make", "down"], check=False)
+        repeated_cleanup = run(["make", "down"], check=False)
         remaining = run(
             ["docker", "compose", "ps", "-a", "--quiet"],
             check=False,
@@ -201,6 +206,11 @@ def check_dynamic_contract() -> None:
         if cleanup.returncode != 0:
             cleanup_error = CheckFailure(
                 f"make down exited with status {cleanup.returncode}"
+            )
+        elif repeated_cleanup.returncode != 0:
+            cleanup_error = CheckFailure(
+                "repeated make down exited with status "
+                f"{repeated_cleanup.returncode}"
             )
         elif remaining.returncode != 0:
             cleanup_error = CheckFailure(
