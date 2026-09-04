@@ -15,7 +15,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - pg_isready --username "$${POSTGRES_USER}" --dbname "$${POSTGRES_DB}"
+        - pg_isready --host 127.0.0.1 --username "$${POSTGRES_USER}" --dbname "$${POSTGRES_DB}"
       interval: 1s
       timeout: 5s
       retries: 30
@@ -24,6 +24,32 @@ services:
       - /var/lib/postgresql:rw,size=512m,mode=1777
     volumes:
       - ./database/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    networks:
+      - benchmark
+    restart: "no"
+
+  go-gin:
+    build:
+      context: ./apps/go-gin
+    environment:
+      <<: *database-environment
+      GIN_MODE: release
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test:
+        - CMD
+        - /go-gin
+        - healthcheck
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    cpus: 1.0
+    mem_limit: 512m
     networks:
       - benchmark
     restart: "no"

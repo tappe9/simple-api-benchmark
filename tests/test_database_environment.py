@@ -36,6 +36,26 @@ def normalized_sql(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def compose_service_block(compose: str, service: str) -> str:
+    lines = compose.splitlines()
+    marker = f"  {service}:"
+    try:
+        start = lines.index(marker)
+    except ValueError as exc:
+        raise CheckFailure(f"Compose service is missing: {service}") from exc
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        line = lines[index]
+        if line and not line.startswith(" "):
+            end = index
+            break
+        if re.match(r"^  [A-Za-z0-9_-]+:\s*$", line):
+            end = index
+            break
+    return "\n".join(lines[start:end])
+
+
 def run(
     command: Sequence[str],
     *,
@@ -86,7 +106,11 @@ def check_static_contract() -> None:
     require("pg_isready" in compose, "PostgreSQL health check is missing")
     require("/var/lib/postgresql" in compose, "PostgreSQL data directory is not backed by tmpfs")
     require("tmpfs:" in compose, "tmpfs configuration is missing")
-    require(not re.search(r"(?m)^\s+ports\s*:", compose), "PostgreSQL must not publish a host port")
+    postgres = compose_service_block(compose, "postgres")
+    require(
+        re.search(r"(?m)^    ports\s*:", postgres) is None,
+        "PostgreSQL must not publish a host port",
+    )
     require(re.search(r"(?m)^\s+benchmark:\s*$", compose) is not None, "benchmark network is missing")
 
     expected_environment = {
