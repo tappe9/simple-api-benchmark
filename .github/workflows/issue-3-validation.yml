@@ -1,0 +1,60 @@
+name: Issue 3 Go Gin validation
+
+on:
+  push:
+    branches:
+      - feat/issue-3-go-gin
+
+permissions:
+  contents: read
+
+jobs:
+  validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the branch
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.0.0
+        with:
+          go-version: 1.27.1
+          cache-dependency-path: apps/go-gin/go.sum
+
+      - name: Show tool versions
+        run: |
+          go version
+          docker version
+          docker compose version
+          make --version | head -n 1
+          python3 --version
+
+      - name: Verify the Go module and unit tests
+        working-directory: apps/go-gin
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          test -z "$(gofmt -l .)"
+          go test ./...
+          go vet ./...
+
+      - name: Validate repository contracts
+        run: |
+          python3 tests/test_database_environment.py --static
+          python3 tests/test_go_gin_service.py --static
+          docker compose config
+          git diff --check
+
+      - name: Verify the shared database environment
+        run: make test-db
+
+      - name: Verify the Go Gin service
+        run: make test-go-gin
+
+      - name: Verify final cleanup
+        if: always()
+        run: |
+          make down
+          docker compose ps -a
+          test -z "$(docker compose ps -a --quiet)"
