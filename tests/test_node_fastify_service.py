@@ -129,7 +129,7 @@ def check_configuration(config: dict) -> None:
     require(Path(service["build"]["context"]).resolve() == APP, "wrong build context")
     require(service["environment"] == {**DB_ENVIRONMENT, "NODE_ENV": "production"}, "wrong environment")
     require(service["depends_on"]["postgres"]["condition"] == "service_healthy", "DB readiness missing")
-    require(float(service["cpus"]) == 1 and service["mem_limit"] == 536870912, "wrong resource limits")
+    require(float(service["cpus"]) == 1 and str(service["mem_limit"]) == "536870912", "wrong resource limits")
     require(service["restart"] == "no", "restarts must be disabled")
     require(set(service["networks"]) == {"benchmark"}, "wrong network")
     ports = service["ports"]
