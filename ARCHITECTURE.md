@@ -53,15 +53,15 @@ Every application exposes:
 ```text
 GET /health
 GET /json
-GET /db/:id
+GET /db/{id}
 GET /cpu
 ```
 
-The exact behavior is defined in [docs/API-CONTRACT.md](docs/API-CONTRACT.md).
+Each implementation exposes one server process or worker. Framework-internal event loops and runtime threads are allowed, but the container remains limited to 1 CPU. The exact endpoint behavior is defined in [docs/API-CONTRACT.md](docs/API-CONTRACT.md).
 
 ### PostgreSQL
 
-One PostgreSQL container is shared by all implementations. The schema and fixture data are created from `database/init.sql`. The DB test uses the same parameterized query and the same row for every backend.
+One PostgreSQL container is shared by all implementations. The schema and fixture data are created from `database/init.sql`. The DB test uses the same parameterized query, the same row, and a maximum pool size of 10 connections for every backend.
 
 ### Contract tests
 
@@ -75,9 +75,9 @@ One PostgreSQL container is shared by all implementations. The schema and fixtur
 2. start one backend at a time;
 3. wait for `GET /health`;
 4. run a short warm-up;
-5. run each test three times with `oha`;
+5. run each test exactly three times with `oha`;
 6. collect throughput, response time, and peak container memory;
-7. reject runs with HTTP errors or timeouts;
+7. reject a test result if any measured run has errors or timeouts;
 8. write `results/latest.json`.
 
 The runner is Python because it is easy to read and is not part of the measured request path.
@@ -156,12 +156,14 @@ A successful run updates the result artifact used by README and GitHub Pages. A 
 The initial v0.1 profile is deliberately easy to explain:
 
 ```text
-API container CPU:       1 CPU
-API container memory:    512 MB
-Benchmark duration:      30 seconds
-Concurrent connections:  50
-Runs per test:            3
-Displayed value:          middle result
+API container CPU:          1 CPU
+API container memory:       512 MB
+API server processes:       1
+PostgreSQL pool maximum:    10 connections
+Benchmark duration:         30 seconds
+Concurrent connections:     50
+Runs per test:               3
+Displayed value:             middle result
 ```
 
 The values may be adjusted before the first published benchmark if GitHub-hosted runner measurements show that the load generator becomes the bottleneck. Any change must be documented before publishing results.
