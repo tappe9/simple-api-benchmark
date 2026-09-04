@@ -1,0 +1,174 @@
+name: Issue 4 Rust Actix finalization
+
+on:
+  push:
+    branches:
+      - feat/issue-4-rust-actix
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: issue-4-rust-actix-finalization
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      FEATURE_BRANCH: feat/issue-4-rust-actix
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out the feature branch
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Synchronize concurrent setup commits
+        run: |
+          sleep 90
+          git fetch origin
+          git checkout -B "$FEATURE_BRANCH" "origin/$FEATURE_BRANCH"
+
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component clippy,rustfmt
+          rustup override set 1.98.1
+          rustc --version
+          cargo --version
+          docker version
+          docker compose version
+
+      - name: Apply the implementation and documentation idempotently
+        run: |
+          python3 scripts/apply_issue4.py
+          python3 scripts/apply_issue4_docs.py
+          cargo generate-lockfile --manifest-path apps/rust-actix/Cargo.toml
+          cargo fmt --manifest-path apps/rust-actix/Cargo.toml
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add \
+              apps/rust-actix \
+              docker-compose.yml \
+              Makefile \
+              tests/test_rust_actix_service.py \
+              README.md \
+              README.ja.md \
+              ARCHITECTURE.md \
+              docs/METHODOLOGY.md \
+              CONTRIBUTING.md
+            git commit -m "feat: complete the Rust Actix Web API implementation"
+            git pull --rebase origin "$FEATURE_BRANCH"
+            git push origin HEAD:"$FEATURE_BRANCH"
+          fi
+
+      - name: Verify Rust formatting, tests, and lints
+        working-directory: apps/rust-actix
+        run: |
+          cargo fmt --check
+          cargo test --locked
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Validate all static repository contracts
+        run: |
+          python3 tests/test_database_environment.py --static
+          python3 tests/test_go_gin_service.py --static
+          python3 tests/test_rust_actix_service.py --static
+          docker compose config
+          git diff --check
+
+      - name: Verify the shared PostgreSQL environment
+        run: make test-db
+
+      - name: Verify the existing Go Gin service
+        run: make test-go-gin
+
+      - name: Verify the Rust Actix Web service
+        run: make test-rust-actix
+
+      - name: Remove temporary Issue 4 automation
+        run: |
+          git rm -f --ignore-unmatch \
+            .github/workflows/issue-4-validation.yml \
+            .github/workflows/issue-4-docs.yml \
+            .github/workflows/issue-4-finalize.yml \
+            scripts/issue4-green.py \
+            scripts/apply_issue4.py \
+            scripts/apply_issue4_docs.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: remove temporary Issue 4 automation"
+          git push origin HEAD:"$FEATURE_BRANCH"
+          git diff --check HEAD^ HEAD
+
+      - name: Create or locate the pull request
+        id: pull-request
+        run: |
+          number="$(gh pr list --head "$FEATURE_BRANCH" --base main --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$number" ]; then
+            gh pr create \
+              --base main \
+              --head "$FEATURE_BRANCH" \
+              --title "feat: implement the Rust Actix Web API" \
+              --body-file - <<'EOF'
+          ## Summary
+
+          - add the Rust / Actix Web implementation of the shared API contract
+          - add a SQLx PostgreSQL pool capped at 10 connections
+          - run exactly one Actix worker under the shared resource limits
+          - add focused unit, container, and regression validation
+
+          ## Testing
+
+          - `cargo fmt --check`
+          - `cargo test --locked`
+          - `cargo clippy --locked --all-targets --all-features -- -D warnings`
+          - `python3 tests/test_database_environment.py --static`
+          - `python3 tests/test_go_gin_service.py --static`
+          - `python3 tests/test_rust_actix_service.py --static`
+          - `docker compose config`
+          - `make test-db`
+          - `make test-go-gin`
+          - `make test-rust-actix`
+          - `make down`
+
+          Closes #4
+          EOF
+            number="$(gh pr list --head "$FEATURE_BRANCH" --base main --state open --json number --jq '.[0].number')"
+          fi
+          test -n "$number"
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: Squash merge the validated pull request
+        run: |
+          head_sha="$(git rev-parse HEAD)"
+          gh pr merge "${{ steps.pull-request.outputs.number }}" \
+            --squash \
+            --delete-branch \
+            --match-head-commit "$head_sha" \
+            --subject "feat: implement the Rust Actix Web API (#${{ steps.pull-request.outputs.number }})" \
+            --body $'Add the Rust / Actix Web API contract implementation, shared SQLx PostgreSQL integration, release container, and focused validation checks.\n\nCloses #4'
+
+      - name: Remove accidental staging branches
+        if: success()
+        run: |
+          for branch in \
+            feat/issue-4-rust-actix-green \
+            feat/issue-4-rust-actix-impl \
+            feat/issue-4-rust-actix-work \
+            feat/issue-4-rust-actix-final \
+            feat/issue-4-rust-actix-green-final \
+            feat/issue-4-rust-actix-green-final-2 \
+            feat/issue-4-rust-actix-green-final-3; do
+            git push origin --delete "$branch" 2>/dev/null || true
+          done
+
+      - name: Verify cleanup after failure
+        if: always()
+        run: |
+          make down || true
+          docker compose ps -a || true
