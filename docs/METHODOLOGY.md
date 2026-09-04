@@ -41,7 +41,7 @@ GET /db/42
 
 Reads one row by primary key and returns JSON. This includes the framework, runtime, PostgreSQL driver, connection pool, database round trip, and serialization.
 
-The database is warmed before measurement. This is not a disk benchmark.
+The shared environment uses PostgreSQL 18.6 from the official `postgres:18.6-bookworm` image pinned by digest. `database/init.sql` creates the exact documented schema and one fixture row. Database data lives on `tmpfs`, and a reset removes the previous environment before recreating the fixture. The database is warmed before measurement, so this is not a disk benchmark.
 
 ### CPU
 
@@ -140,7 +140,13 @@ Comparisons within one run are more meaningful than small changes between differ
 
 ## Reproducibility
 
-The target local command is:
+The shared database environment can be verified independently:
+
+```bash
+make test-db
+```
+
+This check validates the Compose configuration, health status, schema, fixture, reset behavior, and cleanup. The target complete benchmark command remains:
 
 ```bash
 make benchmark

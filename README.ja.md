@@ -59,6 +59,30 @@ v0.1の実装後、確認済みの最新結果を自動生成してここへ表�
 
 計測前にAPIの返却内容を自動確認します。HTTPエラーやタイムアウトが発生した結果は、正常な結果として公開しません。
 
+## ローカルPostgreSQL環境
+
+Docker Compose v2とMakeが必要です。共通DBには、ダイジェストで固定した公式の`postgres:18.6-bookworm`イメージを使用します。Composeプロジェクト内の`benchmark`ネットワーク上で`postgres`サービスとして動作し、ホスト側のポートは公開しません。
+
+| 設定 | 値 |
+|---|---|
+| Service / host | `postgres` |
+| 内部ポート | `5432` |
+| Database | `benchmark` |
+| User | `benchmark` |
+| Password | `benchmark` |
+
+これらは理解しやすさを優先したローカル専用の初期値であり、本番用の認証情報ではありません。今後追加するAPIサービスは、`docker-compose.yml`の共通設定`DATABASE_HOST`、`DATABASE_PORT`、`DATABASE_NAME`、`DATABASE_USER`、`DATABASE_PASSWORD`を使用します。
+
+```bash
+make db-up      # PostgreSQLを起動し、healthy状態とfixtureを確認する
+make db-check   # 起動中DBのfixtureを確認する
+make db-reset   # 現在のDB状態を破棄し、fixtureを再作成する
+make test-db    # 起動・リセット・クリーンアップのacceptance checkを実行する
+make down       # コンテナとプロジェクトネットワークを削除する
+```
+
+PostgreSQLのデータは`tmpfs`上に置かれ、環境を再作成した際に引き継がれません。`database/init.sql`から、常に同じ`items`テーブルと`42 | Item 42 | 4200`の1行を作成します。
+
 ## 実行方法の目標
 
 v0.1では、次の1コマンドで実行できる状態を目指します。

@@ -61,7 +61,11 @@ Each implementation exposes one server process or worker. Framework-internal eve
 
 ### PostgreSQL
 
-One PostgreSQL container is shared by all implementations. The schema and fixture data are created from `database/init.sql`. The DB test uses the same parameterized query, the same row, and a maximum pool size of 10 connections for every backend.
+One PostgreSQL container is shared by all implementations. It runs as the `postgres` service on the project-scoped `benchmark` network without a published host port. API services connect on internal port `5432` using the common `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, and `DATABASE_PASSWORD` settings defined in the Compose extension field.
+
+The environment uses `postgres:18.6-bookworm` pinned to index digest `sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af`. PostgreSQL 18 stores its versioned data directory below `/var/lib/postgresql`, so that parent directory is mounted as `tmpfs`. No benchmark database state survives environment recreation.
+
+The schema and fixture data are created from `database/init.sql`. The DB test uses the same parameterized query, the exact row `(42, 'Item 42', 4200)`, and a maximum pool size of 10 connections for every backend. `make db-up` waits for the Compose health check and validates the fixture, while `make db-reset` removes the current environment before recreating it.
 
 ### Contract tests
 
