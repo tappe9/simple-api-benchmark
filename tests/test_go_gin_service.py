@@ -93,7 +93,11 @@ def check_static_contract() -> None:
     require('GIN_MODE: release' in compose, "Gin release mode is not configured")
 
     dockerfile = (GO_APP / "Dockerfile").read_text(encoding="utf-8")
-    require("FROM golang:1.27.1-bookworm AS build" in dockerfile, "Go builder image is not pinned")
+    require(
+        "FROM golang:1.27.1-bookworm@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b AS build"
+        in dockerfile,
+        "Go builder image is not pinned",
+    )
     require("FROM scratch" in dockerfile, "runtime image is not scratch")
     require("USER 65532:65532" in dockerfile, "runtime does not use the non-root user")
     require('ENTRYPOINT ["/go-gin"]' in dockerfile, "runtime entrypoint is incorrect")
