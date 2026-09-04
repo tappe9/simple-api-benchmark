@@ -23,6 +23,10 @@ v0.1 compares one common framework from each language:
 
 The current Go / Gin implementation baseline uses Go 1.27.1, Gin 1.12.0, and pgx/v5 5.10.0. Exact language, framework, server, and database driver versions are stored with each published result so that later dependency updates remain visible.
 
+The Node / Fastify baseline uses [Node.js 24.20.0 LTS](https://nodejs.org/en/blog/release/v24.20.0), [Fastify 5.12.3](https://www.npmjs.com/package/fastify/v/5.12.3), and [pg 8.23.0](https://www.npmjs.com/package/pg/v/8.23.0). The LTS runtime and stable framework release line are selected for maintenance support. The official Debian Bookworm slim image is fixed by version and index digest in the Dockerfile; exact direct versions and `package-lock.json` freeze the dependency graph. Updating these pins is an explicit baseline change.
+
+Node runs directly as one process with `NODE_ENV=production`, a maximum of 10 DB connections, and the shared 1 CPU / 512 MB limits. Fastify uses its default native-object serialization path without a custom serializer, response schema optimization, cluster mode, or worker threads. CPU requests perform direct recursive Fibonacci(30) on the main event loop, so each CPU calculation occupies that process until completion. This behavior is part of the stack being compared.
+
 ## Tests
 
 ### JSON
@@ -152,7 +156,17 @@ The Go / Gin implementation can be verified independently with:
 make test-go-gin
 ```
 
-This target checks Go formatting, unit tests, `go vet`, Compose configuration, image build, service health, exact endpoint responses, the 1 CPU and 512 MB limits, non-root execution, and cleanup. The target complete benchmark command remains:
+This target checks Go formatting, unit tests, `go vet`, Compose configuration, image build, service health, exact endpoint responses, the 1 CPU and 512 MB limits, non-root execution, and cleanup.
+
+With Node.js 24.20.0 installed, the Node / Fastify implementation can be verified with:
+
+```bash
+make test-node-fastify
+```
+
+It runs `npm ci`, focused Node tests, syntax validation, production image build, exact API responses against PostgreSQL, BIGINT boundaries, sanitized DB errors, resource/process checks, graceful shutdown, and container/network cleanup. These are focused implementation checks; the shared contract suite and benchmark runner are separate future issues. Start and test API services sequentially because they share local port `8080`.
+
+The target complete benchmark command remains:
 
 ```bash
 make benchmark

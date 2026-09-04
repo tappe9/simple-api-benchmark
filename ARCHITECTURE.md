@@ -67,6 +67,14 @@ The process starts one HTTP server on internal port `8080`. Its pgx pool is capp
 
 The production image is built with a multi-stage Dockerfile, contains only the statically linked server binary, and runs as non-root user `65532:65532`. Compose limits the container to 1 CPU and 512 MB, waits for PostgreSQL to become healthy, and publishes API port `8080` only on `127.0.0.1` for local validation. The image's health check invokes the same binary in `healthcheck` mode.
 
+#### Node.js / Fastify
+
+The Node implementation lives in `apps/node-fastify/`. Node.js 24.20.0 LTS, Fastify 5.12.3, and pg 8.23.0 are explicitly pinned, including the transitive dependency lock. `src/app.js` owns routes and native JSON responses, `src/database.js` creates the PostgreSQL pool from all five required `DATABASE_*` settings, and `src/server.js` owns startup and shutdown. `src/healthcheck.js` verifies the readiness response with a two-second timeout.
+
+The process checks PostgreSQL with `SELECT 1` before listening on `0.0.0.0:8080` inside the container. The pool uses at most 10 connections and a five-second connection timeout. Decimal IDs are validated against PostgreSQL's signed BIGINT range before a bound-parameter query. pg returns BIGINT values as strings; safe values become JavaScript numbers, while larger values use the native `JSON.rawJSON` numeric primitive to preserve exact numeric JSON through Fastify's normal serialization path. DB failures return only `{"error":"internal server error"}`. Each `/cpu` request invokes direct recursive Fibonacci(30), with no cached or precomputed result.
+
+The multi-stage Dockerfile installs runtime dependencies with `npm ci --omit=dev --ignore-scripts`. Both stages use `node:24.20.0-bookworm-slim` pinned to index digest `sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e`. The final image excludes tests and dependency-install caches, runs as user `node`, and starts `node src/server.js` directly. Compose applies production mode, PostgreSQL health ordering, 1 CPU / 512 MB, capability removal, no privilege escalation, and loopback-only host port publication. SIGINT/SIGTERM close the server and pool with a five-second shutdown deadline.
+
 ### PostgreSQL
 
 One PostgreSQL container is shared by all implementations. It runs as the `postgres` service on the project-scoped `benchmark` network without a published host port. API services connect on internal port `5432` using the common `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, and `DATABASE_PASSWORD` settings defined in the Compose extension field.

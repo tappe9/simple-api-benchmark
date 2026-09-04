@@ -102,6 +102,26 @@ Run the complete Go formatting, unit-test, vet, container, API-contract, resourc
 make test-go-gin
 ```
 
+## Node.js / Fastify implementation
+
+The Node implementation lives in `apps/node-fastify/` and uses Node.js 24.20.0 LTS, Fastify 5.12.3, and pg 8.23.0. Direct dependencies and `package-lock.json` are pinned; the official `node:24.20.0-bookworm-slim` image is also pinned by digest. The LTS runtime and stable Fastify 5 release line keep this baseline reproducible and maintainable.
+
+It starts one Node process directly in production mode, waits for a PostgreSQL readiness query, and uses a pool capped at 10 connections. The container runs as non-root user `node`, drops Linux capabilities, and uses the shared 1 CPU / 512 MB limits. Only `127.0.0.1:8080` is published. `/json` uses native objects and `/cpu` calculates Fibonacci(30) by direct recursion on every request. Shutdown closes the HTTP server and pool.
+
+Start only one API at a time because implementations share the local port:
+
+```bash
+docker compose up --detach --build --wait node-fastify
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/json
+curl http://127.0.0.1:8080/db/42
+curl http://127.0.0.1:8080/cpu
+make down
+make test-node-fastify
+```
+
+`make test-node-fastify` requires Node.js 24.20.0, npm, Python 3, Docker Compose v2, and Make. It runs focused tests, syntax validation, image and API checks (including real DB updates and errors), resource and process checks, graceful shutdown, and container/network cleanup. Rust / Actix Web and Python / FastAPI are not yet integrated into `main`; no performance results are available.
+
 ## Planned usage
 
 The v0.1 target is one command:
