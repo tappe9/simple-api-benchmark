@@ -26,9 +26,21 @@ Small documentation corrections and clear bug fixes may go directly to a pull re
 
 Use English for source code, identifiers, commit messages, issues, and pull requests. User-facing documentation may provide both English and Japanese versions.
 
-## Planned local commands
+## Local commands
 
-After the related v0.1 issues are implemented:
+The shared PostgreSQL environment is available now:
+
+```bash
+make db-up
+make db-check
+make db-reset
+make test-db
+make down
+```
+
+Run `make test-db` after changing `docker-compose.yml`, `database/init.sql`, the database-related Makefile targets, or their acceptance checks. It performs startup, fixture validation, reset validation, and cleanup. Run `make down` after interrupted manual work.
+
+The following project-wide commands are added by later v0.1 issues:
 
 ```bash
 make test

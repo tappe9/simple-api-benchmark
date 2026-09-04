@@ -59,6 +59,30 @@ Every implementation uses:
 
 Contract tests run before measurements. A result with request errors or timeouts is not published as a valid result.
 
+## Local PostgreSQL environment
+
+Docker Compose v2 and Make are required. The shared database uses the official `postgres:18.6-bookworm` image pinned by digest. It runs as the `postgres` service on the project-scoped `benchmark` network and does not publish a host port.
+
+| Setting | Value |
+|---|---|
+| Service / host | `postgres` |
+| Internal port | `5432` |
+| Database | `benchmark` |
+| User | `benchmark` |
+| Password | `benchmark` |
+
+These are intentionally simple local-only defaults, not production credentials. Future API services use the common `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, and `DATABASE_PASSWORD` settings from `docker-compose.yml`.
+
+```bash
+make db-up      # start PostgreSQL, wait for health, and validate the fixture
+make db-check   # validate the exact fixture in the running database
+make db-reset   # discard all current DB state and recreate the fixture
+make test-db    # run the complete startup, reset, and cleanup acceptance check
+make down       # remove containers and the project network
+```
+
+PostgreSQL data lives on `tmpfs`. It is never reused across a recreated environment, and `database/init.sql` always creates the same `items` table and row `42 | Item 42 | 4200`.
+
 ## Planned usage
 
 The v0.1 target is one command:
