@@ -50,7 +50,7 @@ Content-Type: application/json
 
 Each request must construct or serialize the response through the normal framework path. Returning the JSON example as a fixed string is not allowed.
 
-## `GET /db/:id`
+## `GET /db/{id}`
 
 Reads one PostgreSQL row by primary key and returns it as JSON.
 
