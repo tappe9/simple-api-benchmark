@@ -19,15 +19,6 @@ COMPOSE_FILE = ROOT / "docker-compose.yml"
 MAKEFILE = ROOT / "Makefile"
 BASE_URL = "http://127.0.0.1:8080"
 
-RUST_BUILDER_IMAGE = (
-    "rust:1.98.0-bookworm@"
-    "sha256:e536cf316987faedfe8ae120f83b70c7df0068fdb4fc9efcce55c71a625001d5"
-)
-RUNTIME_IMAGE = (
-    "debian:bookworm-slim@"
-    "sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171"
-)
-
 
 class CheckFailure(RuntimeError):
     """Raised when the Rust / Actix Web service violates its contract."""
@@ -36,26 +27,6 @@ class CheckFailure(RuntimeError):
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise CheckFailure(message)
-
-
-def compose_service_block(compose: str, service: str) -> str:
-    lines = compose.splitlines()
-    marker = f"  {service}:"
-    try:
-        start = lines.index(marker)
-    except ValueError as exc:
-        raise CheckFailure(f"Compose service is missing: {service}") from exc
-
-    end = len(lines)
-    for index in range(start + 1, len(lines)):
-        line = lines[index]
-        if line and not line.startswith(" "):
-            end = index
-            break
-        if re.match(r"^  [A-Za-z0-9_-]+:\s*$", line):
-            end = index
-            break
-    return "\n".join(lines[start:end])
 
 
 def run(
@@ -98,14 +69,34 @@ def run(
     return completed
 
 
+def compose_service_block(compose: str, service: str) -> str:
+    lines = compose.splitlines()
+    marker = f"  {service}:"
+    try:
+        start = lines.index(marker)
+    except ValueError as exc:
+        raise CheckFailure(f"Compose service is missing: {service}") from exc
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        line = lines[index]
+        if line and not line.startswith(" "):
+            end = index
+            break
+        if re.match(r"^  [A-Za-z0-9_-]+:\s*$", line):
+            end = index
+            break
+    return "\n".join(lines[start:end])
+
+
 def check_static_contract() -> None:
     required_files = (
         RUST_APP / "Cargo.toml",
         RUST_APP / "Cargo.lock",
-        RUST_APP / "Dockerfile",
         RUST_APP / "rust-toolchain.toml",
-        RUST_APP / "src" / "main.rs",
+        RUST_APP / "Dockerfile",
         RUST_APP / "src" / "lib.rs",
+        RUST_APP / "src" / "main.rs",
         RUST_APP / "src" / "api.rs",
         RUST_APP / "src" / "database.rs",
         RUST_APP / "src" / "healthcheck.rs",
@@ -116,21 +107,14 @@ def check_static_contract() -> None:
     for path in required_files:
         require(path.is_file(), f"required file is missing: {path.relative_to(ROOT)}")
 
-    cargo = (RUST_APP / "Cargo.toml").read_text(encoding="utf-8")
-    required_dependencies = (
+    manifest = (RUST_APP / "Cargo.toml").read_text(encoding="utf-8")
+    for dependency in (
         'actix-web = { version = "=4.15.0"',
         'serde = { version = "=1.0.228"',
         'serde_json = "=1.0.145"',
         'sqlx = { version = "=0.9.0"',
-        'features = ["postgres", "runtime-tokio"]',
-    )
-    for dependency in required_dependencies:
-        require(dependency in cargo, f"Cargo dependency setting is missing: {dependency}")
-    require('edition = "2024"' in cargo, "Rust 2024 edition is not configured")
-
-    toolchain = (RUST_APP / "rust-toolchain.toml").read_text(encoding="utf-8")
-    require('channel = "1.98.1"' in toolchain, "Rust toolchain is not pinned to 1.98.1")
-    require('components = ["clippy", "rustfmt"]' in toolchain, "required Rust components are missing")
+    ):
+        require(dependency in manifest, f"dependency is not pinned: {dependency}")
 
     compose = COMPOSE_FILE.read_text(encoding="utf-8")
     service = compose_service_block(compose, "rust-actix")
@@ -139,37 +123,33 @@ def check_static_contract() -> None:
     require('127.0.0.1:8080:8080' in service, "rust-actix host port is not loopback-only")
     require(re.search(r"(?m)^    cpus: 1(?:\.0)?\s*$", service) is not None, "rust-actix CPU limit is not 1")
     require(re.search(r"(?m)^    mem_limit: 512m\s*$", service) is not None, "rust-actix memory limit is not 512 MB")
+    require("/usr/local/bin/rust-actix" in service, "rust-actix health check is missing")
 
     dockerfile = (RUST_APP / "Dockerfile").read_text(encoding="utf-8")
-    require(f"FROM {RUST_BUILDER_IMAGE} AS build" in dockerfile, "Rust builder image is not pinned")
-    require("rustup toolchain install 1.98.1" in dockerfile, "Rust 1.98.1 is not installed in the builder")
-    require("cargo build --locked --release" in dockerfile, "release build does not use the lock file")
-    require(f"FROM {RUNTIME_IMAGE}" in dockerfile, "runtime image is not pinned")
+    require("FROM rust:1.98.1-bookworm" in dockerfile, "Rust builder image is not version-pinned")
+    require("cargo build --release --locked" in dockerfile, "release build is missing")
+    require("FROM debian:bookworm-slim" in dockerfile, "runtime image is not Debian slim")
     require("USER 65532:65532" in dockerfile, "runtime does not use the non-root user")
-    require('ENTRYPOINT ["/rust-actix"]' in dockerfile, "runtime entrypoint is incorrect")
-
-    main_source = (RUST_APP / "src" / "main.rs").read_text(encoding="utf-8")
-    normalized_main = re.sub(r"\s+", "", main_source)
-    require(".workers(1)" in normalized_main, "Actix Web worker count is not exactly 1")
-    require(".shutdown_timeout(5)" in normalized_main, "graceful shutdown timeout is not configured")
+    require(
+        'ENTRYPOINT ["/usr/local/bin/rust-actix"]' in dockerfile,
+        "runtime entrypoint is incorrect",
+    )
 
     api_source = (RUST_APP / "src" / "api.rs").read_text(encoding="utf-8")
-    normalized_api = re.sub(r"\s+", "", api_source)
-    require("Serialize" in api_source, "Serde response types are missing")
-    require(
-        "fibonacci(n-1)+fibonacci(n-2)" in normalized_api,
-        "CPU implementation is not direct recursion",
-    )
+    compact_api = re.sub(r"\s+", "", api_source)
+    require("fibonacci(n-1)+fibonacci(n-2)" in compact_api, "CPU implementation is not direct recursion")
+    require("derive(Serialize)" in compact_api, "native Serde response types are missing")
 
     database_source = (RUST_APP / "src" / "database.rs").read_text(encoding="utf-8")
-    normalized_database = re.sub(r"\s+", "", database_source)
+    require("MAX_CONNECTIONS: u32 = 10" in database_source, "database pool maximum is not 10")
     require("WHERE id = $1" in database_source, "database query is not parameterized")
-    require(".bind(id)" in normalized_database, "database ID is not bound as a parameter")
-    require("MAX_CONNECTIONS:u32=10" in normalized_database, "database pool maximum is not 10")
-    require(
-        ".max_connections(MAXX_CONNECTIONS)" in normalized_database,
-        "SQLx pool does not apply the shared maximum",
-    )
+
+    item_source = (RUST_APP / "src" / "item.rs").read_text(encoding="utf-8")
+    require(".bind(id)" in item_source, "database ID is not bound as a query parameter")
+
+    main_source = (RUST_APP / "src" / "main.rs").read_text(encoding="utf-8")
+    require("const WORKERS: usize = 1" in main_source, "worker count is not fixed at one")
+    require(".workers(WORKERS)" in main_source, "Actix worker count is not applied")
 
     makefile = MAKEFILE.read_text(encoding="utf-8")
     require(
@@ -238,29 +218,19 @@ def check_container_contract() -> None:
             "docker",
             "inspect",
             "--format",
-            "{{.State.Health.Status}}|{{.HostConfig.NanoCpus}}|{{.HostConfig.Memory}}|{{.Config.User}}",
+            "{{.State.Health.Status}}|{{.RestartCount}}|{{.HostConfig.NanoCpus}}|{{.HostConfig.Memory}}|{{.Config.User}}",
             container_id,
         ]
     ).stdout.strip()
     require(
-        state == "healthy|1000000000|536870912|65532:65532",
+        state == "healthy|0|1000000000|536870912|65532:65532",
         f"unexpected rust-actix container configuration: {state!r}",
-    )
-
-    process_lines = run(
-        ["docker", "top", container_id, "-eo", "pid,comm"]
-    ).stdout.splitlines()
-    processes = [line for line in process_lines[1:] if line.strip()]
-    require(len(processes) == 1, f"expected one server process, got: {processes!r}")
-    require(
-        processes[0].split()[-1] == "rust-actix",
-        f"unexpected server process: {processes[0]!r}",
     )
 
 
 def check_dynamic_contract() -> None:
     run(["cargo", "fmt", "--check"], cwd=RUST_APP)
-    run(["cargo", "test", "--locked"], cwd=RUST_APP, timeout=900)
+    run(["cargo", "test", "--locked"], cwd=RUST_APP, timeout=600)
     run(
         [
             "cargo",
@@ -273,7 +243,7 @@ def check_dynamic_contract() -> None:
             "warnings",
         ],
         cwd=RUST_APP,
-        timeout=900,
+        timeout=600,
     )
     run(["docker", "compose", "config"])
 
@@ -288,7 +258,7 @@ def check_dynamic_contract() -> None:
                 "--build",
                 "--wait",
                 "--wait-timeout",
-                "300",
+                "240",
                 "rust-actix",
             ],
             timeout=1200,

@@ -1,12 +1,104 @@
+use crate::item::ItemStore;
+use actix_web::{HttpResponse, web};
+use serde::Serialize;
+use std::sync::Arc;
+
+const FIBONACCI_INPUT: u32 = 30;
+
+#[derive(Clone)]
+pub struct AppState {
+    store: Arc<dyn ItemStore>,
+}
+
+impl AppState {
+    #[must_use]
+    pub fn new(store: Arc<dyn ItemStore>) -> Self {
+        Self { store }
+    }
+}
+
+#[derive(Serialize)]
+struct HealthResponse {
+    status: &'static str,
+}
+
+#[derive(Serialize)]
+struct JsonResponse {
+    message: &'static str,
+    items: [u32; 5],
+}
+
+#[derive(Serialize)]
+struct CpuResponse {
+    input: u32,
+    result: u64,
+}
+
+#[derive(Serialize)]
+struct ErrorResponse {
+    error: &'static str,
+}
+
+pub fn configure(configuration: &mut web::ServiceConfig) {
+    configuration
+        .route("/health", web::get().to(health))
+        .route("/json", web::get().to(json))
+        .route("/db/{id}", web::get().to(database))
+        .route("/cpu", web::get().to(cpu));
+}
+
+async fn health() -> HttpResponse {
+    HttpResponse::Ok().json(HealthResponse { status: "ok" })
+}
+
+async fn json() -> HttpResponse {
+    HttpResponse::Ok().json(JsonResponse {
+        message: "Hello, World!",
+        items: [1, 2, 3, 4, 5],
+    })
+}
+
+async fn database(path: web::Path<String>, state: web::Data<AppState>) -> HttpResponse {
+    let Ok(id) = path.into_inner().parse::<i64>() else {
+        return HttpResponse::BadRequest().json(ErrorResponse {
+            error: "invalid id",
+        });
+    };
+
+    match state.store.find_by_id(id).await {
+        Ok(Some(item)) => HttpResponse::Ok().json(item),
+        Ok(None) => HttpResponse::NotFound().json(ErrorResponse { error: "not found" }),
+        Err(_) => HttpResponse::InternalServerError().json(ErrorResponse {
+            error: "internal server error",
+        }),
+    }
+}
+
+async fn cpu() -> HttpResponse {
+    HttpResponse::Ok().json(CpuResponse {
+        input: FIBONACCI_INPUT,
+        result: fibonacci(FIBONACCI_INPUT),
+    })
+}
+
+fn fibonacci(n: u32) -> u64 {
+    match n {
+        0 => 0,
+        1 => 1,
+        _ => fibonacci(n - 1) + fibonacci(n - 2),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{configure, fibonacci, AppState};
+    use super::{AppState, configure, fibonacci};
     use crate::item::{FindItemFuture, Item, ItemStore, ItemStoreError};
     use actix_web::{
-        http::{header, StatusCode},
-        test as actix_test, web, App,
+        App,
+        http::{StatusCode, header},
+        test as actix_test, web,
     };
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use std::sync::{Arc, Mutex};
 
     #[derive(Clone)]
