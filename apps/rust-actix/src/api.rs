@@ -4,7 +4,7 @@ mod tests {
     use crate::item::{FindItemFuture, Item, ItemStore, ItemStoreError};
     use actix_web::{
         http::{header, StatusCode},
-        test, web, App,
+        test as actix_test, web, App,
     };
     use serde_json::{json, Value};
     use std::sync::{Arc, Mutex};
@@ -33,14 +33,14 @@ mod tests {
     }
 
     async fn call(state: AppState, path: &str) -> (StatusCode, String, Value) {
-        let service = test::init_service(
+        let service = actix_test::init_service(
             App::new()
                 .app_data(web::Data::new(state))
                 .configure(configure),
         )
         .await;
-        let request = test::TestRequest::get().uri(path).to_request();
-        let response = test::call_service(&service, request).await;
+        let request = actix_test::TestRequest::get().uri(path).to_request();
+        let response = actix_test::call_service(&service, request).await;
         let status = response.status();
         let content_type = response
             .headers()
@@ -48,7 +48,7 @@ mod tests {
             .and_then(|value| value.to_str().ok())
             .unwrap_or_default()
             .to_owned();
-        let body = test::read_body(response).await;
+        let body = actix_test::read_body(response).await;
         let payload = serde_json::from_slice(&body).expect("response body should be JSON");
         (status, content_type, payload)
     }
