@@ -59,6 +59,14 @@ GET /cpu
 
 Each implementation exposes one server process or worker. Framework-internal event loops and runtime threads are allowed, but the container remains limited to 1 CPU. The exact endpoint behavior is defined in [docs/API-CONTRACT.md](docs/API-CONTRACT.md).
 
+#### Go / Gin
+
+The Go implementation lives in `apps/go-gin/`. It uses Go 1.27.1, Gin 1.12.0, and pgx/v5 5.10.0. `cmd/server` owns process startup and graceful shutdown, `internal/api` owns the HTTP contract, and `internal/database` owns PostgreSQL pool configuration.
+
+The process starts one HTTP server on internal port `8080`. Its pgx pool is capped at 10 connections and reads the shared `DATABASE_*` settings. `/db/{id}` parses the identifier before executing the parameterized query, and `/cpu` performs direct, uncached recursion for Fibonacci(30).
+
+The production image is built with a multi-stage Dockerfile, contains only the statically linked server binary, and runs as non-root user `65532:65532`. Compose limits the container to 1 CPU and 512 MB, waits for PostgreSQL to become healthy, and publishes API port `8080` only on `127.0.0.1` for local validation. The image's health check invokes the same binary in `healthcheck` mode.
+
 ### PostgreSQL
 
 One PostgreSQL container is shared by all implementations. It runs as the `postgres` service on the project-scoped `benchmark` network without a published host port. API services connect on internal port `5432` using the common `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, and `DATABASE_PASSWORD` settings defined in the Compose extension field.

@@ -17,7 +17,7 @@ Simple API Benchmark compares four API stacks with the same endpoints, Docker re
 | Node.js | Fastify |
 | Python | FastAPI |
 
-Each implementation will provide the same three benchmark endpoints:
+Each implementation provides the same three benchmark endpoints:
 
 | Test | Endpoint | Simple explanation |
 |---|---|---|
@@ -71,7 +71,7 @@ Docker Compose v2 and Make are required. The shared database uses the official `
 | User | `benchmark` |
 | Password | `benchmark` |
 
-These are intentionally simple local-only defaults, not production credentials. Future API services use the common `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, and `DATABASE_PASSWORD` settings from `docker-compose.yml`.
+These are intentionally simple local-only defaults, not production credentials. API services use the common `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, and `DATABASE_PASSWORD` settings from `docker-compose.yml`.
 
 ```bash
 make db-up      # start PostgreSQL, wait for health, and validate the fixture
@@ -82,6 +82,25 @@ make down       # remove containers and the project network
 ```
 
 PostgreSQL data lives on `tmpfs`. It is never reused across a recreated environment, and `database/init.sql` always creates the same `items` table and row `42 | Item 42 | 4200`.
+
+## Go / Gin implementation
+
+The Go implementation lives in `apps/go-gin/` and currently uses Go 1.27.1, Gin 1.12.0, and pgx/v5 5.10.0. It runs one server process with a PostgreSQL pool capped at 10 connections. Docker Compose limits the API container to 1 CPU and 512 MB, runs it as non-root user `65532:65532`, and publishes port `8080` only on the loopback interface.
+
+```bash
+docker compose up --detach --build --wait go-gin
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/json
+curl http://127.0.0.1:8080/db/42
+curl http://127.0.0.1:8080/cpu
+make down
+```
+
+Run the complete Go formatting, unit-test, vet, container, API-contract, resource-limit, and cleanup checks with:
+
+```bash
+make test-go-gin
+```
 
 ## Planned usage
 
