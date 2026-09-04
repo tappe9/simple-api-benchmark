@@ -51,6 +51,7 @@ test-go-gin:
 	@$(PYTHON) tests/test_go_gin_service.py
 
 test-node-fastify:
+	@$(PYTHON) -m unittest discover -s tests -p test_node_fastify_acceptance.py
 	@$(PYTHON) tests/test_node_fastify_service.py
 
 down:
