@@ -71,7 +71,7 @@ Docker Compose v2とMakeが必要です。共通DBには、ダイジェストで
 | User | `benchmark` |
 | Password | `benchmark` |
 
-これらは理解しやすさを優先したローカル専用の初期値であり、本番用の認証情報ではありません。今後追加するAPIサービスは、`docker-compose.yml`の共通設定`DATABASE_HOST`、`DATABASE_PORT`、`DATABASE_NAME`、`DATABASE_USER`、`DATABASE_PASSWORD`を使用します。
+これらは理解しやすさを優先したローカル専用の初期値であり、本番用の認証情報ではありません。APIサービスは、`docker-compose.yml`の共通設定`DATABASE_HOST`、`DATABASE_PORT`、`DATABASE_NAME`、`DATABASE_USER`、`DATABASE_PASSWORD`を使用します。
 
 ```bash
 make db-up      # PostgreSQLを起動し、healthy状態とfixtureを確認する
@@ -82,6 +82,25 @@ make down       # コンテナとプロジェクトネットワークを削除�
 ```
 
 PostgreSQLのデータは`tmpfs`上に置かれ、環境を再作成した際に引き継がれません。`database/init.sql`から、常に同じ`items`テーブルと`42 | Item 42 | 4200`の1行を作成します。
+
+## Go / Gin実装
+
+Go実装は`apps/go-gin/`にあり、現在はGo 1.27.1、Gin 1.12.0、pgx/v5 5.10.0を使用します。server processは1つで、PostgreSQLのpool上限は10接続です。Docker ComposeではAPIコンテナを1 CPU・512 MBに制限し、非rootユーザー`65532:65532`で実行します。ポート`8080`はloopback interfaceだけに公開します。
+
+```bash
+docker compose up --detach --build --wait go-gin
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/json
+curl http://127.0.0.1:8080/db/42
+curl http://127.0.0.1:8080/cpu
+make down
+```
+
+Goのformat、unit test、vet、コンテナ起動、API仕様、リソース制限、クリーンアップをまとめて確認するには、次を実行します。
+
+```bash
+make test-go-gin
+```
 
 ## 実行方法の目標
 

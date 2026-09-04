@@ -21,7 +21,7 @@ v0.1 compares one common framework from each language:
 | Node.js / Fastify | Node.js | Fastify |
 | Python / FastAPI | Python | FastAPI |
 
-Exact language, framework, server, and database driver versions are stored with each result.
+The current Go / Gin implementation baseline uses Go 1.27.1, Gin 1.12.0, and pgx/v5 5.10.0. Exact language, framework, server, and database driver versions are stored with each published result so that later dependency updates remain visible.
 
 ## Tests
 
@@ -146,7 +146,13 @@ The shared database environment can be verified independently:
 make test-db
 ```
 
-This check validates the Compose configuration, health status, schema, fixture, reset behavior, and cleanup. The target complete benchmark command remains:
+The Go / Gin implementation can be verified independently with:
+
+```bash
+make test-go-gin
+```
+
+This target checks Go formatting, unit tests, `go vet`, Compose configuration, image build, service health, exact endpoint responses, the 1 CPU and 512 MB limits, non-root execution, and cleanup. The target complete benchmark command remains:
 
 ```bash
 make benchmark

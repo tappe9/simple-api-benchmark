@@ -40,6 +40,22 @@ make down
 
 Run `make test-db` after changing `docker-compose.yml`, `database/init.sql`, the database-related Makefile targets, or their acceptance checks. It performs startup, fixture validation, reset validation, and cleanup. Run `make down` after interrupted manual work.
 
+The complete Go / Gin validation is:
+
+```bash
+make test-go-gin
+```
+
+For a faster source-only check while working under `apps/go-gin/`, run:
+
+```bash
+test -z "$(gofmt -l .)"
+go test ./...
+go vet ./...
+```
+
+`make test-go-gin` additionally builds the production image, starts PostgreSQL and Go / Gin through Compose, verifies every documented endpoint, checks the pool and container constraints, and removes all project containers afterward.
+
 The following project-wide commands are added by later v0.1 issues:
 
 ```bash
