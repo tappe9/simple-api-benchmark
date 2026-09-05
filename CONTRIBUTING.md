@@ -74,7 +74,7 @@ cargo clippy --locked --all-targets --all-features -- -D warnings
 
 The toolchain file selects Rust 1.98.1. Do not regenerate `Cargo.lock`, format files, or apply automatic fixes as part of validation: verify the committed tree. The Docker builder uses a published 1.98.0 image pinned by digest and explicitly installs compiler 1.98.1; the runtime base is independently digest-pinned. Dependency and base-image changes must be intentional and validated with all available DB/API acceptance targets.
 
-The Rust acceptance target also checks native JSON types, real database updates, signed BIGINT boundaries, sanitized query errors, a single non-root server, resource and network settings, startup failure, SIGTERM exit, and connection/container/network cleanup. It does not run a benchmark or replace the future common contract suite.
+The Rust acceptance target also checks native JSON types, real database updates, signed BIGINT boundaries, sanitized query errors, a single non-root server, resource and network settings, startup failure, SIGTERM exit, and connection/container/network cleanup. It does not run a benchmark or replace the shared contract suite.
 
 The complete Node / Fastify validation requires Node.js 24.20.0 (also recorded in `apps/node-fastify/.node-version`), npm, Python 3, Docker Compose v2, and Make:
 
@@ -119,11 +119,70 @@ The exact Python patch version is also recorded in `.python-version`. Tests use 
 
 When updating the Python baseline, review official releases and wheel availability for CPython 3.14, change the `.in` files and exact Python version intentionally, resolve the full runtime and development graphs in a clean environment, and record published wheel SHA256 hashes in both lock files. Review transitive changes, verify the official Docker index digest, and update the matching acceptance expectations and documentation. Never install from an unlocked `.in` file for validation or production. Rerun all DB/API acceptance targets after shared Compose changes.
 
+### Shared contract checks
+
+The common suite needs Python 3.10+ on a POSIX host, Docker Compose v2 with
+`up --wait` support, and Make. It uses only the Python standard library; language
+toolchains are not needed on the host for this target.
+
+```bash
+make test-contract                         # all four implementations, sequentially
+make test-contract CONTRACT_IMPL=go-gin     # one implementation, same assertions
+```
+
+`CONTRACT_IMPL` also accepts `rust-actix`, `node-fastify`, and `python-fastapi`.
+The target first runs the suite's focused tests, then builds and starts the selected
+production services. All expected statuses and JSON objects are read from the
+paired HTTP/JSON examples in `docs/API-CONTRACT.md`; that document remains the
+source of truth. Missing or additional endpoint examples fail closed rather than
+silently dropping coverage. Changes to the contract must update the document and
+its independent focused tests together.
+
+Each backend receives two rounds of seven checks: health, JSON, fixture row,
+unknown ID, two invalid IDs, and CPU. Assertions check HTTP/1.1, status, JSON media
+type, exact keys, values, and types. Object order and whitespace are ignored;
+booleans, floating-point numbers, and strings cannot substitute for integer values.
+Malformed JSON, duplicate fields, unexpected fields, redirects, and overlarge
+responses are rejected. Failures identify the implementation, endpoint, and mismatch.
+
+For an already-running API (no container lifecycle management):
+
+```bash
+python3 -m benchmark.contract_test --base-url http://127.0.0.1:8080 --implementation go-gin
+# Focused tests only, without Docker:
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_contract_*.py' -v
+```
+
+The socket connection timeout and whole-response deadline default to five seconds
+and can be changed with `--timeout` in the standalone suite. Responses are limited
+to 64 KiB. The managed target waits up to 60 seconds for Compose readiness; build,
+startup, and cleanup commands also have finite deadlines. The whole-response
+limit includes slow headers and trickling bodies, not just idle reads.
+
+The runner uses a unique `sab-contract-*` Compose project and explicitly selects
+the repository Compose file. It removes that project's containers, networks, and
+volumes between implementations, recreating the PostgreSQL tmpfs fixture each time.
+It does not mutate fixture rows or tear down another project's services. Stop any
+manually started API first: all services share host port `127.0.0.1:8080`. A port
+conflict fails startup before any contract request is sent.
+
+Build, startup, and assertion failures and handled SIGINT/SIGTERM trigger cleanup;
+cleanup failures are reported and never treated as success. SIGKILL, host shutdown,
+or an unavailable Docker daemon cannot guarantee automatic cleanup. The printed
+project name permits manual recovery with `docker compose -p <project> down
+--remove-orphans --volumes` from the repository root once Docker is available.
+
+Both commands exit non-zero on failure; `run_contract()` raises `ContractFailure`.
+A caller must stop before performance measurement on either failure. The benchmark
+runner that will consume this gate is still a separate issue; these commands never
+measure performance or generate results. Implementation-specific acceptance tests
+remain responsible for internal SQL, uncached computation, process, and resource
+constraints that a response-only check cannot prove.
+
 The following project-wide commands are added by later v0.1 issues:
 
 ```bash
 make test
-make test-contract
 make benchmark
 ```
 

@@ -172,7 +172,7 @@ With Node.js 24.20.0 installed, the Node / Fastify implementation can be verifie
 make test-node-fastify
 ```
 
-It runs `npm ci`, focused Node tests, syntax validation, production image build, exact API responses against PostgreSQL, BIGINT boundaries, sanitized DB errors, resource/process checks, graceful shutdown, and container/network cleanup. These are focused implementation checks; the shared contract suite and benchmark runner are separate future issues. Start and test API services sequentially because they share local port `8080`.
+It runs `npm ci`, focused Node tests, syntax validation, production image build, exact API responses against PostgreSQL, BIGINT boundaries, sanitized DB errors, resource/process checks, graceful shutdown, and container/network cleanup. These are focused implementation checks; the common contract suite is available separately, and the benchmark runner remains future work. Start and test API services sequentially because they share local port `8080`.
 
 With Python 3.14.7 on a POSIX host, Python / FastAPI can be verified with:
 
@@ -180,7 +180,7 @@ With Python 3.14.7 on a POSIX host, Python / FastAPI can be verified with:
 make test-python-fastapi PYTHON=python3.14
 ```
 
-The target verifies SHA256-locked installs, dependency consistency, Ruff, compilation, and focused pytest behavior before real Docker acceptance. It checks native JSON, exact signed BIGINT values, actual SQL updates, sanitized DB errors, startup failure, one non-root worker, resource limits, pool cleanup, and removal of containers and project networks. These checks do not generate benchmark results or replace the future shared contract suite. Docker execution is validated separately from mocked focused tests; unsupported or unexecuted environments must not be reported as passing.
+The target verifies SHA256-locked installs, dependency consistency, Ruff, compilation, and focused pytest behavior before real Docker acceptance. It checks native JSON, exact signed BIGINT values, actual SQL updates, sanitized DB errors, startup failure, one non-root worker, resource limits, pool cleanup, and removal of containers and project networks. These checks do not generate benchmark results or replace the shared contract suite. Docker execution is validated separately from mocked focused tests; unsupported or unexecuted environments must not be reported as passing.
 
 Rust / Actix Web can be verified with:
 
@@ -189,6 +189,19 @@ make test-rust-actix
 ```
 
 This target checks the committed source with rustfmt, locked Rust tests, and Clippy, then builds and verifies the pinned production container. Real DB updates and errors, exact numeric JSON, BIGINT boundaries, startup failure, SIGTERM exit, and DB connection/container/network cleanup are included. Run all available DB/API targets after shared Compose changes. These are implementation acceptance checks, not performance measurements.
+
+All four implementations can now be checked against the same documented contract:
+
+```bash
+make test-contract
+make test-contract CONTRACT_IMPL=python-fastapi
+```
+
+The common target performs no measurement. It uses an isolated Compose project,
+recreates the PostgreSQL fixture between implementations, verifies each endpoint
+twice with strict JSON type and value checks, and fails non-zero before a caller
+may proceed to measurement. See [the shared contract guide](../CONTRIBUTING.md#shared-contract-checks)
+for standalone base-URL checks, deadlines, and failure cleanup behavior.
 
 The target complete benchmark command remains:
 

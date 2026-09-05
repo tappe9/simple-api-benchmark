@@ -7,7 +7,7 @@ All v0.1 implementations must provide the endpoints in this document.
 - Listen on port `8080` inside the container.
 - Use HTTP/1.1.
 - Return the documented status code.
-- Return JSON endpoints with a content type beginning with `application/json`.
+- Return JSON endpoints with the `application/json` media type; optional parameters such as `; charset=utf-8` are allowed.
 - Serialize native language values; do not return a prebuilt JSON byte string.
 - Do not cache benchmark responses.
 - Do not add framework-specific fields.

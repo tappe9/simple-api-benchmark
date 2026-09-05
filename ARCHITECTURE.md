@@ -103,7 +103,20 @@ The schema and fixture data are created from `database/init.sql`. The DB test us
 
 ### Contract tests
 
-`benchmark/contract_test.py` checks response status, content type, and JSON values before any performance measurement. A backend that fails the contract is not benchmarked.
+`benchmark/contract_test.py` reads the HTTP/JSON examples in `docs/API-CONTRACT.md`
+and applies the same assertions to any base URL. It verifies HTTP/1.1, status,
+JSON content type, exact object structure, values, and native JSON types in two
+rounds. Its standard-library transport has socket and whole-response deadlines
+and a response size limit. Failed assertions raise `ContractFailure`; the CLI
+exits non-zero so a later benchmark caller must stop before measuring.
+
+`benchmark/contract_runner.py`, exposed by `make test-contract`, builds and starts
+one implementation at a time on `127.0.0.1:8080`. It waits for Compose readiness
+and tears down its unique project after every implementation, including on failure
+or handled interruption. Recreating PostgreSQL between implementations isolates the
+tmpfs fixture. This is correctness orchestration only, not the benchmark runner.
+See [Contributing](CONTRIBUTING.md#shared-contract-checks) for one/all commands,
+timeouts, cleanup limits, and focused tests.
 
 ### Benchmark runner
 
@@ -139,6 +152,7 @@ simple-api-benchmark/
 ├── benchmark/
 │   ├── config.json
 │   ├── contract_test.py
+│   ├── contract_runner.py
 │   ├── generate_readme.py
 │   └── run.py
 ├── database/
