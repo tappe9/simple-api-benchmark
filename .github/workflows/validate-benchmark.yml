@@ -16,57 +16,19 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Capture pinned upstream inputs and exact repository
-        shell: bash
+      - name: Obtain the already pinned quality tool without changing dependencies
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/inputs"
-          git bundle create "$RUNNER_TEMP/inputs/repository.bundle" --all
-          curl --fail --location --connect-timeout 10 --max-time 120 https://github.com/hatoo/oha/releases/download/v1.16.0/oha-linux-amd64 -o "$RUNNER_TEMP/inputs/oha"
-          echo "620bb9e16fb53eabc9a3fc45f88bdb41fefa3fee5c05e75892011ce320391716  $RUNNER_TEMP/inputs/oha" | sha256sum --check
-          chmod +x "$RUNNER_TEMP/inputs/oha"
-          test "$("$RUNNER_TEMP/inputs/oha" --version)" = 'oha 1.16.0'
-          curl --fail --location --connect-timeout 10 --max-time 120 https://codeload.github.com/hatoo/oha/tar.gz/refs/tags/v1.16.0 -o "$RUNNER_TEMP/inputs/oha-source.tar.gz"
-          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_contract_*.py' -v
-      - name: Capture real oha JSON fixtures, not benchmark results
-        run: |
-          python3 - <<'PY'
-          import http.server, json, os, pathlib, subprocess, threading, time
-          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'inputs'
-          class Handler(http.server.BaseHTTPRequestHandler):
-              protocol_version = 'HTTP/1.1'
-              def do_GET(self):
-                  if self.path == '/slow': time.sleep(0.2)
-                  body = b'{"fixture":true}'
-                  self.send_response(503 if self.path == '/error' else 200)
-                  self.send_header('Content-Type', 'application/json')
-                  self.send_header('Content-Length', str(len(body)))
-                  self.end_headers()
-                  try: self.wfile.write(body)
-                  except (BrokenPipeError, ConnectionResetError): pass
-              def log_message(self, *_): pass
-          server = http.server.ThreadingHTTPServer(('127.0.0.1', 18080), Handler)
-          thread = threading.Thread(target=server.serve_forever, daemon=True)
-          thread.start()
-          base = [str(root / 'oha'), '--no-tui', '--output-format', 'json', '--http-version', '1.1', '--redirect', '0']
-          commands = {
-              'success': ['-n', '20', '-c', '2', '-t', '2s', 'http://127.0.0.1:18080/'],
-              'timed': ['-z', '1s', '-w', '-c', '2', '-t', '2s', 'http://127.0.0.1:18080/'],
-              'http-error': ['-n', '20', '-c', '2', '-t', '2s', 'http://127.0.0.1:18080/error'],
-              'timeout': ['-n', '4', '-c', '2', '-t', '0.05s', 'http://127.0.0.1:18080/slow'],
-          }
-          try:
-              for name, args in commands.items():
-                  result = subprocess.run(base + args, capture_output=True, text=True, timeout=15)
-                  (root / (name + '.json')).write_text(result.stdout)
-                  print(name, 'exit:', result.returncode, 'stderr:', result.stderr)
-                  print(result.stdout)
-          finally:
-              server.shutdown(); server.server_close(); thread.join(timeout=5)
-          PY
+          mkdir -p "$RUNNER_TEMP/tools"
+          grep '^ruff==' apps/python-fastapi/requirements-dev.lock > "$RUNNER_TEMP/ruff.lock"
+          python3 -m venv "$RUNNER_TEMP/quality"
+          "$RUNNER_TEMP/quality/bin/python" -m pip install --require-hashes --only-binary=:all: -r "$RUNNER_TEMP/ruff.lock"
+          cp "$RUNNER_TEMP/quality/bin/ruff" "$RUNNER_TEMP/tools/ruff"
+          "$RUNNER_TEMP/tools/ruff" --version
+          git bundle create "$RUNNER_TEMP/tools/repository.bundle" --all
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: benchmark-development-inputs
-          path: ${{ runner.temp }}/inputs/
+          name: benchmark-quality-tools
+          path: ${{ runner.temp }}/tools/
           retention-days: 7
           if-no-files-found: error
