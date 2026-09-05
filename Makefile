@@ -70,3 +70,17 @@ test-contract:
 down:
 	@echo "Removing benchmark containers and project network..."
 	@$(COMPOSE) down --remove-orphans --volumes
+
+.PHONY: benchmark test-benchmark benchmark-smoke install-oha
+
+install-oha:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.run --install-only
+
+test-benchmark:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p 'test_benchmark_*.py' -v
+
+benchmark:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.run --compose "$(COMPOSE)"
+
+benchmark-smoke:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.run --compose "$(COMPOSE)" --smoke
