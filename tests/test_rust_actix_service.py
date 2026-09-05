@@ -256,8 +256,10 @@ def check_container_contract() -> str:
             "server is not the direct container process")
     require(state["NetworkSettings"]["Ports"]["8080/tcp"]
             == [{"HostIp": "127.0.0.1", "HostPort": "8080"}], "port is not loopback-only")
-    processes = run(["docker", "top", container_id, "-eo", "args"]).stdout.splitlines()[1:]
-    require(sum(line.strip() == "/usr/local/bin/rust-actix" for line in processes) == 1,
+    processes = run(["docker", "top", container_id, "-eo", "pid,args"]).stdout.splitlines()[1:]
+    commands = [line.split(maxsplit=1) for line in processes]
+    require(sum(len(fields) == 2 and fields[0].isdigit()
+                and fields[1] == "/usr/local/bin/rust-actix" for fields in commands) == 1,
             "expected one server process")
     run(["docker", "compose", "exec", "-T", "rust-actix", "sh", "-c",
          "test $(id -u) = 65532 && ! command -v cargo && ! command -v rustc && test ! -d /src"])

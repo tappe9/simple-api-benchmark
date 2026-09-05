@@ -1,4 +1,4 @@
-"""Ensure Rust-only acceptance assertions reject incorrect JSON numeric types."""
+"""Regression tests for Rust-only JSON and container acceptance assertions."""
 
 import io
 import json
@@ -58,6 +58,55 @@ class AcceptanceTests(unittest.TestCase):
             "/cpu", {"input": 30, "result": 832040.0}
         )), self.assertRaises(service.CheckFailure):
             service.check_endpoints()
+
+
+class ContainerProcessTests(unittest.TestCase):
+    def run_commands(self, process_rows):
+        state = {
+            "State": {"Health": {"Status": "healthy"}},
+            "RestartCount": 0,
+            "HostConfig": {
+                "NanoCpus": 1000000000, "Memory": 536870912,
+                "RestartPolicy": {"Name": "no"}, "Privileged": False,
+                "CapDrop": ["ALL"], "SecurityOpt": ["no-new-privileges:true"],
+            },
+            "Config": {"User": "65532:65532"},
+            "Path": "/usr/local/bin/rust-actix", "Args": [],
+            "NetworkSettings": {"Ports": {
+                "8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8080"}],
+            }},
+        }
+
+        def execute(command, **kwargs):
+            if command == ["docker", "compose", "ps", "--quiet", "rust-actix"]:
+                output = "container-id\n"
+            elif command == ["docker", "inspect", "container-id"]:
+                output = json.dumps([state])
+            elif command[:2] == ["docker", "top"]:
+                self.assertEqual(command, ["docker", "top", "container-id", "-eo", "pid,args"])
+                output = "PID COMMAND\n" + process_rows
+            elif command[:3] == ["docker", "compose", "exec"]:
+                output = ""
+            else:
+                self.fail(f"unexpected command: {command}")
+            return service.subprocess.CompletedProcess(command, 0, output, "")
+        return execute
+
+    def test_one_server_with_healthcheck_is_accepted(self):
+        processes = "8824 /usr/local/bin/rust-actix\n9000 /usr/local/bin/rust-actix healthcheck\n"
+        with patch.object(service, "run", side_effect=self.run_commands(processes)):
+            self.assertEqual(service.check_container_contract(), "container-id")
+
+    def test_multiple_servers_are_rejected(self):
+        processes = "8824 /usr/local/bin/rust-actix\n9000 /usr/local/bin/rust-actix\n"
+        with patch.object(service, "run", side_effect=self.run_commands(processes)):
+            with self.assertRaisesRegex(service.CheckFailure, "expected one server process"):
+                service.check_container_contract()
+
+    def test_missing_server_is_rejected(self):
+        with patch.object(service, "run", side_effect=self.run_commands("9000 sleep 1\n")):
+            with self.assertRaisesRegex(service.CheckFailure, "expected one server process"):
+                service.check_container_contract()
 
 
 if __name__ == "__main__":
