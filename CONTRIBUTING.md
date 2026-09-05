@@ -56,6 +56,25 @@ go vet ./...
 
 `make test-go-gin` additionally builds the production image, starts PostgreSQL and Go / Gin through Compose, verifies every documented endpoint, checks the pool and container constraints, and removes all project containers afterward.
 
+The complete Node / Fastify validation requires Node.js 24.20.0 (also recorded in `apps/node-fastify/.node-version`), npm, Python 3, Docker Compose v2, and Make:
+
+```bash
+make test-node-fastify
+```
+
+For focused tests without Docker:
+
+```bash
+cd apps/node-fastify
+npm ci
+npm test
+npm run lint
+```
+
+Tests use the standard Node runner and Fastify's `inject()` API. `lint` is Node syntax validation, with no additional lint dependencies. The Docker acceptance check also validates actual SQL reads and updates, error responses, exact BIGINT serialization, image dependencies, a single non-root Node process, resource limits, SIGTERM shutdown, pool closure, and container/network cleanup. API implementations share host port `8080`; run them one at a time and use `make down` between manual sessions.
+
+Run the available DB and API acceptance targets after modifying shared Compose configuration. To update the Node baseline, intentionally change the exact runtime/dependency versions, regenerate and review `package-lock.json`, verify the official image digest, and update the matching documentation and acceptance expectations. The production image installs only runtime dependencies and starts Node directly.
+
 The following project-wide commands are added by later v0.1 issues:
 
 ```bash

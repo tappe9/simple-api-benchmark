@@ -102,6 +102,26 @@ Goのformat、unit test、vet、コンテナ起動、API仕様、リソース制
 make test-go-gin
 ```
 
+## Node.js / Fastify実装
+
+Node実装は`apps/node-fastify/`にあり、Node.js 24.20.0 LTS、Fastify 5.12.3、pg 8.23.0を使用します。直接依存と`package-lock.json`を固定し、公式の`node:24.20.0-bookworm-slim`イメージもdigestで固定します。再現性と保守性のため、LTSランタイムと安定版のFastify 5系を採用しています。
+
+production modeでNode processを直接1つ起動し、PostgreSQLへの確認queryが成功してからHTTP接続を受け付けます。pool上限は10接続です。コンテナは非rootユーザー`node`で実行し、Linux capabilitiesを削除し、共通の1 CPU・512 MB制限を適用します。公開先は`127.0.0.1:8080`だけです。`/json`は通常のobjectをシリアライズし、`/cpu`は毎request直接再帰でFibonacci(30)を計算します。終了時はHTTP serverとpoolを閉じます。
+
+各APIは同じローカルポートを使うため、1つずつ起動してください。
+
+```bash
+docker compose up --detach --build --wait node-fastify
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/json
+curl http://127.0.0.1:8080/db/42
+curl http://127.0.0.1:8080/cpu
+make down
+make test-node-fastify
+```
+
+`make test-node-fastify`にはNode.js 24.20.0、npm、Python 3、Docker Compose v2、Makeが必要です。focused tests、構文検証、image・API確認（実DBの更新・異常系を含む）、resource・process確認、正常終了、container・networkの削除を実行します。Rust / Actix WebとPython / FastAPIはまだ`main`に統合されておらず、性能測定結果もありません。
+
 ## 実行方法の目標
 
 v0.1では、次の1コマンドで実行できる状態を目指します。
