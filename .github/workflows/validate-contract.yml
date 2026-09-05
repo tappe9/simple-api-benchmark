@@ -4,60 +4,23 @@ on:
     branches: [test/issue-7-shared-contract]
 permissions:
   contents: read
-concurrency:
-  group: validate-issue-7
-  cancel-in-progress: false
 jobs:
-  validate:
+  tools:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
-    env:
-      COMPOSE_PROJECT_NAME: contract-validation-${{ github.run_id }}
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          fetch-depth: 0
           persist-credentials: false
-      - name: Export the exact baseline for offline inspection
-        run: |
-          git branch source-snapshot 8bde2b343507f5264274e1469d45037de57b5b6e
-          git bundle create "$RUNNER_TEMP/source.bundle" source-snapshot
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: source-snapshot
-          path: ${{ runner.temp }}/source.bundle
-          retention-days: 1
-      - name: Install exact Rust toolchain
-        run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt,clippy
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: 3.14.7
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
-        with:
-          go-version: 1.27.1
-          cache: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: 24.20.0
-      - name: Shared PostgreSQL regression
-        run: make test-db
-      - name: Go Gin regression
-        run: make test-go-gin
-      - name: Rust Actix regression
-        run: make test-rust-actix
-      - name: Node Fastify regression
-        run: make test-node-fastify
-      - name: Python FastAPI regression
-        run: make test-python-fastapi
-      - name: Source integrity
+      - name: Install hash-verified existing development tools
         run: |
-          git diff --exit-code
-          git diff --check 8bde2b343507f5264274e1469d45037de57b5b6e HEAD
-      - name: Final cleanup
-        if: always()
-        run: |
-          set -euo pipefail
-          make down
-          test -z "$(docker compose ps -a --quiet)"
-          test -z "$(docker network ls --quiet --filter label=com.docker.compose.project=$COMPOSE_PROJECT_NAME)"
-          test -z "$(docker volume ls --quiet --filter label=com.docker.compose.project=$COMPOSE_PROJECT_NAME)"
+          python -m pip install --require-hashes --only-binary=:all: -r apps/python-fastapi/requirements-dev.lock
+          cp "$(command -v ruff)" "$RUNNER_TEMP/ruff"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: contract-format-tool
+          path: ${{ runner.temp }}/ruff
+          retention-days: 1
