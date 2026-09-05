@@ -145,7 +145,7 @@ class WorkflowTests(unittest.TestCase):
         )
         self.assertEqual(workflow["on"]["workflow_run"]["types"], ["completed"])
         self.assertEqual(workflow["permissions"], {"contents": "read"})
-        self.assertEqual(set(workflow["jobs"]), {"build", "deploy"})
+        self.assertEqual(set(workflow["jobs"]), {"build", "deploy", "release"})
         build = workflow["jobs"]["build"]
         self.assertEqual(build.get("permissions", {"contents": "read"}), {"contents": "read"})
         self.assertIn("python -m benchmark.pages", str(build))
@@ -166,8 +166,33 @@ class WorkflowTests(unittest.TestCase):
             )
         )
         content = (ROOT / ".github/workflows/pages.yml").read_text()
-        for forbidden in ("pull_request:", "pull_request_target", "contents: write", "secrets."):
+        for forbidden in ("pull_request:", "pull_request_target", "secrets."):
             self.assertNotIn(forbidden, content)
+
+    def test_v0_1_0_release_is_after_pages_and_only_from_successful_main_ci(self):
+        workflow = load("pages.yml")
+        release = workflow["jobs"]["release"]
+        self.assertEqual(release["needs"], "deploy")
+        self.assertEqual(release["permissions"], {"contents": "write"})
+        condition = release["if"]
+        for expected in (
+            "github.event_name == 'workflow_run'",
+            "github.event.workflow_run.name == 'CI'",
+            "github.event.workflow_run.event == 'push'",
+            "github.event.workflow_run.conclusion == 'success'",
+            "github.event.workflow_run.head_sha == github.sha",
+            "github.event.workflow_run.head_repository.full_name == github.repository",
+        ):
+            self.assertIn(expected, condition)
+        self.assertEqual(len(release["steps"]), 1)
+        step = release["steps"][0]
+        self.assertEqual(step["env"], {"GH_TOKEN": "${{ github.token }}"})
+        command = step["run"]
+        self.assertIn("gh release view v0.1.0", command)
+        self.assertIn("gh release create v0.1.0", command)
+        self.assertIn('--target "$GITHUB_SHA"', command)
+        self.assertIn("GitHub-hosted runners are shared", command)
+        self.assertNotIn("${{", command)
 
 
 if __name__ == "__main__":
