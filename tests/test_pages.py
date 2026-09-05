@@ -144,7 +144,6 @@ class PagesContextTests(unittest.TestCase):
         with self.assertRaises(BenchmarkFailure):
             self.validate(**arguments)
 
-
     def test_missing_or_malformed_upstream_repository_is_a_controlled_rejection(self):
         for repository in (None, [], "foreign", {}):
             self.event["workflow_run"]["head_repository"] = repository
