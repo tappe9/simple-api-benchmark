@@ -120,16 +120,25 @@ timeouts, cleanup limits, and focused tests.
 
 ### Benchmark runner
 
-`benchmark/run.py` is the orchestration entry point. It will:
+`benchmark/run.py` is the implemented orchestration entry point. It:
 
-1. read `benchmark/config.json`;
-2. start one backend at a time;
-3. wait for `GET /health`;
-4. run a short warm-up;
-5. run each test exactly three times with `oha`;
-6. collect throughput, response time, and peak container memory;
-7. reject a test result if any measured run has errors or timeouts;
-8. write `results/latest.json`.
+1. reads and validates `benchmark/config.json`;
+2. verifies the version and SHA256 of a pinned oha release asset;
+3. builds and starts one backend with fresh PostgreSQL fixtures;
+4. waits for readiness and calls the shared `run_contract()` on that running API;
+5. warms each endpoint, then runs exactly three fixed-duration measurements;
+6. validates oha output and samples only the API container's memory and lifecycle;
+7. selects the middle-throughput whole run, retaining all three summaries;
+8. removes the owned Compose project, including on failure or interruption;
+9. atomically saves `results/latest.json` only after every backend and teardown succeeds.
+
+`benchmark/results.py` owns strict output parsing, whole-run selection and atomic
+saving. `benchmark/process.py` bounds external commands and their process groups.
+`benchmark/environment.py` owns isolated Compose execution and API-only memory
+sampling; `benchmark/install_oha.py` owns verified load-generator installation.
+No API implementation contains benchmark-specific logic. See
+[the benchmark guide](docs/BENCHMARK.md) for schema, failure boundaries and sampling
+limitations. Generated local results are not official publications.
 
 The runner is Python because it is easy to read and is not part of the measured request path.
 
@@ -178,15 +187,14 @@ Directories are added only when the related implementation issue is completed.
 
 ```text
 make benchmark
-  ├─ build Docker images
-  ├─ start PostgreSQL
-  ├─ verify all API contracts
-  ├─ benchmark JSON
-  ├─ benchmark PostgreSQL
-  ├─ benchmark CPU
-  ├─ collect memory values
-  ├─ write results/latest.json
-  └─ stop containers
+  ├─ verify configuration, source and oha
+  ├─ for each API (sequentially)
+  │    ├─ build and start API + fresh PostgreSQL
+  │    ├─ readiness + shared contract
+  │    ├─ warm-up + three measured runs per endpoint
+  │    ├─ validate results + select one whole run
+  │    └─ cleanup owned containers/network/volumes
+  └─ atomically write results/latest.json after all success
 ```
 
 Cleanup must run even when a build, contract test, or benchmark fails.

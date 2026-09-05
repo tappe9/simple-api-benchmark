@@ -170,23 +170,31 @@ make test-contract CONTRACT_IMPL=go-gin  # 1実装を同じ契約で検証
 HTTP status、JSONの内容・型、規定のerror response、応答の再現性を確認し、
 失敗時にも分離された検証環境を片付けます。必要な環境、起動済みAPIのbase URLを指定する
 方法、cleanupの制約は[共通contractの実行ガイド](CONTRIBUTING.md#shared-contract-checks)を
-参照してください。benchmark runnerと恒久CIは今後の対象であり、性能測定結果はありません。
+参照してください。ローカルのbenchmark runnerは利用可能です。恒久CIと公式結果の公開は今後の対象です。
 
-## 実行方法の目標
+## ローカルでの計測
 
-v0.1では、次の1コマンドで実行できる状態を目指します。
+変更をcommitした作業ツリー、Python 3.10以上、curl、ローカルのDocker Compose v2で実行します。
 
 ```bash
 make benchmark
 ```
 
-コンテナのビルド、API確認、ベンチマーク、`results/latest.json`の生成までを行います。
+SHA256とversionを固定したoha 1.16.0を検証・導入し、APIを1つずつビルド・起動します。
+共通contractの成功後、各endpointを規定条件でwarm-upし、3回ずつ計測します。
+全計測とcleanupが成功した場合だけ、`results/latest.json`をatomicに保存します。
+途中失敗では既存結果を保持します。生成ファイルはローカル結果であり、公式公開結果ではありません。
+
+focused testsは`make test-benchmark`、短縮診断は`make benchmark-smoke`です。
+短縮診断は`latest.json`を更新しません。必要環境、単位、結果形式、期限、メモリサンプリングの制約は
+[実行・結果形式ガイド](docs/BENCHMARK.md)を参照してください。
 
 ## ドキュメント
 
 - [アーキテクチャ](ARCHITECTURE.md)
 - [API仕様](docs/API-CONTRACT.md)
 - [測定方法](docs/METHODOLOGY.md)
+- [実行・結果形式](docs/BENCHMARK.md)
 - [ロードマップ](ROADMAP.md)
 - [コントリビューション](CONTRIBUTING.md)
 - [セキュリティ](SECURITY.md)

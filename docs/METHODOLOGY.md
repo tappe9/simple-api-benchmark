@@ -172,7 +172,7 @@ With Node.js 24.20.0 installed, the Node / Fastify implementation can be verifie
 make test-node-fastify
 ```
 
-It runs `npm ci`, focused Node tests, syntax validation, production image build, exact API responses against PostgreSQL, BIGINT boundaries, sanitized DB errors, resource/process checks, graceful shutdown, and container/network cleanup. These are focused implementation checks; the common contract suite is available separately, and the benchmark runner remains future work. Start and test API services sequentially because they share local port `8080`.
+It runs `npm ci`, focused Node tests, syntax validation, production image build, exact API responses against PostgreSQL, BIGINT boundaries, sanitized DB errors, resource/process checks, graceful shutdown, and container/network cleanup. These are focused implementation checks; the common contract suite is available separately, and the local benchmark runner is available separately. Start and test API services sequentially because they share local port `8080`.
 
 With Python 3.14.7 on a POSIX host, Python / FastAPI can be verified with:
 
@@ -203,7 +203,7 @@ twice with strict JSON type and value checks, and fails non-zero before a caller
 may proceed to measurement. See [the shared contract guide](../CONTRIBUTING.md#shared-contract-checks)
 for standalone base-URL checks, deadlines, and failure cleanup behavior.
 
-The target complete benchmark command remains:
+The complete local benchmark command is:
 
 ```bash
 make benchmark
@@ -222,3 +222,17 @@ The result file records:
 - the three raw summaries and selected run.
 
 Anyone may rerun the same commit and compare the generated JSON.
+
+## Runner implementation details
+
+See [the execution and result-format guide](BENCHMARK.md) for strict oha 1.16.0
+parsing, verified installation, atomic saving and cleanup. The 30-second setting
+is oha's request-sending window; `-w` drains in-flight requests with a 15-second
+request timeout. Reported requests/s uses actual elapsed time including drain.
+Errors and timeouts invalidate the result rather than being dropped or retried.
+
+Peak memory is the maximum observed, rounded Docker CLI API-container sample,
+excluding inactive file cache on Linux. It is not a continuous kernel high-water
+mark; sample timestamps/counts are retained and short peaks can be missed.
+PostgreSQL is not included. Local and development-validation reports are marked
+`official: false`; the runner does not publish README/Pages results or history.

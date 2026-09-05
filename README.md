@@ -170,24 +170,33 @@ make test-contract CONTRACT_IMPL=go-gin  # one API with the same contract
 The suite checks exact statuses, JSON content and types, documented errors, and
 repeated responses, and cleans up its isolated environments even after failure.
 See [the shared contract guide](CONTRIBUTING.md#shared-contract-checks) for
-requirements, standalone base-URL checks, and cleanup limits. The benchmark runner
-and permanent CI remain future work; no performance results are available.
+requirements, standalone base-URL checks, and cleanup limits. The local benchmark runner
+is available; permanent CI and official result publication remain future work.
 
-## Planned usage
+## Run the local benchmark
 
-The v0.1 target is one command:
+With a clean committed source tree, Python 3.10+, curl and local Docker Compose v2:
 
 ```bash
 make benchmark
 ```
 
-It will build the containers, verify the APIs, run the benchmarks, and write `results/latest.json`.
+It verifies/installs checksum-pinned oha 1.16.0, builds and starts one API at a time,
+runs the shared contract, performs the fixed warm-up and three measured runs per
+endpoint, and atomically writes `results/latest.json` only after all results and
+cleanup succeed. Existing results survive any partial failure. The generated file
+is a local result, not an official publication.
+
+Use `make test-benchmark` for focused tests or `make benchmark-smoke` for a short
+diagnostic that never replaces `latest.json`. See [the benchmark guide](docs/BENCHMARK.md)
+for requirements, exact units, result schema, deadlines and memory-sampling limitations.
 
 ## Documentation
 
 - [Architecture](ARCHITECTURE.md)
 - [API contract](docs/API-CONTRACT.md)
 - [Benchmark methodology](docs/METHODOLOGY.md)
+- [Running benchmarks and result format](docs/BENCHMARK.md)
 - [Roadmap](ROADMAP.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security](SECURITY.md)
