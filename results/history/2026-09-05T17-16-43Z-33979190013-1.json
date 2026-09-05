@@ -1,0 +1,717 @@
+{
+  "schema_version": 1,
+  "status": "verified",
+  "mode": "official",
+  "official": true,
+  "started_at": "2026-09-05T16:53:28.651292+00:00",
+  "conditions": {
+    "schema_version": 1,
+    "api_cpus": 1,
+    "api_memory_bytes": 536870912,
+    "workers": 1,
+    "pool_max": 10,
+    "http_version": "1.1",
+    "warmup_seconds": 5,
+    "duration_seconds": 30,
+    "connections": 50,
+    "runs": 3,
+    "request_timeout_seconds": 15,
+    "endpoints": [
+      "/json",
+      "/db/42",
+      "/cpu"
+    ]
+  },
+  "metadata": {
+    "source_commit": "f839bbf5ecc25a22648eeeaa7a169d7f0ab9c075",
+    "source_tree": "b4c4e4a8e50c133f3bd77e33169fefcbcac5edc7",
+    "os": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+    "architecture": "x86_64",
+    "host_cpu_count": 4,
+    "docker": {
+      "ServerVersion": "28.0.4",
+      "OperatingSystem": "Ubuntu 24.04.4 LTS",
+      "Architecture": "x86_64",
+      "NCPU": 4,
+      "MemTotal": 16766414848,
+      "KernelVersion": "6.17.0-1022-azure"
+    },
+    "oha": {
+      "version": "1.16.0",
+      "asset": "oha-linux-amd64",
+      "sha256": "620bb9e16fb53eabc9a3fc45f88bdb41fefa3fee5c05e75892011ce320391716"
+    },
+    "versions": {
+      "go-gin": {
+        "go": "1.27.1",
+        "gin": "1.12.0",
+        "pgx": "5.10.0"
+      },
+      "rust-actix": {
+        "rust": "1.98.1",
+        "actix-web": "4.15.0",
+        "sqlx": "0.9.0",
+        "serde": "1.0.228",
+        "serde_json": "1.0.145"
+      },
+      "node-fastify": {
+        "node": "24.20.0",
+        "fastify": "5.12.3",
+        "pg": "8.23.0"
+      },
+      "python-fastapi": {
+        "python": "3.14.7",
+        "fastapi": "0.141.1",
+        "uvicorn": "0.52.4",
+        "asyncpg": "0.31.0"
+      }
+    },
+    "lock_sha256": {
+      "apps/go-gin/go.sum": "5233eb69f4c84b086758d0ec8deb333dd4aa8c172d11a6a54e3ea28c526a9f41",
+      "apps/rust-actix/Cargo.lock": "564fc5bd6bc6caec76401b1c0d115c98c50478cd47de3a14fec27d64a3dd8ff7",
+      "apps/node-fastify/package-lock.json": "72e0ed47fae20edb36685ddce859116807199e9079bff927807775eb38072ae9",
+      "apps/python-fastapi/requirements.lock": "342720c8d9f894a9b21b403da6c73d282ecb4e21b128b20486b1bf48bad94b86"
+    },
+    "memory_method": "Maximum observed docker stats --no-stream API MemUsage; binary units rounded by Docker, inactive file cache excluded. Samples run sequentially with state checks; not kernel high-water RSS.",
+    "oha_duration_method": "-z sends for the specified duration; -w drains in-flight requests with a 15s request timeout. Throughput uses oha total elapsed seconds, including drain.",
+    "github": {
+      "repository": "tappe9/simple-api-benchmark",
+      "ref": "refs/heads/main",
+      "source_commit": "f839bbf5ecc25a22648eeeaa7a169d7f0ab9c075",
+      "event": "schedule",
+      "workflow_ref": "tappe9/simple-api-benchmark/.github/workflows/benchmark.yml@refs/heads/main",
+      "workflow_sha": "f839bbf5ecc25a22648eeeaa7a169d7f0ab9c075",
+      "run_id": "33979190013",
+      "run_attempt": "1",
+      "run_url": "https://github.com/tappe9/simple-api-benchmark/actions/runs/33979190013"
+    },
+    "runner": {
+      "name": "GitHub Actions 1000008020",
+      "environment": "github-hosted",
+      "os": "Linux",
+      "architecture": "X64",
+      "image_os": "ubuntu24",
+      "image_version": "20260831.293.1",
+      "cpu_model": "AMD EPYC 7763 64-Core Processor"
+    },
+    "docker_cli": "28.0.4",
+    "docker_compose": "2.38.2",
+    "artifact_directory": ".cache/official/raw/sab-benchmark-68cd0602838f"
+  },
+  "implementations": [
+    {
+      "implementation": "go-gin",
+      "container": {
+        "id": "2982e9750dfe4701cccffa5ce5f930fc821796f8b6b287e207cc929532b293f2",
+        "image_id": "sha256:603f113b40e62fb3bb9f0f861637cdadc4f4543ace55dfc3f2bf3eb4978f6701",
+        "command": [
+          "/go-gin"
+        ],
+        "postgresql_version": "PostgreSQL 18.6 (Debian 18.6-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit"
+      },
+      "contract_checks": 14,
+      "endpoints": [
+        {
+          "endpoint": "/json",
+          "runs": [
+            {
+              "requests_per_second": 22319.668668944145,
+              "mean_response_time_ms": 2.237794832710598,
+              "elapsed_seconds": 30.003133556,
+              "successful_requests": 669660,
+              "response_bytes": 31474020,
+              "run": 1,
+              "peak_memory_bytes": 13568574,
+              "memory_samples": 15
+            },
+            {
+              "requests_per_second": 22140.196327631773,
+              "mean_response_time_ms": 2.2559044819956555,
+              "elapsed_seconds": 30.004657148,
+              "successful_requests": 664309,
+              "response_bytes": 31222523,
+              "run": 2,
+              "peak_memory_bytes": 20457718,
+              "memory_samples": 16
+            },
+            {
+              "requests_per_second": 22405.566616644828,
+              "mean_response_time_ms": 2.2292122469029807,
+              "elapsed_seconds": 30.00361524,
+              "successful_requests": 672248,
+              "response_bytes": 31595656,
+              "run": 3,
+              "peak_memory_bytes": 20698891,
+              "memory_samples": 15
+            }
+          ],
+          "selected": {
+            "requests_per_second": 22319.668668944145,
+            "mean_response_time_ms": 2.237794832710598,
+            "elapsed_seconds": 30.003133556,
+            "successful_requests": 669660,
+            "response_bytes": 31474020,
+            "run": 1,
+            "peak_memory_bytes": 13568574,
+            "memory_samples": 15
+          }
+        },
+        {
+          "endpoint": "/db/42",
+          "runs": [
+            {
+              "requests_per_second": 10284.069319691374,
+              "mean_response_time_ms": 4.857686736175368,
+              "elapsed_seconds": 30.009327087,
+              "successful_requests": 308618,
+              "response_bytes": 12036102,
+              "run": 1,
+              "peak_memory_bytes": 24631051,
+              "memory_samples": 15
+            },
+            {
+              "requests_per_second": 10262.755985329042,
+              "mean_response_time_ms": 4.868067545427771,
+              "elapsed_seconds": 30.028093861,
+              "successful_requests": 308171,
+              "response_bytes": 12018669,
+              "run": 2,
+              "peak_memory_bytes": 17311990,
+              "memory_samples": 15
+            },
+            {
+              "requests_per_second": 10271.675699615953,
+              "mean_response_time_ms": 4.863957387298269,
+              "elapsed_seconds": 30.006009634,
+              "successful_requests": 308212,
+              "response_bytes": 12020268,
+              "run": 3,
+              "peak_memory_bytes": 17144218,
+              "memory_samples": 15
+            }
+          ],
+          "selected": {
+            "requests_per_second": 10271.675699615953,
+            "mean_response_time_ms": 4.863957387298269,
+            "elapsed_seconds": 30.006009634,
+            "successful_requests": 308212,
+            "response_bytes": 12020268,
+            "run": 3,
+            "peak_memory_bytes": 17144218,
+            "memory_samples": 15
+          }
+        },
+        {
+          "endpoint": "/cpu",
+          "runs": [
+            {
+              "requests_per_second": 208.4576105537177,
+              "mean_response_time_ms": 238.88720916224804,
+              "elapsed_seconds": 30.217174529,
+              "successful_requests": 6299,
+              "response_bytes": 176372,
+              "run": 1,
+              "peak_memory_bytes": 20583547,
+              "memory_samples": 16
+            },
+            {
+              "requests_per_second": 208.05220080645233,
+              "mean_response_time_ms": 239.35315684379438,
+              "elapsed_seconds": 30.247216687,
+              "successful_requests": 6293,
+              "response_bytes": 176204,
+              "run": 2,
+              "peak_memory_bytes": 20803748,
+              "memory_samples": 16
+            },
+            {
+              "requests_per_second": 208.2406432785466,
+              "mean_response_time_ms": 239.03632080485502,
+              "elapsed_seconds": 30.267866545,
+              "successful_requests": 6303,
+              "response_bytes": 176484,
+              "run": 3,
+              "peak_memory_bytes": 20552090,
+              "memory_samples": 16
+            }
+          ],
+          "selected": {
+            "requests_per_second": 208.2406432785466,
+            "mean_response_time_ms": 239.03632080485502,
+            "elapsed_seconds": 30.267866545,
+            "successful_requests": 6303,
+            "response_bytes": 176484,
+            "run": 3,
+            "peak_memory_bytes": 20552090,
+            "memory_samples": 16
+          }
+        }
+      ]
+    },
+    {
+      "implementation": "rust-actix",
+      "container": {
+        "id": "509988f1dfe5b52b391c266dc8265c2beed48fc07494840386f8d1baf9172b9f",
+        "image_id": "sha256:d64fabdad8df03feb348a45a4c2665ae55acc5233dee2c4e8521c4d2ca31d29a",
+        "command": [
+          "/usr/local/bin/rust-actix"
+        ],
+        "postgresql_version": "PostgreSQL 18.6 (Debian 18.6-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit"
+      },
+      "contract_checks": 14,
+      "endpoints": [
+        {
+          "endpoint": "/json",
+          "runs": [
+            {
+              "requests_per_second": 50164.93866975063,
+              "mean_response_time_ms": 0.9948388921962488,
+              "elapsed_seconds": 30.003325827,
+              "successful_requests": 1505115,
+              "response_bytes": 70740405,
+              "run": 1,
+              "peak_memory_bytes": 3018851,
+              "memory_samples": 16
+            },
+            {
+              "requests_per_second": 49891.3835612157,
+              "mean_response_time_ms": 1.000313109361103,
+              "elapsed_seconds": 30.003056503,
+              "successful_requests": 1496894,
+              "response_bytes": 70354018,
+              "run": 2,
+              "peak_memory_bytes": 3190817,
+              "memory_samples": 16
+            },
+            {
+              "requests_per_second": 50075.98941978578,
+              "mean_response_time_ms": 0.9965711762249234,
+              "elapsed_seconds": 30.003061695,
+              "successful_requests": 1502433,
+              "response_bytes": 70614351,
+              "run": 3,
+              "peak_memory_bytes": 9207546,
+              "memory_samples": 16
+            }
+          ],
+          "selected": {
+            "requests_per_second": 50075.98941978578,
+            "mean_response_time_ms": 0.9965711762249234,
+            "elapsed_seconds": 30.003061695,
+            "successful_requests": 1502433,
+            "response_bytes": 70614351,
+            "run": 3,
+            "peak_memory_bytes": 9207546,
+            "memory_samples": 16
+          }
+        },
+        {
+          "endpoint": "/db/42",
+          "runs": [
+            {
+              "requests_per_second": 8830.152413807798,
+              "mean_response_time_ms": 5.657789692078659,
+              "elapsed_seconds": 30.008542048,
+              "successful_requests": 264980,
+              "response_bytes": 10334220,
+              "run": 1,
+              "peak_memory_bytes": 5013242,
+              "memory_samples": 15
+            },
+            {
+              "requests_per_second": 8823.283111000053,
+              "mean_response_time_ms": 5.662323140058916,
+              "elapsed_seconds": 30.007764306,
+              "successful_requests": 264767,
+              "response_bytes": 10325913,
+              "run": 2,
+              "peak_memory_bytes": 4722787,
+              "memory_samples": 15
+            },
+            {
+              "requests_per_second": 8718.453767675941,
+              "mean_response_time_ms": 5.730372313777349,
+              "elapsed_seconds": 30.008188031,
+              "successful_requests": 261625,
+              "response_bytes": 10203375,
+              "run": 3,
+              "peak_memory_bytes": 4845470,
+              "memory_samples": 15
+            }
+          ],
+          "selected": {
+            "requests_per_second": 8823.283111000053,
+            "mean_response_time_ms": 5.662323140058916,
+            "elapsed_seconds": 30.007764306,
+            "successful_requests": 264767,
+            "response_bytes": 10325913,
+            "run": 2,
+            "peak_memory_bytes": 4722787,
+            "memory_samples": 15
+          }
+        },
+        {
+          "endpoint": "/cpu",
+          "runs": [
+            {
+              "requests_per_second": 321.3880518368433,
+              "mean_response_time_ms": 155.15352790724322,
+              "elapsed_seconds": 30.15669047,
+              "successful_requests": 9692,
+              "response_bytes": 271376,
+              "run": 1,
+              "peak_memory_bytes": 5320475,
+              "memory_samples": 16
+            },
+            {
+              "requests_per_second": 321.2298810079781,
+              "mean_response_time_ms": 155.21181291754397,
+              "elapsed_seconds": 30.165313294,
+              "successful_requests": 9690,
+              "response_bytes": 271320,
+              "run": 2,
+              "peak_memory_bytes": 12006196,
+              "memory_samples": 16
+            },
+            {
+              "requests_per_second": 320.5350909159449,
+              "mean_response_time_ms": 155.5650927503616,
+              "elapsed_seconds": 30.155824663,
+              "successful_requests": 9666,
+              "response_bytes": 270648,
+              "run": 3,
+              "peak_memory_bytes": 5132780,
+              "memory_samples": 16
+            }
+          ],
+          "selected": {
+            "requests_per_second": 321.2298810079781,
+            "mean_response_time_ms": 155.21181291754397,
+            "elapsed_seconds": 30.165313294,
+            "successful_requests": 9690,
+            "response_bytes": 271320,
+            "run": 2,
+            "peak_memory_bytes": 12006196,
+            "memory_samples": 16
+          }
+        }
+      ]
+    },
+    {
+      "implementation": "node-fastify",
+      "container": {
+        "id": "91a0bf2f4866f832c43128b36dc8564104a75ee841e257a3455d08d8a1246956",
+        "image_id": "sha256:f82e457bec616c75b1ab0bdce5ee8268ffe7254c3f582453ebea722d652b2ef2",
+        "command": [
+          "node",
+          "src/server.js"
+        ],
+        "postgresql_version": "PostgreSQL 18.6 (Debian 18.6-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit"
+      },
+      "contract_checks": 14,
+      "endpoints": [
+        {
+          "endpoint": "/json",
+          "runs": [
+            {
+              "requests_per_second": 13050.751063999978,
+              "mean_response_time_ms": 3.828048958536222,
+              "elapsed_seconds": 30.00555279,
+              "successful_requests": 391595,
+              "response_bytes": 18404965,
+              "run": 1,
+              "peak_memory_bytes": 61006152,
+              "memory_samples": 15
+            },
+            {
+              "requests_per_second": 13073.271641076852,
+              "mean_response_time_ms": 3.8216844104142083,
+              "elapsed_seconds": 30.005648989,
+              "successful_requests": 392272,
+              "response_bytes": 18436784,
+              "run": 2,
+              "peak_memory_bytes": 61058581,
+              "memory_samples": 16
+            },
+            {
+              "requests_per_second": 13184.684237019885,
+              "mean_response_time_ms": 3.7891707344465964,
+              "elapsed_seconds": 30.004814138,
+              "successful_requests": 395604,
+              "response_bytes": 18593388,
+              "run": 3,
+              "peak_memory_bytes": 63208162,
+              "memory_samples": 15
+            }
+          ],
+          "selected": {
+            "requests_per_second": 13073.271641076852,
+            "mean_response_time_ms": 3.8216844104142083,
+            "elapsed_seconds": 30.005648989,
+            "successful_requests": 392272,
+            "response_bytes": 18436784,
+            "run": 2,
+            "peak_memory_bytes": 61058581,
+            "memory_samples": 16
+          }
+        },
+        {
+          "endpoint": "/db/42",
+          "runs": [
+            {
+              "requests_per_second": 6114.064491440087,
+              "mean_response_time_ms": 8.172450039446911,
+              "elapsed_seconds": 30.010641899,
+              "successful_requests": 183487,
+              "response_bytes": 7155993,
+              "run": 1,
+              "peak_memory_bytes": 68880958,
+              "memory_samples": 15
+            },
+            {
+              "requests_per_second": 6108.418209235733,
+              "mean_response_time_ms": 8.180283033012959,
+              "elapsed_seconds": 30.011370165,
+              "successful_requests": 183322,
+              "response_bytes": 7149558,
+              "run": 2,
+              "peak_memory_bytes": 57000592,
+              "memory_samples": 15
+            },
+            {
+              "requests_per_second": 6091.211151367637,
+              "mean_response_time_ms": 8.203578148266779,
+              "elapsed_seconds": 30.009138652,
+              "successful_requests": 182792,
+              "response_bytes": 7128888,
+              "run": 3,
+              "peak_memory_bytes": 69824676,
+              "memory_samples": 15
+            }
+          ],
+          "selected": {
+            "requests_per_second": 6108.418209235733,
+            "mean_response_time_ms": 8.180283033012959,
+            "elapsed_seconds": 30.011370165,
+            "successful_requests": 183322,
+            "response_bytes": 7149558,
+            "run": 2,
+            "peak_memory_bytes": 57000592,
+            "memory_samples": 15
+          }
+        },
+        {
+          "endpoint": "/cpu",
+          "runs": [
+            {
+              "requests_per_second": 91.39376614658144,
+              "mean_response_time_ms": 542.4526576746673,
+              "elapsed_seconds": 30.538187862,
+              "successful_requests": 2791,
+              "response_bytes": 78148,
+              "run": 1,
+              "peak_memory_bytes": 69226988,
+              "memory_samples": 16
+            },
+            {
+              "requests_per_second": 91.17751160903029,
+              "mean_response_time_ms": 543.7448698124327,
+              "elapsed_seconds": 30.522877307,
+              "successful_requests": 2783,
+              "response_bytes": 77924,
+              "run": 2,
+              "peak_memory_bytes": 69436703,
+              "memory_samples": 16
+            },
+            {
+              "requests_per_second": 91.2877036480158,
+              "mean_response_time_ms": 543.0276976031572,
+              "elapsed_seconds": 30.529851104,
+              "successful_requests": 2787,
+              "response_bytes": 78036,
+              "run": 3,
+              "peak_memory_bytes": 69247960,
+              "memory_samples": 16
+            }
+          ],
+          "selected": {
+            "requests_per_second": 91.2877036480158,
+            "mean_response_time_ms": 543.0276976031572,
+            "elapsed_seconds": 30.529851104,
+            "successful_requests": 2787,
+            "response_bytes": 78036,
+            "run": 3,
+            "peak_memory_bytes": 69247960,
+            "memory_samples": 16
+          }
+        }
+      ]
+    },
+    {
+      "implementation": "python-fastapi",
+      "container": {
+        "id": "de899ff68f794734977e3daa4e0afebb27f3dbd2212b14948919e9e7f8e0edc4",
+        "image_id": "sha256:f904d74e39723b82e3c3b65066ce27f722bf60b68bdfe6afd7e89ab4c3b6ce0b",
+        "command": [
+          "python",
+          "-m",
+          "uvicorn",
+          "benchmark_api.app:app",
+          "--host",
+          "0.0.0.0",
+          "--port",
+          "8080",
+          "--workers",
+          "1",
+          "--loop",
+          "asyncio",
+          "--http",
+          "h11",
+          "--no-access-log",
+          "--timeout-graceful-shutdown",
+          "5"
+        ],
+        "postgresql_version": "PostgreSQL 18.6 (Debian 18.6-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit"
+      },
+      "contract_checks": 14,
+      "endpoints": [
+        {
+          "endpoint": "/json",
+          "runs": [
+            {
+              "requests_per_second": 2611.1439812658996,
+              "mean_response_time_ms": 19.138991357331452,
+              "elapsed_seconds": 30.017877437,
+              "successful_requests": 78381,
+              "response_bytes": 3683907,
+              "run": 1,
+              "peak_memory_bytes": 53991179,
+              "memory_samples": 15
+            },
+            {
+              "requests_per_second": 2583.3095598359346,
+              "mean_response_time_ms": 19.346277661551053,
+              "elapsed_seconds": 30.016534296,
+              "successful_requests": 77542,
+              "response_bytes": 3644474,
+              "run": 2,
+              "peak_memory_bytes": 55480157,
+              "memory_samples": 15
+            },
+            {
+              "requests_per_second": 2652.0467243589183,
+              "mean_response_time_ms": 18.842958537193766,
+              "elapsed_seconds": 30.043588323,
+              "successful_requests": 79677,
+              "response_bytes": 3744819,
+              "run": 3,
+              "peak_memory_bytes": 55459185,
+              "memory_samples": 15
+            }
+          ],
+          "selected": {
+            "requests_per_second": 2611.1439812658996,
+            "mean_response_time_ms": 19.138991357331452,
+            "elapsed_seconds": 30.017877437,
+            "successful_requests": 78381,
+            "response_bytes": 3683907,
+            "run": 1,
+            "peak_memory_bytes": 53991179,
+            "memory_samples": 15
+          }
+        },
+        {
+          "endpoint": "/db/42",
+          "runs": [
+            {
+              "requests_per_second": 1488.7019797016073,
+              "mean_response_time_ms": 33.56717552861396,
+              "elapsed_seconds": 30.060415456,
+              "successful_requests": 44751,
+              "response_bytes": 1745289,
+              "run": 1,
+              "peak_memory_bytes": 56675533,
+              "memory_samples": 15
+            },
+            {
+              "requests_per_second": 1490.571791577014,
+              "mean_response_time_ms": 33.5255632554582,
+              "elapsed_seconds": 30.022706892,
+              "successful_requests": 44751,
+              "response_bytes": 1745289,
+              "run": 2,
+              "peak_memory_bytes": 56581161,
+              "memory_samples": 15
+            },
+            {
+              "requests_per_second": 1457.4452639256847,
+              "mean_response_time_ms": 34.28882129035308,
+              "elapsed_seconds": 30.023082913,
+              "successful_requests": 43757,
+              "response_bytes": 1706523,
+              "run": 3,
+              "peak_memory_bytes": 55312384,
+              "memory_samples": 15
+            }
+          ],
+          "selected": {
+            "requests_per_second": 1488.7019797016073,
+            "mean_response_time_ms": 33.56717552861396,
+            "elapsed_seconds": 30.060415456,
+            "successful_requests": 44751,
+            "response_bytes": 1745289,
+            "run": 1,
+            "peak_memory_bytes": 56675533,
+            "memory_samples": 15
+          }
+        },
+        {
+          "endpoint": "/cpu",
+          "runs": [
+            {
+              "requests_per_second": 8.349257671437709,
+              "mean_response_time_ms": 5499.857515096988,
+              "elapsed_seconds": 35.81156694,
+              "successful_requests": 299,
+              "response_bytes": 8372,
+              "run": 1,
+              "peak_memory_bytes": 56853791,
+              "memory_samples": 18
+            },
+            {
+              "requests_per_second": 8.341282485340702,
+              "mean_response_time_ms": 5501.812118334449,
+              "elapsed_seconds": 35.845806748,
+              "successful_requests": 299,
+              "response_bytes": 8372,
+              "run": 2,
+              "peak_memory_bytes": 56916706,
+              "memory_samples": 18
+            },
+            {
+              "requests_per_second": 8.33914936544884,
+              "mean_response_time_ms": 5504.172895046821,
+              "elapsed_seconds": 35.854975957,
+              "successful_requests": 299,
+              "response_bytes": 8372,
+              "run": 3,
+              "peak_memory_bytes": 57168364,
+              "memory_samples": 18
+            }
+          ],
+          "selected": {
+            "requests_per_second": 8.341282485340702,
+            "mean_response_time_ms": 5501.812118334449,
+            "elapsed_seconds": 35.845806748,
+            "successful_requests": 299,
+            "response_bytes": 8372,
+            "run": 2,
+            "peak_memory_bytes": 56916706,
+            "memory_samples": 18
+          }
+        }
+      ]
+    }
+  ],
+  "completed_at": "2026-09-05T17:16:43.993339+00:00"
+}

@@ -31,7 +31,29 @@ Simple API Benchmarkは、4つのAPIスタックを同じエンドポイント�
 
 <!-- benchmark-results:start -->
 
-確認済みの公式結果はまだありません。未計測の値をゼロとして表示しません。
+計測完了（UTC）: `2026-09-05T17:16:43.993339+00:00`
+Source: `f839bbf5ecc25a22648eeeaa7a169d7f0ab9c075` · [Actions run](https://github.com/tappe9/simple-api-benchmark/actions/runs/33979190013)
+
+1 CPU・512 MiB・1 worker・DB pool 10・HTTP/1.1・50接続・warm-up 5秒・各endpointを30秒×3回。処理件数/秒が中央の1回から全指標を採用します。
+
+| バックエンド | テスト | 処理件数/秒 ↑ | 平均応答 ms ↓ | 観測最大メモリ MiB ↓ |
+| --- | --- | ---: | ---: | ---: |
+| Go / Gin | JSON | 22,319.669 | 2.238 | 12.940 |
+| Go / Gin | PostgreSQL | 10,271.676 | 4.864 | 16.350 |
+| Go / Gin | CPU | 208.241 | 239.036 | 19.600 |
+| Rust / Actix Web | JSON | 50,075.989 | 0.997 | 8.781 |
+| Rust / Actix Web | PostgreSQL | 8,823.283 | 5.662 | 4.504 |
+| Rust / Actix Web | CPU | 321.230 | 155.212 | 11.450 |
+| Node.js / Fastify | JSON | 13,073.272 | 3.822 | 58.230 |
+| Node.js / Fastify | PostgreSQL | 6,108.418 | 8.180 | 54.360 |
+| Node.js / Fastify | CPU | 91.288 | 543.028 | 66.040 |
+| Python / FastAPI | JSON | 2,611.144 | 19.139 | 51.490 |
+| Python / FastAPI | PostgreSQL | 1,488.702 | 33.567 | 54.050 |
+| Python / FastAPI | CPU | 8.341 | 5,501.812 | 54.280 |
+
+↑ 多いほど高速、↓ 少ないほど良好です。メモリはAPIコンテナだけの観測値で、PostgreSQLは含まず、短いピークを見逃す場合があります。共有GitHub-hosted環境でのAPIスタック全体の参考値であり、言語の普遍的な順位ではありません。
+
+[Result JSON](results/latest.json) · [History](results/history/) · [Methodology](docs/METHODOLOGY.md) · [Versions and conditions](results/latest.json)
 
 <!-- benchmark-results:end -->
 
