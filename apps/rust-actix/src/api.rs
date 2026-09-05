@@ -145,7 +145,9 @@ mod tests {
         (status, content_type, payload)
     }
 
-    fn state_with(result: Result<Option<Item>, ItemStoreError>) -> (AppState, Arc<Mutex<Vec<i64>>>) {
+    fn state_with(
+        result: Result<Option<Item>, ItemStoreError>,
+    ) -> (AppState, Arc<Mutex<Vec<i64>>>) {
         let store = Arc::new(StubStore::new(result));
         let calls = Arc::clone(&store.calls);
         (AppState::new(store), calls)

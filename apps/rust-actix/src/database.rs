@@ -25,7 +25,9 @@ pub enum DatabaseConfigError {
 
 impl fmt::Debug for DatabaseConfig {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_struct("DatabaseConfig").finish_non_exhaustive()
+        formatter
+            .debug_struct("DatabaseConfig")
+            .finish_non_exhaustive()
     }
 }
 
