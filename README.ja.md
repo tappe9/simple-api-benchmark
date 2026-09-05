@@ -102,6 +102,24 @@ Goのformat、unit test、vet、コンテナ起動、API仕様、リソース制
 make test-go-gin
 ```
 
+## Rust / Actix Web実装
+
+Rust実装は`apps/rust-actix/`にあり、Rust 1.98.1、Actix Web 4.15.0、SQLx 0.9.0、Serde 1.0.228、serde_json 1.0.145を固定しています。推移的な依存も`Cargo.lock`で固定します。1つのActix workerでポート`8080`を受け付け、通常のSerde値からJSONを生成します。`/cpu`では毎request直接再帰でFibonacci(30)を計算します。SQLx poolはHTTP受付前にPostgreSQLへ接続し、上限は10接続です。
+
+Dockerでは公開済みの`rust:1.98.0-bookworm`をdigest固定し、誤コンパイル修正を含むcompiler 1.98.1を明示導入して、`cargo +1.98.1 build --release --locked`でビルドします。実行用のDebian Bookworm slimもdigest固定し、release binaryのみをコピーして`65532:65532`で実行します。Cargoやソースコードは含めません。ComposeはPostgreSQLのhealthy状態を待ち、capabilities削除と権限昇格禁止、1 CPU・512 MB、loopback限定公開、restartなしを適用します。
+
+```bash
+docker compose up --detach --build --wait rust-actix
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/json
+curl http://127.0.0.1:8080/db/42
+curl http://127.0.0.1:8080/cpu
+make down
+make test-rust-actix
+```
+
+acceptance targetにはRustup、Python 3、Docker Compose v2、Makeが必要です。format、locked Rust tests、警告をエラーにするClippy、実DB・API、BIGINT境界、起動失敗、SIGTERM終了、container・network削除を検証します。各APIは同じホストポート`8080`を使うため、1つずつ起動してください。
+
 ## Node.js / Fastify実装
 
 Node実装は`apps/node-fastify/`にあり、Node.js 24.20.0 LTS、Fastify 5.12.3、pg 8.23.0を使用します。直接依存と`package-lock.json`を固定し、公式の`node:24.20.0-bookworm-slim`イメージもdigestで固定します。再現性と保守性のため、LTSランタイムと安定版のFastify 5系を採用しています。
@@ -142,7 +160,7 @@ make test-python-fastapi PYTHON=python3.14
 
 acceptance targetにはPOSIX環境のPython 3.14.7、Docker Compose v2、Makeが必要です。一時virtual environmentへhash検証付きで開発用依存をinstallし、Ruff、focused pytest tests、実Dockerサービス、DB更新・異常系、資源制限、1 worker、起動失敗、SIGTERM終了、container・network削除を確認します。Dockerを使わないfocused testsは[Contributing](CONTRIBUTING.md)を参照してください。
 
-Rust / Actix Webはまだ`main`に統合されていません。共通contract suite、benchmark runner、恒久CIは今後の対象であり、性能測定結果はありません。
+4つのAPI実装を利用できます。共通contract suite、benchmark runner、恒久CIは今後の対象であり、性能測定結果はありません。
 
 ## 実行方法の目標
 

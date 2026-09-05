@@ -23,6 +23,10 @@ v0.1 compares one common framework from each language:
 
 The current Go / Gin implementation baseline uses Go 1.27.1, Gin 1.12.0, and pgx/v5 5.10.0. Exact language, framework, server, and database driver versions are stored with each published result so that later dependency updates remain visible.
 
+The Rust / Actix Web baseline uses [Rust 1.98.1](https://github.com/rust-lang/rust/releases/tag/1.98.1), [Actix Web 4.15.0](https://docs.rs/crate/actix-web/4.15.0), and [SQLx 0.9.0](https://docs.rs/crate/sqlx/0.9.0). Serde 1.0.228 and serde_json 1.0.145 are exact direct pins, and `Cargo.lock` fixes the transitive graph. The [official Rust image](https://hub.docker.com/_/rust) has a published 1.98.0 Bookworm builder; it is pinned to index digest `sha256:82150a52ec202c1b14d7817e14516c392bb7f5cfebd88f1ed531cb37ebd39922` and explicitly installs compiler 1.98.1 to retain its miscompilation fix. The Debian Bookworm slim runtime is pinned to `sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171`. Builds use `cargo +1.98.1 build --release --locked`, thin LTO, and one code-generation unit.
+
+Rust uses one Actix worker, normal Serde serialization, a SQLx pool capped at 10 connections, and the common 1 CPU / 512 MB limits. CPU requests execute direct recursive Fibonacci(30) on the worker without caching, memoization, or an executor. Framework/runtime helper threads are not additional HTTP workers. This is a complete-stack comparison, including compiler optimization, not a framework-only result.
+
 The Node / Fastify baseline uses [Node.js 24.20.0 LTS](https://nodejs.org/en/blog/release/v24.20.0), [Fastify 5.12.3](https://www.npmjs.com/package/fastify/v/5.12.3), and [pg 8.23.0](https://www.npmjs.com/package/pg/v/8.23.0). The LTS runtime and stable framework release line are selected for maintenance support. The official Debian Bookworm slim image is fixed by version and index digest in the Dockerfile; exact direct versions and `package-lock.json` freeze the dependency graph. Updating these pins is an explicit baseline change.
 
 Node runs directly as one process with `NODE_ENV=production`, a maximum of 10 DB connections, and the shared 1 CPU / 512 MB limits. Fastify uses its default native-object serialization path without a custom serializer, response schema optimization, cluster mode, or worker threads. CPU requests perform direct recursive Fibonacci(30) on the main event loop, so each CPU calculation occupies that process until completion. This behavior is part of the stack being compared.
@@ -177,6 +181,14 @@ make test-python-fastapi PYTHON=python3.14
 ```
 
 The target verifies SHA256-locked installs, dependency consistency, Ruff, compilation, and focused pytest behavior before real Docker acceptance. It checks native JSON, exact signed BIGINT values, actual SQL updates, sanitized DB errors, startup failure, one non-root worker, resource limits, pool cleanup, and removal of containers and project networks. These checks do not generate benchmark results or replace the future shared contract suite. Docker execution is validated separately from mocked focused tests; unsupported or unexecuted environments must not be reported as passing.
+
+Rust / Actix Web can be verified with:
+
+```bash
+make test-rust-actix
+```
+
+This target checks the committed source with rustfmt, locked Rust tests, and Clippy, then builds and verifies the pinned production container. Real DB updates and errors, exact numeric JSON, BIGINT boundaries, startup failure, SIGTERM exit, and DB connection/container/network cleanup are included. Run all available DB/API targets after shared Compose changes. These are implementation acceptance checks, not performance measurements.
 
 The target complete benchmark command remains:
 
