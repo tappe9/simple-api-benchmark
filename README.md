@@ -160,7 +160,18 @@ make test-python-fastapi PYTHON=python3.14
 
 The complete acceptance target requires Python 3.14.7 on a POSIX host, Docker Compose v2, and Make. It installs the hash-locked development dependencies in a temporary virtual environment, runs Ruff and focused pytest tests, and verifies the real Docker service, DB errors and updates, resources, one worker, startup failure, SIGTERM shutdown, and container/network cleanup. See [Contributing](CONTRIBUTING.md) for focused tests without Docker.
 
-All four API implementations are available. The shared contract suite, benchmark runner, and permanent CI remain future work; no performance results are available.
+All four API implementations and the shared contract suite are available:
+
+```bash
+make test-contract                      # all four APIs, one at a time
+make test-contract CONTRACT_IMPL=go-gin  # one API with the same contract
+```
+
+The suite checks exact statuses, JSON content and types, documented errors, and
+repeated responses, and cleans up its isolated environments even after failure.
+See [the shared contract guide](CONTRIBUTING.md#shared-contract-checks) for
+requirements, standalone base-URL checks, and cleanup limits. The benchmark runner
+and permanent CI remain future work; no performance results are available.
 
 ## Planned usage
 

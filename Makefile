@@ -1,5 +1,6 @@
 COMPOSE ?= docker compose
 PYTHON ?= python3
+CONTRACT_IMPL ?= all
 
 DB_SERVICE := postgres
 DB_NAME := benchmark
@@ -7,7 +8,7 @@ DB_USER := benchmark
 DB_WAIT_TIMEOUT ?= 60
 PSQL := $(COMPOSE) exec -T $(DB_SERVICE) psql -X --username $(DB_USER) --dbname $(DB_NAME) --set ON_ERROR_STOP=1 --tuples-only --no-align
 
-.PHONY: db-up db-check db-reset test-db test-go-gin test-node-fastify test-python-fastapi test-rust-actix down
+.PHONY: db-up db-check db-reset test-db test-go-gin test-node-fastify test-python-fastapi test-rust-actix test-contract down
 
 db-up:
 	@echo "Starting PostgreSQL $(DB_SERVICE) service..."
@@ -61,6 +62,10 @@ test-python-fastapi:
 test-rust-actix:
 	@$(PYTHON) -m unittest discover -s tests -p test_rust_actix_acceptance.py
 	@$(PYTHON) tests/test_rust_actix_service.py
+
+test-contract:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p 'test_contract_*.py'
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.contract_runner --implementation "$(CONTRACT_IMPL)" --compose "$(COMPOSE)"
 
 down:
 	@echo "Removing benchmark containers and project network..."

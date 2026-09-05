@@ -160,7 +160,17 @@ make test-python-fastapi PYTHON=python3.14
 
 acceptance targetにはPOSIX環境のPython 3.14.7、Docker Compose v2、Makeが必要です。一時virtual environmentへhash検証付きで開発用依存をinstallし、Ruff、focused pytest tests、実Dockerサービス、DB更新・異常系、資源制限、1 worker、起動失敗、SIGTERM終了、container・network削除を確認します。Dockerを使わないfocused testsは[Contributing](CONTRIBUTING.md)を参照してください。
 
-4つのAPI実装を利用できます。共通contract suite、benchmark runner、恒久CIは今後の対象であり、性能測定結果はありません。
+4つのAPI実装と共通contract suiteを利用できます。
+
+```bash
+make test-contract                      # 4実装を1つずつ順番に検証
+make test-contract CONTRACT_IMPL=go-gin  # 1実装を同じ契約で検証
+```
+
+HTTP status、JSONの内容・型、規定のerror response、応答の再現性を確認し、
+失敗時にも分離された検証環境を片付けます。必要な環境、起動済みAPIのbase URLを指定する
+方法、cleanupの制約は[共通contractの実行ガイド](CONTRIBUTING.md#shared-contract-checks)を
+参照してください。benchmark runnerと恒久CIは今後の対象であり、性能測定結果はありません。
 
 ## 実行方法の目標
 
