@@ -63,7 +63,9 @@ class OfficialWrapperTests(unittest.TestCase):
                 next(Environment.artifacts.glob("*-run-3.json")).write_text("{}")
             stack.enter_context(patch.object(official, "ROOT", root))
             stack.enter_context(patch.dict("os.environ", context_env(), clear=True))
-            stack.enter_context(patch.object(official, "ensure_oha", return_value=Path("synthetic")))
+            stack.enter_context(
+                patch.object(official, "ensure_oha", return_value=Path("synthetic"))
+            )
             stack.enter_context(
                 patch.object(official, "provenance", return_value=copy.deepcopy(report["metadata"]))
             )
@@ -71,12 +73,12 @@ class OfficialWrapperTests(unittest.TestCase):
                 patch.object(official, "runner_metadata", return_value=report["metadata"]["runner"])
             )
             stack.enter_context(patch.object(official, "execute", return_value="synthetic-version"))
-            stack.enter_context(patch.object(official, "DockerEnvironment", return_value=Environment()))
+            stack.enter_context(
+                patch.object(official, "DockerEnvironment", return_value=Environment())
+            )
             stack.enter_context(patch.object(run, "run_contract", return_value=14))
             stack.enter_context(
-                patch.object(
-                    run, "now", side_effect=[report["started_at"], report["completed_at"]]
-                )
+                patch.object(run, "now", side_effect=[report["started_at"], report["completed_at"]])
             )
             previous = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
             with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
