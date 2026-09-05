@@ -78,7 +78,7 @@ class WorkflowTests(unittest.TestCase):
     def test_official_workflow_has_no_pr_or_push_trigger_and_only_default_ref(self):
         workflow = load("benchmark.yml")
         self.assertEqual(set(workflow.get("on", {})), {"schedule", "workflow_dispatch"})
-        self.assertEqual(workflow["on"]["schedule"], [{"cron": "17 3 * * 1"}])
+        self.assertEqual(workflow["on"]["schedule"], [{"cron": "27 14 * * 6"}])
         self.assertIn(workflow["on"]["workflow_dispatch"], ("", {}))
         self.assertEqual(workflow["concurrency"]["cancel-in-progress"], "false")
         self.assertEqual(set(workflow["jobs"]), {"measure", "publish"})

@@ -1,7 +1,7 @@
 name: Official benchmark
 on:
   schedule:
-    - cron: '17 3 * * 1'
+    - cron: '27 14 * * 6'
   workflow_dispatch:
 permissions:
   contents: read

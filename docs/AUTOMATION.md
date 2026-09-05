@@ -10,7 +10,7 @@ a shortened `make benchmark-smoke` run are required. The smoke run never changes
 `results/latest.json`, history, or README. Only a formatting patch may be uploaded
 on a failed CI run; no PR benchmark numbers are uploaded or committed.
 
-`benchmark.yml` runs Mondays at 03:17 UTC (12:17 JST) and through
+`benchmark.yml` runs Saturdays at 14:27 UTC (23:27 JST) and through
 `workflow_dispatch`, without caller-supplied inputs. Both jobs check the repository,
 event and default-branch ref. The Python entry point additionally requires the
 exact `main` workflow ref and matching workflow/source SHA. A dispatch from a
