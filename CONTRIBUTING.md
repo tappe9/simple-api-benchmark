@@ -203,8 +203,10 @@ python -m ruff format --target-version py310 --check --config apps/python-fastap
 ```
 
 Run all existing DB/API acceptance targets and `make test-contract` after changes
-to shared execution. Permanent CI and the project-wide `make test` target belong
-to the next v0.1 issue.
+to shared execution. `make test` runs the project-wide gates sequentially, including
+workflow checks and smoke. Install the pinned workflow tools as described in
+[automation](docs/AUTOMATION.md). PR CI runs all gates with read-only permissions.
+Official publication is reserved for complete trusted-main Actions runs.
 
 A pull request must pass the available checks for the area it changes.
 

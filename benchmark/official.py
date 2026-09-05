@@ -17,9 +17,13 @@ def trusted_context(environment=None) -> dict:
     environment = os.environ if environment is None else environment
     require(environment.get("GITHUB_ACTIONS") == "true", "official runs require GitHub Actions")
     fields = {
-        "repository": "GITHUB_REPOSITORY", "ref": "GITHUB_REF", "source_commit": "GITHUB_SHA",
-        "event": "GITHUB_EVENT_NAME", "workflow_ref": "GITHUB_WORKFLOW_REF",
-        "workflow_sha": "GITHUB_WORKFLOW_SHA", "run_id": "GITHUB_RUN_ID",
+        "repository": "GITHUB_REPOSITORY",
+        "ref": "GITHUB_REF",
+        "source_commit": "GITHUB_SHA",
+        "event": "GITHUB_EVENT_NAME",
+        "workflow_ref": "GITHUB_WORKFLOW_REF",
+        "workflow_sha": "GITHUB_WORKFLOW_SHA",
+        "run_id": "GITHUB_RUN_ID",
         "run_attempt": "GITHUB_RUN_ATTEMPT",
     }
     context = {field: environment.get(variable) for field, variable in fields.items()}
@@ -29,13 +33,24 @@ def trusted_context(environment=None) -> dict:
 
 
 def runner_metadata() -> dict:
-    variables = {"name": "RUNNER_NAME", "environment": "RUNNER_ENVIRONMENT", "os": "RUNNER_OS",
-                 "architecture": "RUNNER_ARCH", "image_os": "ImageOS", "image_version": "ImageVersion"}
-    result = {key: text(os.environ.get(variable), "missing " + variable)
-              for key, variable in variables.items()}
+    variables = {
+        "name": "RUNNER_NAME",
+        "environment": "RUNNER_ENVIRONMENT",
+        "os": "RUNNER_OS",
+        "architecture": "RUNNER_ARCH",
+        "image_os": "ImageOS",
+        "image_version": "ImageVersion",
+    }
+    result = {
+        key: text(os.environ.get(variable), "missing " + variable)
+        for key, variable in variables.items()
+    }
     require(result["environment"] == "github-hosted", "dedicated runners are outside this baseline")
-    cpu = [line.partition(":")[2].strip() for line in Path("/proc/cpuinfo").read_text().splitlines()
-           if line.startswith("model name")]
+    cpu = [
+        line.partition(":")[2].strip()
+        for line in Path("/proc/cpuinfo").read_text().splitlines()
+        if line.startswith("model name")
+    ]
     result["cpu_model"] = text(cpu[0] if cpu else None, "CPU model unavailable")
     return result
 
@@ -51,13 +66,22 @@ def main() -> int:
         require(not selected.exists(), "refusing stale selected artifact")
         oha = ensure_oha()
         metadata = provenance(oha)
-        require(metadata["source_commit"] == context["source_commit"], "checkout does not match run")
-        metadata.update(github=context, runner=runner_metadata(),
-                        docker_cli=execute(["docker", "version", "--format", "{{.Client.Version}}"], timeout=15).strip(),
-                        docker_compose=execute(["docker", "compose", "version", "--short"], timeout=15).strip())
+        require(
+            metadata["source_commit"] == context["source_commit"], "checkout does not match run"
+        )
+        metadata.update(
+            github=context,
+            runner=runner_metadata(),
+            docker_cli=execute(
+                ["docker", "version", "--format", "{{.Client.Version}}"], timeout=15
+            ).strip(),
+            docker_compose=execute(["docker", "compose", "version", "--short"], timeout=15).strip(),
+        )
         environment = DockerEnvironment(oha, ROOT / ".cache/official/raw")
         metadata["artifact_directory"] = str(environment.artifacts.relative_to(ROOT))
-        report = run_benchmark(environment, load_config(), selected.with_name("candidate.json"), metadata=metadata)
+        report = run_benchmark(
+            environment, load_config(), selected.with_name("candidate.json"), metadata=metadata
+        )
         report.update(mode="official", official=True)
         validate_report(report, expected_context=context)
         audit_raw(report, ROOT)

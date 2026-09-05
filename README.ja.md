@@ -6,7 +6,7 @@
 
 Simple API Benchmarkは、4つのAPIスタックを同じエンドポイント、同じDockerリソース制限、同じベンチマーク設定で比較するOSSです。普遍的な最速言語を決めることではなく、誰でも理解できて、自分でも再実行できる小さな比較を目指します。
 
-> **現在の状態:** v0.1を設計・実装中です。ベンチマーク結果はまだ公開していません。
+> **現在の状態:** v0.1を開発中です。CIと公式benchmark自動化を利用できます。GitHub Pagesと初回releaseは今後の対象です。
 
 ## 比較対象
 
@@ -29,21 +29,11 @@ Simple API Benchmarkは、4つのAPIスタックを同じエンドポイント�
 
 ## 結果
 
-v0.1の実装後、確認済みの最新結果を自動生成してここへ表示します。
+<!-- benchmark-results:start -->
 
-| バックエンド | JSON 処理件数/秒 | PostgreSQL 処理件数/秒 | CPU 処理件数/秒 | 最大メモリ |
-|---|---:|---:|---:|---:|
-| Go / Gin | — | — | — | — |
-| Rust / Actix Web | — | — | — | — |
-| Node.js / Fastify | — | — | — | — |
-| Python / FastAPI | — | — | — | — |
+確認済みの公式結果はまだありません。未計測の値をゼロとして表示しません。
 
-公開結果の見方:
-
-- 1秒あたりの処理件数は、多いほど高速です。
-- 平均応答時間は、短いほど高速です。詳細結果に表示します。
-- 最大メモリは、少ないほど軽量です。
-- 結果は、記載された測定環境での参考値です。
+<!-- benchmark-results:end -->
 
 ## 同じ条件
 
@@ -170,7 +160,8 @@ make test-contract CONTRACT_IMPL=go-gin  # 1実装を同じ契約で検証
 HTTP status、JSONの内容・型、規定のerror response、応答の再現性を確認し、
 失敗時にも分離された検証環境を片付けます。必要な環境、起動済みAPIのbase URLを指定する
 方法、cleanupの制約は[共通contractの実行ガイド](CONTRIBUTING.md#shared-contract-checks)を
-参照してください。ローカルのbenchmark runnerは利用可能です。恒久CIと公式結果の公開は今後の対象です。
+参照してください。ローカルのbenchmark runnerは利用可能です。PRでは同じ検証と公開しない短縮benchmarkを実行します。
+公式結果はtrusted mainの[週次・手動workflow](docs/AUTOMATION.md)だけから公開します。
 
 ## ローカルでの計測
 

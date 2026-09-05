@@ -6,7 +6,7 @@
 
 Simple API Benchmark compares four API stacks with the same endpoints, Docker resource limits, and benchmark settings. The goal is not to declare a universal winner. The goal is to make a small, repeatable comparison that anyone can understand.
 
-> **Project status:** v0.1 is being designed and implemented. No benchmark results have been published yet.
+> **Project status:** v0.1 is in development. CI and official benchmark automation are available; GitHub Pages and the first release are still pending.
 
 ## What is compared?
 
@@ -29,21 +29,11 @@ A separate `GET /health` endpoint is used only to check readiness.
 
 ## Results
 
-The latest verified results will be generated automatically here after v0.1 is implemented.
+<!-- benchmark-results:start -->
 
-| Backend | JSON requests/s | PostgreSQL requests/s | CPU requests/s | Peak memory |
-|---|---:|---:|---:|---:|
-| Go / Gin | — | — | — | — |
-| Rust / Actix Web | — | — | — | — |
-| Node.js / Fastify | — | — | — | — |
-| Python / FastAPI | — | — | — | — |
+No verified official results have been published yet. Unavailable values are not zero.
 
-How to read the published results:
-
-- More requests per second is better.
-- Lower average response time is better and will be shown in the detailed results.
-- Lower peak memory is better.
-- Results only describe the documented test environment.
+<!-- benchmark-results:end -->
 
 ## Same conditions
 
@@ -171,7 +161,8 @@ The suite checks exact statuses, JSON content and types, documented errors, and
 repeated responses, and cleans up its isolated environments even after failure.
 See [the shared contract guide](CONTRIBUTING.md#shared-contract-checks) for
 requirements, standalone base-URL checks, and cleanup limits. The local benchmark runner
-is available; permanent CI and official result publication remain future work.
+is available, and pull requests run the same checks plus a non-publishing smoke benchmark.
+Official results come only from the trusted-main [weekly/manual workflow](docs/AUTOMATION.md).
 
 ## Run the local benchmark
 

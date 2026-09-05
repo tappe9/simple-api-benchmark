@@ -147,7 +147,9 @@ Short spikes between samples can be missed. See the
 
 `results/latest.json` is an ignored local output generated only after **all 36
 measured runs and all four teardowns** succeed. No fabricated result file is
-committed. This command does not create official README/Pages results or history.
+committed. The local command does not create official README/Pages results or history.
+Once an official result is committed, a local run replaces only your working copy
+with `official: false`; do not commit that local replacement as project results.
 
 Schema version 1 contains:
 
@@ -179,5 +181,13 @@ transaction or a guarantee against storage/host failure.
 
 GitHub-hosted machines are shared infrastructure. Full-profile development
 validation artifacts are real measurements but **not official project results**.
-Do not interpret small differences as universal rankings. Permanent CI, scheduled
-benchmarking and official publication remain separate issues.
+Do not interpret small differences as universal rankings.
+
+## Official automation
+
+[CI and official automation](AUTOMATION.md) describes the separate trusted-main
+wrapper, complete raw-data audit, runner provenance, same-run artifacts and atomic
+publication of latest/history/README. Official records use `mode: official` and
+`official: true`, plus `metadata.github`, `metadata.runner`, `metadata.docker_cli`
+and `metadata.docker_compose`. Local and smoke behavior above is unchanged.
+GitHub Pages and release automation remain outside this runner.

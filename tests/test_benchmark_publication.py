@@ -70,12 +70,17 @@ def synthetic_report(root, *, source=SOURCE):
             "versions": pinned_versions(),
             "github": context(source),
             "runner": {
-                "name": "synthetic-test-runner", "environment": "github-hosted",
-                "os": "Linux", "architecture": "X64", "image_os": "ubuntu24",
-                "image_version": "synthetic", "cpu_model": "synthetic CPU",
+                "name": "synthetic-test-runner",
+                "environment": "github-hosted",
+                "os": "Linux",
+                "architecture": "X64",
+                "image_os": "ubuntu24",
+                "image_version": "synthetic",
+                "cpu_model": "synthetic CPU",
             },
             "docker": {"ServerVersion": "synthetic"},
-            "docker_cli": "synthetic", "docker_compose": "synthetic",
+            "docker_cli": "synthetic",
+            "docker_compose": "synthetic",
         },
         "implementations": [],
     }
@@ -87,9 +92,14 @@ def synthetic_report(root, *, source=SOURCE):
     raw["metrics"]["requests_per_sec"] = count / 30.5
     for implementation in IMPLEMENTATIONS:
         backend = {
-            "implementation": implementation, "contract_checks": 14,
-            "container": {"id": "c" * 64, "image_id": "sha256:" + "d" * 64,
-                          "command": ["synthetic"], "postgresql_version": "PostgreSQL synthetic"},
+            "implementation": implementation,
+            "contract_checks": 14,
+            "container": {
+                "id": "c" * 64,
+                "image_id": "sha256:" + "d" * 64,
+                "command": ["synthetic"],
+                "postgresql_version": "PostgreSQL synthetic",
+            },
             "endpoints": [],
         }
         for endpoint in PROFILE["endpoints"]:
@@ -98,14 +108,18 @@ def synthetic_report(root, *, source=SOURCE):
             for index in (1, 2, 3):
                 path = artifact / f"{stem}-run-{index}.json"
                 path.write_text(json.dumps(raw))
-                sample = {"at": "2026-09-05T10:30:00+00:00", "bytes": index * 1048576,
-                          "container_id": backend["container"]["id"]}
+                sample = {
+                    "at": "2026-09-05T10:30:00+00:00",
+                    "bytes": index * 1048576,
+                    "container_id": backend["container"]["id"],
+                }
                 path.with_suffix(".memory.jsonl").write_text(json.dumps(sample) + "\n")
                 run = parse_oha(path.read_bytes(), duration=30)
                 run.update(run=index, peak_memory_bytes=sample["bytes"], memory_samples=1)
                 runs.append(run)
-            backend["endpoints"].append({"endpoint": endpoint, "runs": runs,
-                                         "selected": select_run(runs)})
+            backend["endpoints"].append(
+                {"endpoint": endpoint, "runs": runs, "selected": select_run(runs)}
+            )
         report["implementations"].append(backend)
     return report
 
@@ -125,11 +139,15 @@ class TrustedContextTests(ModuleTest):
             env = {**context_env(), "GITHUB_EVENT_NAME": event}
             self.assertEqual(official.trusted_context(env)["event"], event)
         changes = {
-            "GITHUB_ACTIONS": "false", "GITHUB_REPOSITORY": "attacker/fork",
-            "GITHUB_REF": "refs/heads/feature", "GITHUB_EVENT_NAME": "pull_request",
+            "GITHUB_ACTIONS": "false",
+            "GITHUB_REPOSITORY": "attacker/fork",
+            "GITHUB_REF": "refs/heads/feature",
+            "GITHUB_EVENT_NAME": "pull_request",
             "GITHUB_WORKFLOW_REF": WORKFLOW.replace("main", "feature"),
-            "GITHUB_WORKFLOW_SHA": "b" * 40, "GITHUB_SHA": "fixture",
-            "GITHUB_RUN_ID": "../1", "GITHUB_RUN_ATTEMPT": "0",
+            "GITHUB_WORKFLOW_SHA": "b" * 40,
+            "GITHUB_SHA": "fixture",
+            "GITHUB_RUN_ID": "../1",
+            "GITHUB_RUN_ATTEMPT": "0",
         }
         for key, value in changes.items():
             with self.subTest(key=key), self.assertRaises(BenchmarkFailure):
@@ -161,6 +179,7 @@ class ReportTests(ModuleTest):
 
     def test_local_smoke_partial_invalid_and_foreign_reports_are_rejected(self):
         report = self.module("report")
+
         def change(path, value):
             bad = copy.deepcopy(self.report)
             target = bad
@@ -168,18 +187,25 @@ class ReportTests(ModuleTest):
                 target = target[key]
             target[path[-1]] = value
             return bad
+
         mutations = [
-            (("official",), False), (("official",), 1), (("mode",), "smoke"),
-            (("status",), "failed"), (("schema_version",), True),
-            (("conditions", "duration_seconds"), 2), (("conditions", "workers"), True),
+            (("official",), False),
+            (("official",), 1),
+            (("mode",), "smoke"),
+            (("status",), "failed"),
+            (("schema_version",), True),
+            (("conditions", "duration_seconds"), 2),
+            (("conditions", "workers"), True),
             (("implementations",), self.report["implementations"][:3]),
             (("implementations", 0, "contract_checks"), 0),
             (("implementations", 0, "endpoints", 0, "runs"), []),
             (("implementations", 0, "endpoints", 0, "selected", "peak_memory_bytes"), 123),
-            (("metadata", "versions"), {}), (("metadata", "source_commit"), "fixture"),
+            (("metadata", "versions"), {}),
+            (("metadata", "source_commit"), "fixture"),
             (("metadata", "github", "ref"), "refs/pull/1/merge"),
             (("metadata", "runner", "environment"), "self-hosted"),
-            (("metadata", "docker"), {}), (("completed_at",), "2026-09-04T11:00:00Z"),
+            (("metadata", "docker"), {}),
+            (("completed_at",), "2026-09-04T11:00:00Z"),
         ]
         for path, value in mutations:
             with self.subTest(path=path), self.assertRaises(BenchmarkFailure):
@@ -189,7 +215,9 @@ class ReportTests(ModuleTest):
 
     def test_raw_tampering_missing_wrong_container_and_symlink_fail(self):
         report = self.module("report")
-        path = next((self.root / self.report["metadata"]["artifact_directory"]).glob("*-run-1.json"))
+        path = next(
+            (self.root / self.report["metadata"]["artifact_directory"]).glob("*-run-1.json")
+        )
         original = path.read_bytes()
         path.write_text("{}")
         with self.assertRaises(BenchmarkFailure):
@@ -241,8 +269,10 @@ class ReadmeTests(ModuleTest):
             self.assertIn("2.000", text)  # selected run's memory, not maximum of all 3 runs
             self.assertNotIn("3.000", text)
             for endpoint in self.report["implementations"][0]["endpoints"]:
-                self.assertIn(f'{endpoint["selected"]["requests_per_second"]:,.3f}', text)
-            self.assertEqual(generator.replace_section(text, generator.render(self.report, locale)), text)
+                self.assertIn(f"{endpoint['selected']['requests_per_second']:,.3f}", text)
+            self.assertEqual(
+                generator.replace_section(text, generator.render(self.report, locale)), text
+            )
 
     def test_empty_state_is_honest_and_bad_markers_fail_closed(self):
         generator = self.module("generate_readme")
@@ -259,7 +289,9 @@ class ReadmeTests(ModuleTest):
 
 class GitPublicationTests(ModuleTest):
     def git(self, *args, cwd=None, **kwargs):
-        return subprocess.check_output(["git", *args], cwd=cwd or self.repo, **kwargs).decode().strip()
+        return (
+            subprocess.check_output(["git", *args], cwd=cwd or self.repo, **kwargs).decode().strip()
+        )
 
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -299,8 +331,13 @@ class GitPublicationTests(ModuleTest):
         changed = self.git("diff-tree", "--no-commit-id", "--name-only", "-r", commit).splitlines()
         history = [p for p in changed if p.startswith("results/history/")]
         self.assertEqual(len(history), 1)
-        self.assertEqual(set(changed), {"README.md", "README.ja.md", "results/latest.json", *history})
-        self.assertEqual(self.git("show", commit + ":results/latest.json"), self.git("show", commit + ":" + history[0]))
+        self.assertEqual(
+            set(changed), {"README.md", "README.ja.md", "results/latest.json", *history}
+        )
+        self.assertEqual(
+            self.git("show", commit + ":results/latest.json"),
+            self.git("show", commit + ":" + history[0]),
+        )
         self.assertEqual((self.repo / ".git/index").read_bytes(), before_index)
         self.assertEqual((self.repo / "results/latest.json").read_bytes(), before)
         self.assertEqual(self.git("rev-parse", "HEAD"), self.source)
@@ -336,6 +373,43 @@ class GitPublicationTests(ModuleTest):
             publish.publish(self.report, self.repo, expected_context=context(self.source))
         self.assertEqual(self.remote_head(), newer)
 
+    def test_push_time_race_rejects_without_overwriting_concurrent_commit(self):
+        publish = self.module("publish")
+        original = publish.git
+        newer = self.git(
+            "commit-tree",
+            self.git("rev-parse", "HEAD^{tree}"),
+            "-p",
+            self.source,
+            input=b"test: concurrent publication race\n",
+        )
+
+        def racing_git(root, *args, **kwargs):
+            if args[0] == "push":
+                self.git("push", "-q", "origin", f"{newer}:refs/heads/main")
+            return original(root, *args, **kwargs)
+
+        with patch.object(publish, "git", side_effect=racing_git):
+            with self.assertRaises(BenchmarkFailure):
+                publish.publish(self.report, self.repo, expected_context=context(self.source))
+        self.assertEqual(self.remote_head(), newer)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_git_object_failure_does_not_publish_any_file(self):
+        publish = self.module("publish")
+        original = publish.git
+
+        def failing_git(root, *args, **kwargs):
+            if args[0] == "hash-object":
+                raise BenchmarkFailure("injected storage failure")
+            return original(root, *args, **kwargs)
+
+        with patch.object(publish, "git", side_effect=failing_git):
+            with self.assertRaisesRegex(BenchmarkFailure, "storage failure"):
+                publish.publish(self.report, self.repo, expected_context=context(self.source))
+        self.assertEqual(self.remote_head(), self.source)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
     def test_history_collision_is_not_overwritten(self):
         publish = self.module("publish")
         filename = publish.history_path(self.report)
@@ -346,7 +420,11 @@ class GitPublicationTests(ModuleTest):
         self.git("commit", "-qm", "test: existing history")
         self.git("push", "-q", "origin", "HEAD:main")
         source = self.git("rev-parse", "HEAD")
-        self.report["metadata"].update(source_commit=source, source_tree=self.git("rev-parse", "HEAD^{tree}"), github=context(source))
+        self.report["metadata"].update(
+            source_commit=source,
+            source_tree=self.git("rev-parse", "HEAD^{tree}"),
+            github=context(source),
+        )
         with self.assertRaises(BenchmarkFailure):
             publish.publish(self.report, self.repo, expected_context=context(source))
         self.assertEqual(self.remote_head(), source)

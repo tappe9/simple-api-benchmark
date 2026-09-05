@@ -5,7 +5,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .contract_test import load_cases
-from .results import number, object_fields, parse_oha, require, select_run, strict_json, validate_run
+from .results import (
+    number,
+    object_fields,
+    parse_oha,
+    require,
+    select_run,
+    strict_json,
+    validate_run,
+)
 from .run import IMPLEMENTATIONS, PROFILE
 
 REPOSITORY = "tappe9/simple-api-benchmark"
@@ -40,34 +48,62 @@ def sha(value, label: str) -> str:
 
 
 def validate_context(context: dict) -> None:
-    object_fields(context, (
-        "repository", "ref", "source_commit", "event", "workflow_ref", "workflow_sha",
-        "run_id", "run_attempt", "run_url",
-    ), "GitHub provenance")
+    object_fields(
+        context,
+        (
+            "repository",
+            "ref",
+            "source_commit",
+            "event",
+            "workflow_ref",
+            "workflow_sha",
+            "run_id",
+            "run_attempt",
+            "run_url",
+        ),
+        "GitHub provenance",
+    )
     require(context["repository"] == REPOSITORY and context["ref"] == REF, "untrusted source ref")
     require(context["event"] in ("schedule", "workflow_dispatch"), "untrusted event")
     require(context["workflow_ref"] == WORKFLOW, "untrusted workflow ref")
     sha(context["source_commit"], "invalid source commit")
     require(context["workflow_sha"] == context["source_commit"], "workflow/source mismatch")
     for key in ("run_id", "run_attempt"):
-        require(type(context[key]) is str and re.fullmatch(r"[1-9][0-9]*", context[key]) is not None,
-                "invalid " + key)
-    require(context["run_url"] == f"https://github.com/{REPOSITORY}/actions/runs/{context['run_id']}",
-            "invalid run URL")
+        require(
+            type(context[key]) is str and re.fullmatch(r"[1-9][0-9]*", context[key]) is not None,
+            "invalid " + key,
+        )
+    require(
+        context["run_url"] == f"https://github.com/{REPOSITORY}/actions/runs/{context['run_id']}",
+        "invalid run URL",
+    )
 
 
 def validate_report(report: dict, *, expected_context: dict | None = None) -> None:
-    object_fields(report, (
-        "schema_version", "status", "mode", "official", "started_at", "completed_at",
-        "conditions", "metadata", "implementations",
-    ), "report")
+    object_fields(
+        report,
+        (
+            "schema_version",
+            "status",
+            "mode",
+            "official",
+            "started_at",
+            "completed_at",
+            "conditions",
+            "metadata",
+            "implementations",
+        ),
+        "report",
+    )
     require(type(report["schema_version"]) is int and report["schema_version"] == 1, "schema")
     require(report["official"] is True and report["mode"] == "official", "not an official result")
     require(report["status"] == "verified", "unverified result")
     conditions = object_fields(report["conditions"], PROFILE, "conditions")
     for field, expected in PROFILE.items():
-        require(type(conditions[field]) is type(expected) and conditions[field] == expected,
-                "nonstandard condition: " + field)
+        require(
+            type(conditions[field]) is type(expected) and conditions[field] == expected,
+            "nonstandard condition: " + field,
+        )
     require(timestamp(report["completed_at"]) >= timestamp(report["started_at"]), "time order")
     metadata = report["metadata"]
     require(type(metadata) is dict, "metadata required")
@@ -78,9 +114,19 @@ def validate_report(report: dict, *, expected_context: dict | None = None) -> No
     if expected_context is not None:
         validate_context(expected_context)
         require(metadata["github"] == expected_context, "artifact belongs to a different run")
-    runner = object_fields(metadata.get("runner"), (
-        "name", "environment", "os", "architecture", "image_os", "image_version", "cpu_model",
-    ), "runner")
+    runner = object_fields(
+        metadata.get("runner"),
+        (
+            "name",
+            "environment",
+            "os",
+            "architecture",
+            "image_os",
+            "image_version",
+            "cpu_model",
+        ),
+        "runner",
+    )
     for key, value in runner.items():
         text(value, "missing runner " + key)
     require(runner["environment"] == "github-hosted" and runner["os"] == "Linux", "runner type")
@@ -93,26 +139,41 @@ def validate_report(report: dict, *, expected_context: dict | None = None) -> No
         values = versions[implementation]
         require(type(values) is dict and set(keys) <= set(values), "missing stack versions")
         for value in values.values():
-            require(type(value) is str and re.fullmatch(r"\d+\.\d+\.\d+", value) is not None,
-                    "invalid stack version")
+            require(
+                type(value) is str and re.fullmatch(r"\d+\.\d+\.\d+", value) is not None,
+                "invalid stack version",
+            )
     backends = report["implementations"]
     require(type(backends) is list and len(backends) == len(IMPLEMENTATIONS), "four APIs required")
     for backend, implementation in zip(backends, IMPLEMENTATIONS):
-        object_fields(backend, ("implementation", "container", "contract_checks", "endpoints"),
-                      "backend")
+        object_fields(
+            backend, ("implementation", "container", "contract_checks", "endpoints"), "backend"
+        )
         require(backend["implementation"] == implementation, "API order/identity mismatch")
-        require(type(backend["contract_checks"]) is int
-                and backend["contract_checks"] == 2 * len(load_cases()), "incomplete contract")
-        container = object_fields(backend["container"],
-                                  ("id", "image_id", "command", "postgresql_version"), "container")
-        require(type(container["id"]) is str and re.fullmatch(r"[0-9a-f]{64}", container["id"]),
-                "container ID required")
+        require(
+            type(backend["contract_checks"]) is int
+            and backend["contract_checks"] == 2 * len(load_cases()),
+            "incomplete contract",
+        )
+        container = object_fields(
+            backend["container"], ("id", "image_id", "command", "postgresql_version"), "container"
+        )
+        require(
+            type(container["id"]) is str and re.fullmatch(r"[0-9a-f]{64}", container["id"]),
+            "container ID required",
+        )
         text(container["image_id"], "image ID required")
-        require(type(container["command"]) is list and bool(container["command"]), "command required")
+        require(
+            type(container["command"]) is list and bool(container["command"]), "command required"
+        )
         for argument in container["command"]:
             text(argument, "invalid command")
-        require(text(container["postgresql_version"], "PostgreSQL version required").startswith(
-            "PostgreSQL "), "PostgreSQL version required")
+        require(
+            text(container["postgresql_version"], "PostgreSQL version required").startswith(
+                "PostgreSQL "
+            ),
+            "PostgreSQL version required",
+        )
         endpoints = backend["endpoints"]
         require(type(endpoints) is list and len(endpoints) == 3, "three endpoints required")
         for entry, endpoint in zip(endpoints, PROFILE["endpoints"]):
@@ -138,26 +199,37 @@ def read_regular(path: Path, root: Path, *, limit: int = 1024 * 1024) -> bytes:
 def audit_raw(report: dict, root: Path) -> None:
     validate_report(report)
     relative = report["metadata"].get("artifact_directory")
-    require(type(relative) is str and re.fullmatch(
-        r"\.cache/official/raw/sab-benchmark-[a-zA-Z0-9]+", relative), "invalid raw directory")
+    require(
+        type(relative) is str
+        and re.fullmatch(r"\.cache/official/raw/sab-benchmark-[a-zA-Z0-9]+", relative),
+        "invalid raw directory",
+    )
     directory = root / relative
     for backend in report["implementations"]:
         for endpoint in backend["endpoints"]:
-            stem = backend["implementation"] + "-" + endpoint["endpoint"].strip("/").replace("/", "-")
+            stem = (
+                backend["implementation"] + "-" + endpoint["endpoint"].strip("/").replace("/", "-")
+            )
             for run in endpoint["runs"]:
                 path = directory / f"{stem}-run-{run['run']}.json"
                 raw = parse_oha(read_regular(path, root), duration=30, request_timeout=15)
                 require(all(run[key] == value for key, value in raw.items()), "raw metric mismatch")
-                samples = [strict_json(line) for line in
-                           read_regular(path.with_suffix(".memory.jsonl"), root).splitlines()]
+                samples = [
+                    strict_json(line)
+                    for line in read_regular(path.with_suffix(".memory.jsonl"), root).splitlines()
+                ]
                 require(len(samples) == run["memory_samples"] and bool(samples), "sample count")
                 previous = timestamp(report["started_at"])
                 for sample in samples:
                     object_fields(sample, ("at", "bytes", "container_id"), "memory sample")
-                    require(sample["container_id"] == backend["container"]["id"], "wrong API memory")
+                    require(
+                        sample["container_id"] == backend["container"]["id"], "wrong API memory"
+                    )
                     number(sample["bytes"], "sample bytes", integer=True, positive=True)
                     require(sample["bytes"] <= PROFILE["api_memory_bytes"], "memory exceeds limit")
                     current = timestamp(sample["at"])
                     require(previous <= current <= timestamp(report["completed_at"]), "sample time")
                     previous = current
-                require(max(s["bytes"] for s in samples) == run["peak_memory_bytes"], "peak mismatch")
+                require(
+                    max(s["bytes"] for s in samples) == run["peak_memory_bytes"], "peak mismatch"
+                )

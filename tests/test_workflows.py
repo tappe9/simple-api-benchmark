@@ -39,17 +39,36 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("pull_request", ci.get("on", {}))
         self.assertEqual(set(ci["on"]), {"pull_request", "push"})
         self.assertEqual(ci["on"]["push"]["branches"], ["main"])
-        self.assertEqual(set(ci["on"]["push"]["paths-ignore"]),
-                         {"results/**", "README.md", "README.ja.md"})
+        self.assertEqual(
+            set(ci["on"]["push"]["paths-ignore"]), {"results/**", "README.md", "README.ja.md"}
+        )
         content = (ROOT / ".github/workflows/ci.yml").read_text()
-        for forbidden in ("secrets.", "contents: write", "pull_request_target", "workflow_run",
-                          "benchmark.official", "benchmark.publish"):
+        for forbidden in (
+            "secrets.",
+            "contents: write",
+            "pull_request_target",
+            "workflow_run",
+            "benchmark.official",
+            "benchmark.publish",
+        ):
             self.assertNotIn(forbidden, content)
-        for target in ("test-db", "test-go-gin", "test-rust-actix", "test-node-fastify",
-                       "test-python-fastapi", "test-contract", "test-benchmark", "benchmark-smoke"):
+        for target in (
+            "test-db",
+            "test-go-gin",
+            "test-rust-actix",
+            "test-node-fastify",
+            "test-python-fastapi",
+            "test-contract",
+            "test-benchmark",
+            "benchmark-smoke",
+        ):
             self.assertIn("make " + target, content)
-        uploads = [step for job in ci["jobs"].values() for step in job["steps"]
-                   if step.get("uses", "").startswith("actions/upload-artifact@")]
+        uploads = [
+            step
+            for job in ci["jobs"].values()
+            for step in job["steps"]
+            if step.get("uses", "").startswith("actions/upload-artifact@")
+        ]
         self.assertEqual(len(uploads), 1)
         self.assertEqual(uploads[0]["with"]["path"], ".cache/ci/format.patch")
         self.assertIn("git diff --exit-code HEAD", content)
@@ -67,7 +86,9 @@ class WorkflowTests(unittest.TestCase):
             self.assertIn("github.event.repository.default_branch", job["if"])
             self.assertIn("github.ref", job["if"])
             self.assertIn("tappe9/simple-api-benchmark", job["if"])
-            checkout = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout@"))
+            checkout = next(
+                s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout@")
+            )
             self.assertEqual(checkout["with"]["ref"], "${{ github.sha }}")
 
     def test_measurement_is_one_read_only_job_using_existing_runner(self):
@@ -94,10 +115,15 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(job["needs"], "measure")
         self.assertIn("needs.measure.result == 'success'", job["if"])
         self.assertEqual(job["permissions"], {"contents": "write"})
-        download = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/download-artifact@"))
+        download = next(
+            s for s in job["steps"] if s.get("uses", "").startswith("actions/download-artifact@")
+        )
         self.assertEqual(set(download["with"]), {"name", "path"})
-        upload = next(s for s in workflow["jobs"]["measure"]["steps"]
-                      if s.get("uses", "").startswith("actions/upload-artifact@"))
+        upload = next(
+            s
+            for s in workflow["jobs"]["measure"]["steps"]
+            if s.get("uses", "").startswith("actions/upload-artifact@")
+        )
         self.assertEqual(upload["with"]["name"], download["with"]["name"])
         self.assertIn("github.run_id", download["with"]["name"])
         self.assertIn("github.run_attempt", download["with"]["name"])
