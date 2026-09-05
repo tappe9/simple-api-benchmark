@@ -18,12 +18,11 @@ def load(name):
 
 
 class WorkflowTests(unittest.TestCase):
-    def test_only_two_permanent_workflows_with_pinned_actions_and_no_persisted_credentials(self):
+    def test_only_three_permanent_workflows_use_pinned_actions_and_safe_checkouts(self):
         paths = list((ROOT / ".github/workflows").glob("*.yml"))
-        self.assertEqual({p.name for p in paths}, {"ci.yml", "benchmark.yml"})
+        self.assertEqual({p.name for p in paths}, {"ci.yml", "benchmark.yml", "pages.yml"})
         for path in paths:
             workflow = load(path.name)
-            self.assertEqual(workflow["permissions"], {"contents": "read"})
             for job in workflow["jobs"].values():
                 self.assertEqual(job["runs-on"], "ubuntu-24.04")
                 self.assertGreater(int(job["timeout-minutes"]), 0)
@@ -36,6 +35,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_pr_ci_is_read_only_all_gates_and_smoke_never_publish(self):
         ci = load("ci.yml")
+        self.assertEqual(ci["permissions"], {"contents": "read"})
         self.assertIn("pull_request", ci.get("on", {}))
         self.assertEqual(set(ci["on"]), {"pull_request", "push"})
         self.assertEqual(ci["on"]["push"]["branches"], ["main"])
@@ -50,6 +50,7 @@ class WorkflowTests(unittest.TestCase):
             "workflow_run",
             "benchmark.official",
             "benchmark.publish",
+            "deploy-pages",
         ):
             self.assertNotIn(forbidden, content)
         for target in (
@@ -60,6 +61,7 @@ class WorkflowTests(unittest.TestCase):
             "test-python-fastapi",
             "test-contract",
             "test-benchmark",
+            "test-site",
             "benchmark-smoke",
         ):
             self.assertIn("make " + target, content)
@@ -77,6 +79,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_official_workflow_has_no_pr_or_push_trigger_and_only_default_ref(self):
         workflow = load("benchmark.yml")
+        self.assertEqual(workflow["permissions"], {"contents": "read"})
         self.assertEqual(set(workflow.get("on", {})), {"schedule", "workflow_dispatch"})
         self.assertEqual(workflow["on"]["schedule"], [{"cron": "27 14 * * 6"}])
         self.assertIn(workflow["on"]["workflow_dispatch"], ("", {}))
@@ -133,6 +136,39 @@ class WorkflowTests(unittest.TestCase):
         for step in job["steps"][:-1]:
             self.assertNotIn("GH_TOKEN", str(step))
         self.assertNotRegex(str(job), re.compile(r"make (test|benchmark)|docker (build|run)|npm "))
+
+    def test_pages_deploys_only_after_trusted_main_validation(self):
+        workflow = load("pages.yml")
+        self.assertEqual(set(workflow.get("on", {})), {"workflow_run", "workflow_dispatch"})
+        self.assertEqual(
+            set(workflow["on"]["workflow_run"]["workflows"]), {"CI", "Official benchmark"}
+        )
+        self.assertEqual(workflow["on"]["workflow_run"]["types"], ["completed"])
+        self.assertEqual(workflow["permissions"], {"contents": "read"})
+        self.assertEqual(set(workflow["jobs"]), {"build", "deploy"})
+        build = workflow["jobs"]["build"]
+        self.assertEqual(build.get("permissions", {"contents": "read"}), {"contents": "read"})
+        self.assertIn("python -m benchmark.pages", str(build))
+        self.assertIn("python -m benchmark.site", str(build))
+        upload = next(
+            step
+            for step in build["steps"]
+            if step.get("uses", "").startswith("actions/upload-pages-artifact@")
+        )
+        self.assertEqual(upload["with"]["path"], ".cache/site")
+        deploy = workflow["jobs"]["deploy"]
+        self.assertEqual(deploy["needs"], "build")
+        self.assertEqual(deploy["permissions"], {"pages": "write", "id-token": "write"})
+        self.assertEqual(deploy["environment"]["name"], "github-pages")
+        self.assertTrue(
+            any(
+                step.get("uses", "").startswith("actions/deploy-pages@")
+                for step in deploy["steps"]
+            )
+        )
+        content = (ROOT / ".github/workflows/pages.yml").read_text()
+        for forbidden in ("pull_request:", "pull_request_target", "contents: write", "secrets."):
+            self.assertNotIn(forbidden, content)
 
 
 if __name__ == "__main__":
