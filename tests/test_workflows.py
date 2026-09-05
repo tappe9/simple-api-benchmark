@@ -161,10 +161,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(deploy["permissions"], {"pages": "write", "id-token": "write"})
         self.assertEqual(deploy["environment"]["name"], "github-pages")
         self.assertTrue(
-            any(
-                step.get("uses", "").startswith("actions/deploy-pages@")
-                for step in deploy["steps"]
-            )
+            any(step.get("uses", "").startswith("actions/deploy-pages@") for step in deploy["steps"])
         )
         content = (ROOT / ".github/workflows/pages.yml").read_text()
         for forbidden in ("pull_request:", "pull_request_target", "contents: write", "secrets."):
