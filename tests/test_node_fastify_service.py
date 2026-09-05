@@ -154,8 +154,9 @@ def check_running_service() -> str:
     require("no-new-privileges:true" in state["HostConfig"]["SecurityOpt"], "privilege escalation allowed")
     ports = state["NetworkSettings"]["Ports"]["8080/tcp"]
     require(ports == [{"HostIp": "127.0.0.1", "HostPort": "8080"}], "runtime port is not loopback-only")
-    processes = run(["docker", "top", container, "-eo", "args"]).stdout.splitlines()[1:]
-    require(sum(line.strip() == "node src/server.js" for line in processes) == 1, "not one Node server")
+    processes = run(["docker", "top", container, "-eo", "pid,args"]).stdout.splitlines()[1:]
+    commands = [line.split(maxsplit=1)[1] for line in processes if line.strip()]
+    require(commands.count("node src/server.js") == 1, "not one Node server")
     run(["docker", "compose", "exec", "-T", "node-fastify", "node", "--input-type=module", "-e",
          "import assert from 'node:assert/strict'; import { existsSync } from 'node:fs'; "
          "assert.equal(process.version, 'v24.20.0'); assert.notEqual(process.getuid(), 0); "
