@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "api_cpus": 1,
+  "api_memory_bytes": 536870912,
+  "workers": 1,
+  "pool_max": 10,
+  "http_version": "1.1",
+  "warmup_seconds": 5,
+  "duration_seconds": 30,
+  "connections": 50,
+  "runs": 3,
+  "request_timeout_seconds": 15,
+  "endpoints": ["/json", "/db/42", "/cpu"]
+}
