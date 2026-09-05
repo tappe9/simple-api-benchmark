@@ -10,6 +10,7 @@ from benchmark.results import BenchmarkFailure
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ("index.html", "style.css", "app.mjs")
+PAGES_URL = "https://tappe9.github.io/simple-api-benchmark/"
 
 
 class SiteBuildTests(unittest.TestCase):
@@ -116,6 +117,21 @@ class SiteBuildTests(unittest.TestCase):
         self.assertFalse((self.output / "stale.txt").exists())
         self.assertFalse((self.output / "private.txt").exists())
         self.assertEqual((self.root / ".cache/keep.txt").read_text(), "unrelated cache")
+
+
+class ReleaseDocumentationTests(unittest.TestCase):
+    def test_bilingual_readmes_link_pages_and_no_longer_claim_development_status(self):
+        english = (ROOT / "README.md").read_text()
+        japanese = (ROOT / "README.ja.md").read_text()
+        for content in (english, japanese):
+            self.assertIn(PAGES_URL, content)
+            self.assertIn("v0.1.0", content)
+        self.assertNotIn("v0.1 is in development", english)
+        self.assertNotIn("v0.1を開発中", japanese)
+
+    def test_roadmap_records_v0_1_0_as_released(self):
+        roadmap = (ROOT / "ROADMAP.md").read_text()
+        self.assertIn("**Status: released.**", roadmap)
 
 
 if __name__ == "__main__":
