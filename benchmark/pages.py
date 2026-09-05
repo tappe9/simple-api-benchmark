@@ -1,6 +1,5 @@
 """Authorize Pages builds only for validated trusted-main workflow events."""
 
-import json
 import os
 import re
 import subprocess
@@ -86,13 +85,17 @@ def validate_event(environment, event, *, head: str, parents=(), changed=(), rep
     require(run.get("event") == context["event"], "benchmark event mismatch")
     require(run.get("id") == int(context["run_id"]), "benchmark run ID mismatch")
     require(run.get("run_attempt") == int(context["run_attempt"]), "benchmark attempt mismatch")
-    require(list(parents) == [source], "publication commit must have measured source as sole parent")
+    require(
+        list(parents) == [source], "publication commit must have measured source as sole parent"
+    )
 
     paths = list(changed)
     require(len(paths) == 4, "official publication must change exactly four files")
     fixed = {"README.md", "README.ja.md", "results/latest.json"}
     require(fixed <= set(paths), "official publication files missing")
-    history = [path for path in paths if path.startswith("results/history/") and path.endswith(".json")]
+    history = [
+        path for path in paths if path.startswith("results/history/") and path.endswith(".json")
+    ]
     require(len(history) == 1 and set(paths) == fixed | set(history), "unexpected publication path")
 
 
@@ -124,10 +127,12 @@ def main() -> int:
         changed = git("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").splitlines()
         report_path = ROOT / "results/latest.json"
         report = strict_json(report_path.read_bytes()) if report_path.is_file() else None
-        validate_event(os.environ, event, head=head, parents=parents, changed=changed, report=report)
+        validate_event(
+            os.environ, event, head=head, parents=parents, changed=changed, report=report
+        )
         print("Trusted main content authorized for Pages publication.")
         return 0
-    except (BenchmarkFailure, OSError, ValueError, json.JSONDecodeError) as error:
+    except (BenchmarkFailure, OSError, ValueError) as error:
         print(f"Pages authorization failed: {error}", file=sys.stderr)
         return 1
 
