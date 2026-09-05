@@ -1,10 +1,20 @@
-# Local results
+# Benchmark results
 
-`make benchmark` creates `results/latest.json` only after every measured run and
-all cleanup checks succeed. It is an ignored local output, not an official result.
-A failed or partial run leaves an existing file byte-for-byte unchanged.
+Official `latest.json` and unique `history/<UTC-completion>-<run_id>-<attempt>.json`
+are generated only by successful trusted-main weekly/manual benchmark automation.
+The same JSON generates both README result sections in one atomic Git commit.
+A failed, partial, invalid or stale-source run never replaces the published state.
+There is no fabricated placeholder result before the first official success.
 
-There are no fabricated placeholder measurements in the repository. Development
-fixtures live under `tests/fixtures/`; smoke diagnostics live under `.cache/` and
-never replace this file. Official publication and history automation are separate
-work. See [the benchmark guide](../docs/BENCHMARK.md) for the schema and limitations.
+`make benchmark` instead produces a **local** `official: false` working-copy result.
+The ignore rule prevents accidentally adding a first local file; once the official
+file is tracked, a local run appears as an ordinary working-copy modification.
+Do not commit it as official data. `make benchmark-smoke` writes only diagnostics
+under `.cache/` and never replaces latest. Synthetic test data stays in temporary
+test repositories, not here.
+
+[Automation and publication safety](../docs/AUTOMATION.md) documents artifact
+retention, history naming, trust boundaries and failure recovery. The
+[benchmark guide](../docs/BENCHMARK.md) defines units and the schema. GitHub-hosted
+results compare complete API stacks under the recorded conditions, not languages
+in isolation. Inspect `metadata` for source, runner and version provenance.

@@ -1,0 +1,91 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths-ignore: ['results/**', README.md, README.ja.md]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      COMPOSE_PROJECT_NAME: sab-ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.10'
+      - name: Python 3.10 shared compatibility
+        run: |
+          make test-benchmark
+          python -m unittest discover -s tests -p 'test_contract_*.py' -v
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version-file: apps/python-fastapi/.python-version
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: apps/node-fastify/.node-version
+      - name: Install the pinned test toolchains
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt,clippy
+          python -m pip install --require-hashes --only-binary=:all: -r apps/python-fastapi/requirements-dev.lock
+          python -m pip install --only-binary=:all: PyYAML==6.0.3
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - name: Workflow syntax, security, README, and source checks
+        run: |
+          actionlint -color
+          python -m unittest discover -s tests -p test_workflows.py -v
+          mkdir -p .cache/ci
+          python -m ruff format --diff --target-version py310 --config apps/python-fastapi/pyproject.toml benchmark tests/test_benchmark_*.py tests/test_contract_*.py tests/test_workflows.py > .cache/ci/format.patch
+          python -m ruff check --target-version py310 --config apps/python-fastapi/pyproject.toml benchmark tests/test_benchmark_*.py tests/test_contract_*.py tests/test_workflows.py
+          python -m benchmark.generate_readme --check
+          git diff --check HEAD^ HEAD
+      - name: make test-db
+        run: make test-db
+      - name: make test-go-gin
+        run: make test-go-gin
+      - name: make test-rust-actix
+        run: make test-rust-actix
+      - name: make test-node-fastify
+        run: make test-node-fastify
+      - name: make test-python-fastapi
+        run: make test-python-fastapi
+      - name: make test-contract
+        run: make test-contract
+      - name: make test-benchmark
+        run: |
+          make test-benchmark
+          python -O -m unittest discover -s tests -p 'test_benchmark_*.py' -v
+      - name: make benchmark-smoke (never publish)
+        run: |
+          make benchmark-smoke
+          git diff --exit-code HEAD
+          test -z "$(git ls-files --others --exclude-standard)"
+      - name: Clean only this job's default Compose project
+        if: always()
+        run: timeout 90 docker compose -p "$COMPOSE_PROJECT_NAME" down --remove-orphans --volumes --timeout 10
+      - name: Formatting diagnostic (no benchmark data)
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: formatting-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .cache/ci/format.patch
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: ignore

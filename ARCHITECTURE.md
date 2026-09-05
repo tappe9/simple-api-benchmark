@@ -203,13 +203,13 @@ Cleanup must run even when a build, contract test, or benchmark fails.
 
 ### Pull requests
 
-`ci.yml` will build changed applications, run contract tests, and execute a short smoke benchmark. Pull requests do not update published results.
+`ci.yml` builds and checks all four applications, runs the shared contract and focused tests, validates workflow syntax/security and generated README sections, and executes a short non-publishing smoke benchmark. Repository permissions are read-only and checkout credentials are not persisted.
 
 ### Scheduled and manual benchmarks
 
-`benchmark.yml` will run weekly and through `workflow_dispatch`. All four backends are measured sequentially in one GitHub Actions job so that they use the same runner.
+`benchmark.yml` runs weekly and through `workflow_dispatch`, only for trusted default-branch code. All four backends are measured sequentially in one GitHub Actions job so that they use the same runner.
 
-A successful run updates the result artifact used by README and GitHub Pages. A failed or incomplete run must not replace the latest verified result.
+The read-only measurement job calls `benchmark/official.py`, which reuses the existing runner and audits raw results. A separate successful-run-only publishing job uses `benchmark/publish.py` and `benchmark/generate_readme.py` to create one fast-forward commit for latest JSON, unique dated history and both README sections. A failed, incomplete or stale-source run cannot replace the latest verified result. `benchmark/report.py` owns publication validation, not measurement. See [automation](docs/AUTOMATION.md) for trust and transaction boundaries. GitHub Pages remains planned.
 
 ## Resource limits
 
