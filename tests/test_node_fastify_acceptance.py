@@ -1,8 +1,13 @@
-"""Regression tests for the Node / Fastify acceptance configuration checks."""
+"""Regression tests for the Node / Fastify acceptance checks."""
 
+import json
+import subprocess
 import unittest
+from unittest.mock import patch
 
-from test_node_fastify_service import APP, DB_ENVIRONMENT, CheckFailure, check_configuration
+from test_node_fastify_service import (
+    APP, DB_ENVIRONMENT, DEPENDENCIES, CheckFailure, check_configuration, check_running_service,
+)
 
 
 class ConfigurationTests(unittest.TestCase):
@@ -40,6 +45,52 @@ class ConfigurationTests(unittest.TestCase):
         config["services"]["node-fastify"]["ports"][0]["host_ip"] = "0.0.0.0"
         with self.assertRaisesRegex(CheckFailure, "loopback-only"):
             check_configuration(config)
+
+
+class ProcessTests(unittest.TestCase):
+    def check_processes(self, processes):
+        state = {
+            "State": {"Health": {"Status": "healthy"}},
+            "RestartCount": 0,
+            "HostConfig": {
+                "NanoCpus": 1000000000, "Memory": 536870912,
+                "Privileged": False, "CapDrop": ["ALL"],
+                "SecurityOpt": ["no-new-privileges:true"],
+            },
+            "Config": {"User": "node"},
+            "Path": "node", "Args": ["src/server.js"],
+            "NetworkSettings": {"Ports": {"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8080"}]}},
+        }
+
+        def fake_run(command):
+            if command == ["docker", "compose", "ps", "--quiet", "node-fastify"]:
+                output = "container-id\n"
+            elif command == ["docker", "inspect", "container-id"]:
+                output = json.dumps([state])
+            elif command[:2] == ["docker", "top"]:
+                self.assertEqual(command, ["docker", "top", "container-id", "-eo", "pid,args"])
+                output = "PID COMMAND\n" + processes
+            elif command[:3] == ["docker", "compose", "exec"]:
+                output = json.dumps({"dependencies": {
+                    name: {"version": version} for name, version in DEPENDENCIES.items()
+                }}) if "npm" in command else ""
+            else:
+                self.fail(f"unexpected command: {command}")
+            return subprocess.CompletedProcess(command, 0, stdout=output, stderr="")
+
+        with patch("test_node_fastify_service.run", side_effect=fake_run):
+            return check_running_service()
+
+    def test_requests_pid_column_and_accepts_one_server(self):
+        self.assertEqual(self.check_processes("  123 node src/server.js\n"), "container-id")
+
+    def test_rejects_multiple_servers(self):
+        with self.assertRaisesRegex(CheckFailure, "not one Node server"):
+            self.check_processes("123 node src/server.js\n124 node src/server.js\n")
+
+    def test_rejects_missing_server(self):
+        with self.assertRaisesRegex(CheckFailure, "not one Node server"):
+            self.check_processes("123 node src/healthcheck.js\n")
 
 
 if __name__ == "__main__":
