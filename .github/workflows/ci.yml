@@ -52,10 +52,12 @@ jobs:
           actionlint -color
           python -m unittest discover -s tests -p test_workflows.py -v
           mkdir -p .cache/ci
-          python -m ruff format --diff --target-version py310 --config apps/python-fastapi/pyproject.toml benchmark tests/test_benchmark_*.py tests/test_contract_*.py tests/test_workflows.py > .cache/ci/format.patch
-          python -m ruff check --target-version py310 --config apps/python-fastapi/pyproject.toml benchmark tests/test_benchmark_*.py tests/test_contract_*.py tests/test_workflows.py
+          python -m ruff format --diff --target-version py310 --config apps/python-fastapi/pyproject.toml benchmark tests/test_benchmark_*.py tests/test_contract_*.py tests/test_workflows.py tests/test_pages.py tests/test_site.py > .cache/ci/format.patch
+          python -m ruff check --target-version py310 --config apps/python-fastapi/pyproject.toml benchmark tests/test_benchmark_*.py tests/test_contract_*.py tests/test_workflows.py tests/test_pages.py tests/test_site.py
           python -m benchmark.generate_readme --check
           git diff --check HEAD^ HEAD
+      - name: make test-site
+        run: make test-site
       - name: make test-db
         run: make test-db
       - name: make test-go-gin
