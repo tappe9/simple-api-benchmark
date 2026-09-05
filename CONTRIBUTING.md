@@ -56,21 +56,48 @@ go vet ./...
 
 `make test-go-gin` additionally builds the production image, starts PostgreSQL and Go / Gin through Compose, verifies every documented endpoint, checks the pool and container constraints, and removes all project containers afterward.
 
-The complete Rust / Actix Web validation is:
+The complete Node / Fastify validation requires Node.js 24.20.0 (also recorded in `apps/node-fastify/.node-version`), npm, Python 3, Docker Compose v2, and Make:
 
 ```bash
-make test-rust-actix
+make test-node-fastify
 ```
 
-For a faster source-only check while working under `apps/rust-actix/`, run:
+For focused tests without Docker:
 
 ```bash
-cargo fmt --check
-cargo test --locked
-cargo clippy --locked --all-targets --all-features -- -D warnings
+cd apps/node-fastify
+npm ci
+npm test
+npm run lint
 ```
 
-`make test-rust-actix` additionally builds the release image, starts PostgreSQL and Rust / Actix Web through Compose, verifies every documented endpoint, checks the worker, pool, and container constraints, and removes all project containers afterward.
+Tests use the standard Node runner and Fastify's `inject()` API. `lint` is Node syntax validation, with no additional lint dependencies. The Docker acceptance check also validates actual SQL reads and updates, error responses, exact BIGINT serialization, image dependencies, a single non-root Node process, resource limits, SIGTERM shutdown, pool closure, and container/network cleanup. API implementations share host port `8080`; run them one at a time and use `make down` between manual sessions.
+
+Run the available DB and API acceptance targets after modifying shared Compose configuration. To update the Node baseline, intentionally change the exact runtime/dependency versions, regenerate and review `package-lock.json`, verify the official image digest, and update the matching documentation and acceptance expectations. The production image installs only runtime dependencies and starts Node directly.
+
+The complete Python / FastAPI validation requires Python 3.14.7 on a POSIX host, Docker Compose v2, and Make:
+
+```bash
+make test-python-fastapi PYTHON=python3.14
+```
+
+It creates and removes a temporary virtual environment, installs `requirements-dev.lock` with hash verification and binary wheels only, runs `pip check`, Ruff, compilation checks, and pytest, then builds and tests the production Docker service. Acceptance checks cover real SQL reads and updates, signed BIGINT boundaries, sanitized failures, startup readiness, image dependencies, one non-root Uvicorn worker, resource limits, SIGTERM pool cleanup, and removal of project containers and networks. No benchmark is run.
+
+For focused Python tests without Docker:
+
+```bash
+cd apps/python-fastapi
+python3.14 -m venv .venv
+. .venv/bin/activate
+python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.lock
+python -m pip check
+python -m ruff check .
+python -m pytest -q
+```
+
+The exact Python patch version is also recorded in `.python-version`. Tests use pytest, AnyIO's asyncio backend, and HTTPX2's ASGI transport, with explicit lifespan management and warnings treated as errors. They do not need a database. Production images install only `requirements.lock`; development dependencies and tests are excluded.
+
+When updating the Python baseline, review official releases and wheel availability for CPython 3.14, change the `.in` files and exact Python version intentionally, resolve the full runtime and development graphs in a clean environment, and record published wheel SHA256 hashes in both lock files. Review transitive changes, verify the official Docker index digest, and update the matching acceptance expectations and documentation. Never install from an unlocked `.in` file for validation or production. Rerun all DB/API acceptance targets after shared Compose changes.
 
 The following project-wide commands are added by later v0.1 issues:
 

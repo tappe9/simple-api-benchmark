@@ -54,10 +54,39 @@ services:
       - benchmark
     restart: "no"
 
-
-  rust-actix:
+  node-fastify:
     build:
-      context: ./apps/rust-actix
+      context: ./apps/node-fastify
+    environment:
+      <<: *database-environment
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - src/healthcheck.js
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    cpus: 1.0
+    mem_limit: 512m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - benchmark
+    restart: "no"
+
+  python-fastapi:
+    build:
+      context: ./apps/python-fastapi
     environment:
       <<: *database-environment
     depends_on:
@@ -68,14 +97,19 @@ services:
     healthcheck:
       test:
         - CMD
-        - /usr/local/bin/rust-actix
-        - healthcheck
+        - python
+        - -m
+        - benchmark_api.healthcheck
       interval: 2s
       timeout: 3s
       retries: 30
       start_period: 5s
     cpus: 1.0
     mem_limit: 512m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     networks:
       - benchmark
     restart: "no"

@@ -23,9 +23,13 @@ v0.1 compares one common framework from each language:
 
 The current Go / Gin implementation baseline uses Go 1.27.1, Gin 1.12.0, and pgx/v5 5.10.0. Exact language, framework, server, and database driver versions are stored with each published result so that later dependency updates remain visible.
 
-## Implemented stack baselines
+The Node / Fastify baseline uses [Node.js 24.20.0 LTS](https://nodejs.org/en/blog/release/v24.20.0), [Fastify 5.12.3](https://www.npmjs.com/package/fastify/v/5.12.3), and [pg 8.23.0](https://www.npmjs.com/package/pg/v/8.23.0). The LTS runtime and stable framework release line are selected for maintenance support. The official Debian Bookworm slim image is fixed by version and index digest in the Dockerfile; exact direct versions and `package-lock.json` freeze the dependency graph. Updating these pins is an explicit baseline change.
 
-The current Go baseline uses Go 1.27.1, Gin 1.12.0, and pgx/v5 5.10.0. The current Rust baseline uses Rust 1.98.1, Actix Web 4.15.0, and SQLx 0.9.0. Both implementations use one server process or worker, the shared pool maximum of 10 connections, and the same Compose resource limits. Published result files record these versions so later dependency updates remain visible.
+Node runs directly as one process with `NODE_ENV=production`, a maximum of 10 DB connections, and the shared 1 CPU / 512 MB limits. Fastify uses its default native-object serialization path without a custom serializer, response schema optimization, cluster mode, or worker threads. CPU requests perform direct recursive Fibonacci(30) on the main event loop, so each CPU calculation occupies that process until completion. This behavior is part of the stack being compared.
+
+The Python / FastAPI baseline uses [Python 3.14.7](https://www.python.org/downloads/release/python-3147/), [FastAPI 0.141.1](https://pypi.org/project/fastapi/0.141.1/), [Uvicorn 0.52.4](https://pypi.org/project/uvicorn/0.52.4/), and [asyncpg 0.31.0](https://pypi.org/project/asyncpg/0.31.0/). The standard CPython release and binary wheels avoid custom interpreter or compiler builds. The official [Python Docker image](https://hub.docker.com/_/python) is fixed as `python:3.14.7-slim-bookworm` plus its index digest. Runtime and development lock files pin the complete resolved dependency graphs and published wheel SHA256 hashes; installation uses `--require-hashes --only-binary=:all:`. Dependency or image updates are deliberate baseline changes, not floating upgrades.
+
+Uvicorn uses one worker, standard asyncio, and h11 for HTTP/1.1, without optional uvloop or httptools acceleration. FastAPI serializes ordinary Python values using its normal response handling. The asyncpg pool is capped at 10, reads the shared database settings, and is checked before HTTP startup. Each async CPU route executes direct recursive Fibonacci(30) on the event loop, occupying the process until the calculation finishes; it does not offload work to a thread or process pool. The common 1 CPU / 512 MB limits remain unchanged. Focused validation is separate from performance measurement.
 
 ## Tests
 
@@ -156,7 +160,25 @@ The Go / Gin implementation can be verified independently with:
 make test-go-gin
 ```
 
-This target checks Go formatting, unit tests, `go vet`, Compose configuration, image build, service health, exact endpoint responses, the 1 CPU and 512 MB limits, non-root execution, and cleanup. The target complete benchmark command remains:
+This target checks Go formatting, unit tests, `go vet`, Compose configuration, image build, service health, exact endpoint responses, the 1 CPU and 512 MB limits, non-root execution, and cleanup.
+
+With Node.js 24.20.0 installed, the Node / Fastify implementation can be verified with:
+
+```bash
+make test-node-fastify
+```
+
+It runs `npm ci`, focused Node tests, syntax validation, production image build, exact API responses against PostgreSQL, BIGINT boundaries, sanitized DB errors, resource/process checks, graceful shutdown, and container/network cleanup. These are focused implementation checks; the shared contract suite and benchmark runner are separate future issues. Start and test API services sequentially because they share local port `8080`.
+
+With Python 3.14.7 on a POSIX host, Python / FastAPI can be verified with:
+
+```bash
+make test-python-fastapi PYTHON=python3.14
+```
+
+The target verifies SHA256-locked installs, dependency consistency, Ruff, compilation, and focused pytest behavior before real Docker acceptance. It checks native JSON, exact signed BIGINT values, actual SQL updates, sanitized DB errors, startup failure, one non-root worker, resource limits, pool cleanup, and removal of containers and project networks. These checks do not generate benchmark results or replace the future shared contract suite. Docker execution is validated separately from mocked focused tests; unsupported or unexecuted environments must not be reported as passing.
+
+The target complete benchmark command remains:
 
 ```bash
 make benchmark

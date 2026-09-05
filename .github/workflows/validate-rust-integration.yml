@@ -1,0 +1,49 @@
+name: Validate Rust integration
+on:
+  push:
+    branches: [finalize/issue-4-rust-actix]
+permissions:
+  contents: read
+concurrency:
+  group: validate-rust-integration
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Export exact source and image metadata
+        run: |
+          set -euo pipefail
+          git archive --format=tar.gz HEAD > "$RUNNER_TEMP/source.tar.gz"
+          docker buildx imagetools inspect rust:1.98.0-bookworm
+          docker buildx imagetools inspect debian:bookworm-slim
+          if docker buildx imagetools inspect rust:1.98.1-bookworm; then
+            echo 'Rust 1.98.1 image is now available'
+          else
+            echo 'Rust 1.98.1 image is unavailable; the published builder must be used'
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rust-integration-source
+          path: ${{ runner.temp }}/source.tar.gz
+          retention-days: 3
+          if-no-files-found: error
+  red:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - name: Install exact Rust toolchain
+        run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt,clippy
+      - name: Run regression tests before fixes
+        working-directory: apps/rust-actix
+        run: |
+          set -euo pipefail
+          cargo +1.98.1 test --locked --test regressions

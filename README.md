@@ -102,24 +102,47 @@ Run the complete Go formatting, unit-test, vet, container, API-contract, resourc
 make test-go-gin
 ```
 
-## Rust / Actix Web implementation
+## Node.js / Fastify implementation
 
-The Rust implementation lives in `apps/rust-actix/` and uses Rust 1.98.1, Actix Web 4.15.0, and SQLx 0.9.0. It runs exactly one Actix worker with a PostgreSQL pool capped at 10 connections. Docker Compose limits the API container to 1 CPU and 512 MB, runs it as non-root user `65532:65532`, and publishes port `8080` only on the loopback interface.
+The Node implementation lives in `apps/node-fastify/` and uses Node.js 24.20.0 LTS, Fastify 5.12.3, and pg 8.23.0. Direct dependencies and `package-lock.json` are pinned; the official `node:24.20.0-bookworm-slim` image is also pinned by digest. The LTS runtime and stable Fastify 5 release line keep this baseline reproducible and maintainable.
+
+It starts one Node process directly in production mode, waits for a PostgreSQL readiness query, and uses a pool capped at 10 connections. The container runs as non-root user `node`, drops Linux capabilities, and uses the shared 1 CPU / 512 MB limits. Only `127.0.0.1:8080` is published. `/json` uses native objects and `/cpu` calculates Fibonacci(30) by direct recursion on every request. Shutdown closes the HTTP server and pool.
+
+Start only one API at a time because implementations share the local port:
 
 ```bash
-docker compose up --detach --build --wait rust-actix
+docker compose up --detach --build --wait node-fastify
 curl http://127.0.0.1:8080/health
 curl http://127.0.0.1:8080/json
 curl http://127.0.0.1:8080/db/42
 curl http://127.0.0.1:8080/cpu
 make down
+make test-node-fastify
 ```
 
-Run the complete Rust formatting, unit-test, Clippy, container, API-contract, resource-limit, and cleanup checks with:
+`make test-node-fastify` requires Node.js 24.20.0, npm, Python 3, Docker Compose v2, and Make. It runs focused tests, syntax validation, image and API checks (including real DB updates and errors), resource and process checks, graceful shutdown, and container/network cleanup.
+
+## Python / FastAPI implementation
+
+The Python implementation lives in `apps/python-fastapi/` and uses Python 3.14.7, FastAPI 0.141.1, Uvicorn 0.52.4, and asyncpg 0.31.0. Runtime and development dependencies have exact, SHA256-verified lock files. Both Docker stages use the official `python:3.14.7-slim-bookworm` image pinned by index digest.
+
+Uvicorn runs directly with one worker, the standard asyncio event loop, and the h11 HTTP/1.1 implementation. Startup checks PostgreSQL before accepting HTTP requests; the asyncpg pool has at most 10 connections. Responses are serialized from ordinary Python values, including exact signed BIGINT IDs. Every `/cpu` request computes Fibonacci(30) by direct recursion, without caching or precomputation. Lifespan shutdown closes the pool.
+
+The production container runs as non-root user `10001:10001`, excludes tests and development dependencies, drops Linux capabilities, and uses 1 CPU / 512 MB. Compose waits for PostgreSQL health, publishes only `127.0.0.1:8080`, probes `/health`, and does not restart the service.
 
 ```bash
-make test-rust-actix
+docker compose up --detach --build --wait python-fastapi
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/json
+curl http://127.0.0.1:8080/db/42
+curl http://127.0.0.1:8080/cpu
+make down
+make test-python-fastapi PYTHON=python3.14
 ```
+
+The complete acceptance target requires Python 3.14.7 on a POSIX host, Docker Compose v2, and Make. It installs the hash-locked development dependencies in a temporary virtual environment, runs Ruff and focused pytest tests, and verifies the real Docker service, DB errors and updates, resources, one worker, startup failure, SIGTERM shutdown, and container/network cleanup. See [Contributing](CONTRIBUTING.md) for focused tests without Docker.
+
+Rust / Actix Web is not yet integrated into `main`. The shared contract suite, benchmark runner, and permanent CI remain future work; no performance results are available.
 
 ## Planned usage
 

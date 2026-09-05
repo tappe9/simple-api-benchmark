@@ -102,24 +102,47 @@ Goのformat、unit test、vet、コンテナ起動、API仕様、リソース制
 make test-go-gin
 ```
 
-## Rust / Actix Web実装
+## Node.js / Fastify実装
 
-Rust実装は`apps/rust-actix/`にあり、Rust 1.98.1、Actix Web 4.15.0、SQLx 0.9.0を使用します。Actix workerは厳密に1つ、PostgreSQLのpool上限は10接続です。Docker ComposeではAPIコンテナを1 CPU・512 MBに制限し、非rootユーザー`65532:65532`で実行します。ポート`8080`はloopback interfaceだけに公開します。
+Node実装は`apps/node-fastify/`にあり、Node.js 24.20.0 LTS、Fastify 5.12.3、pg 8.23.0を使用します。直接依存と`package-lock.json`を固定し、公式の`node:24.20.0-bookworm-slim`イメージもdigestで固定します。再現性と保守性のため、LTSランタイムと安定版のFastify 5系を採用しています。
+
+production modeでNode processを直接1つ起動し、PostgreSQLへの確認queryが成功してからHTTP接続を受け付けます。pool上限は10接続です。コンテナは非rootユーザー`node`で実行し、Linux capabilitiesを削除し、共通の1 CPU・512 MB制限を適用します。公開先は`127.0.0.1:8080`だけです。`/json`は通常のobjectをシリアライズし、`/cpu`は毎request直接再帰でFibonacci(30)を計算します。終了時はHTTP serverとpoolを閉じます。
+
+各APIは同じローカルポートを使うため、1つずつ起動してください。
 
 ```bash
-docker compose up --detach --build --wait rust-actix
+docker compose up --detach --build --wait node-fastify
 curl http://127.0.0.1:8080/health
 curl http://127.0.0.1:8080/json
 curl http://127.0.0.1:8080/db/42
 curl http://127.0.0.1:8080/cpu
 make down
+make test-node-fastify
 ```
 
-Rustのformat、unit test、Clippy、コンテナ起動、API仕様、リソース制限、クリーンアップをまとめて確認するには、次を実行します。
+`make test-node-fastify`にはNode.js 24.20.0、npm、Python 3、Docker Compose v2、Makeが必要です。focused tests、構文検証、image・API確認（実DBの更新・異常系を含む）、resource・process確認、正常終了、container・networkの削除を実行します。
+
+## Python / FastAPI実装
+
+Python実装は`apps/python-fastapi/`にあり、Python 3.14.7、FastAPI 0.141.1、Uvicorn 0.52.4、asyncpg 0.31.0を使用します。実行時依存と開発用依存は、バージョンとSHA256 hashを固定したlockファイルで管理します。Dockerの両stageは、index digestで固定した公式の`python:3.14.7-slim-bookworm`イメージを使用します。
+
+Uvicornを直接1 workerで起動し、標準のasyncioイベントループとHTTP/1.1実装のh11を使用します。PostgreSQL接続確認後にHTTP受付を開始し、asyncpg poolの上限は10接続です。通常のPython値からJSONを生成し、signed BIGINTのIDも数値として正確に返します。`/cpu`は毎request直接再帰でFibonacci(30)を計算し、cacheや事前計算は使用しません。終了時はlifespanでpoolを閉じます。
+
+productionコンテナは非rootユーザー`10001:10001`で実行し、testsと開発用依存を含めません。Linux capabilitiesを削除し、1 CPU・512 MBに制限します。ComposeはPostgreSQLのhealthy状態を待ち、`127.0.0.1:8080`だけに公開し、`/health`を確認します。自動restartは行いません。
 
 ```bash
-make test-rust-actix
+docker compose up --detach --build --wait python-fastapi
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/json
+curl http://127.0.0.1:8080/db/42
+curl http://127.0.0.1:8080/cpu
+make down
+make test-python-fastapi PYTHON=python3.14
 ```
+
+acceptance targetにはPOSIX環境のPython 3.14.7、Docker Compose v2、Makeが必要です。一時virtual environmentへhash検証付きで開発用依存をinstallし、Ruff、focused pytest tests、実Dockerサービス、DB更新・異常系、資源制限、1 worker、起動失敗、SIGTERM終了、container・network削除を確認します。Dockerを使わないfocused testsは[Contributing](CONTRIBUTING.md)を参照してください。
+
+Rust / Actix Webはまだ`main`に統合されていません。共通contract suite、benchmark runner、恒久CIは今後の対象であり、性能測定結果はありません。
 
 ## 実行方法の目標
 

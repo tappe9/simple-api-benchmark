@@ -1,0 +1,5 @@
+*
+!Dockerfile
+!requirements.lock
+!benchmark_api
+!benchmark_api/*.py

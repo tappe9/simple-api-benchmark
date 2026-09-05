@@ -67,13 +67,21 @@ The process starts one HTTP server on internal port `8080`. Its pgx pool is capp
 
 The production image is built with a multi-stage Dockerfile, contains only the statically linked server binary, and runs as non-root user `65532:65532`. Compose limits the container to 1 CPU and 512 MB, waits for PostgreSQL to become healthy, and publishes API port `8080` only on `127.0.0.1` for local validation. The image's health check invokes the same binary in `healthcheck` mode.
 
-#### Rust / Actix Web
+#### Node.js / Fastify
 
-The Rust implementation lives in `apps/rust-actix/`. It uses Rust 1.98.1, Actix Web 4.15.0, and SQLx 0.9.0. `src/main.rs` owns process startup and fixes the Actix worker count at one, `src/api.rs` owns the HTTP contract, `src/database.rs` owns PostgreSQL connection configuration, and `src/item.rs` owns the parameterized item lookup abstraction.
+The Node implementation lives in `apps/node-fastify/`. Node.js 24.20.0 LTS, Fastify 5.12.3, and pg 8.23.0 are explicitly pinned, including the transitive dependency lock. `src/app.js` owns routes and native JSON responses, `src/database.js` creates the PostgreSQL pool from all five required `DATABASE_*` settings, and `src/server.js` owns startup and shutdown. `src/healthcheck.js` verifies the readiness response with a two-second timeout.
 
-The process listens on internal port `8080`, reads the shared `DATABASE_*` settings, and caps the SQLx pool at 10 connections. `/db/{id}` validates the identifier before binding it to the query, while `/cpu` performs direct, uncached recursion for Fibonacci(30) on every request.
+The process checks PostgreSQL with `SELECT 1` before listening on `0.0.0.0:8080` inside the container. The pool uses at most 10 connections and a five-second connection timeout. Decimal IDs are validated against PostgreSQL's signed BIGINT range before a bound-parameter query. pg returns BIGINT values as strings; safe values become JavaScript numbers, while larger values use the native `JSON.rawJSON` numeric primitive to preserve exact numeric JSON through Fastify's normal serialization path. DB failures return only `{"error":"internal server error"}`. Each `/cpu` request invokes direct recursive Fibonacci(30), with no cached or precomputed result.
 
-The production image is a release multi-stage build and runs as numeric non-root user `65532:65532`. Compose limits the container to 1 CPU and 512 MB, waits for PostgreSQL to become healthy, and publishes API port `8080` only on `127.0.0.1`. The image health check invokes the same binary in `healthcheck` mode.
+The multi-stage Dockerfile installs runtime dependencies with `npm ci --omit=dev --ignore-scripts`. Both stages use `node:24.20.0-bookworm-slim` pinned to index digest `sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e`. The final image excludes tests and dependency-install caches, runs as user `node`, and starts `node src/server.js` directly. Compose applies production mode, PostgreSQL health ordering, 1 CPU / 512 MB, capability removal, no privilege escalation, and loopback-only host port publication. SIGINT/SIGTERM close the server and pool with a five-second shutdown deadline.
+
+#### Python / FastAPI
+
+The Python implementation lives in `apps/python-fastapi/`. Python 3.14.7, FastAPI 0.141.1, Uvicorn 0.52.4, and asyncpg 0.31.0 are explicitly pinned. `benchmark_api/app.py` owns the routes, ordinary Python response values, and FastAPI lifespan. `benchmark_api/database.py` validates all five shared `DATABASE_*` settings and owns the asyncpg pool. `benchmark_api/healthcheck.py` checks the HTTP status, JSON content type, and exact readiness body with a two-second timeout.
+
+The lifespan creates a pool with `min_size=1` and `max_size=10`, executes `SELECT 1`, and only then allows Uvicorn to accept requests. Connection and command timeouts are five seconds. IDs must be ASCII signed decimal integers in PostgreSQL's BIGINT range; invalid IDs return 400 before any pool query. Valid IDs are passed to `SELECT id, name, price FROM items WHERE id = $1` as a bound integer. Missing rows return 404, and DB failures expose only `{"error":"internal server error"}`. Python integers preserve BIGINT values through normal FastAPI serialization. The async CPU route directly computes recursive Fibonacci(30) for each request on the event loop, without an executor, memoization, or precomputed data.
+
+Uvicorn is the direct container process, with `--workers 1 --loop asyncio --http h11`, no access log, and a five-second graceful HTTP shutdown timeout. The lifespan closes the pool with a five-second bound and terminates remaining connections only if graceful pool closure fails or is cancelled. The production image installs only the SHA256-verified runtime lock and excludes tests and development tools. Both Docker stages use `python:3.14.7-slim-bookworm` pinned to index digest `sha256:9ab8d9c8514b44f90cf0029dd42fdd7e9e211e639c8b995304cc04568dee900f`. Compose uses non-root user `10001:10001`, 1 CPU / 512 MB, healthy PostgreSQL ordering, dropped capabilities, no privilege escalation, loopback-only port `8080`, and no restarts.
 
 ### PostgreSQL
 
