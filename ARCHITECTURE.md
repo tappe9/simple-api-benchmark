@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the planned v0.1 structure of Simple API Benchmark.
+This document describes the v0.1 structure of Simple API Benchmark.
 
 ## Design goals
 
@@ -144,15 +144,16 @@ The runner is Python because it is easy to read and is not part of the measured 
 
 ### Results page
 
-The v0.1 results page is a static site under `site/`. It reads `results/latest.json` and displays a small table and bar charts. It does not need a frontend framework or server-side runtime.
+The v0.1 results page is a static site under `site/`. It reads the same verified `results/latest.json` used by README and renders the table, comparison bars, run conditions, recorded versions, and complete-stack limitation without embedding benchmark numbers in site source. `benchmark/site.py` validates and stages only the expected static assets plus the verified JSON. `benchmark/pages.py` validates the trusted-main workflow context before the Pages artifact may be uploaded.
 
-## Planned repository layout
+## Repository layout
 
 ```text
 simple-api-benchmark/
 ├── .github/workflows/
 │   ├── ci.yml
-│   └── benchmark.yml
+│   ├── benchmark.yml
+│   └── pages.yml
 ├── apps/
 │   ├── go-gin/
 │   ├── rust-actix/
@@ -163,6 +164,8 @@ simple-api-benchmark/
 │   ├── contract_test.py
 │   ├── contract_runner.py
 │   ├── generate_readme.py
+│   ├── pages.py
+│   ├── site.py
 │   └── run.py
 ├── database/
 │   └── init.sql
@@ -173,15 +176,13 @@ simple-api-benchmark/
 │   ├── latest.json
 │   └── history/
 ├── site/
-│   ├── app.js
+│   ├── app.mjs
 │   ├── index.html
 │   └── style.css
 ├── docker-compose.yml
 ├── Makefile
 └── README.md
 ```
-
-Directories are added only when the related implementation issue is completed.
 
 ## Local benchmark flow
 
@@ -203,17 +204,21 @@ Cleanup must run even when a build, contract test, or benchmark fails.
 
 ### Pull requests
 
-`ci.yml` builds and checks all four applications, runs the shared contract and focused tests, validates workflow syntax/security and generated README sections, and executes a short non-publishing smoke benchmark. Repository permissions are read-only and checkout credentials are not persisted.
+`ci.yml` builds and checks all four applications, runs the shared contract and focused tests, validates workflow syntax/security and generated README sections, validates the static Pages contracts, and executes a short non-publishing smoke benchmark. Repository permissions are read-only and checkout credentials are not persisted.
 
 ### Scheduled and manual benchmarks
 
 `benchmark.yml` runs weekly and through `workflow_dispatch`, only for trusted default-branch code. All four backends are measured sequentially in one GitHub Actions job so that they use the same runner.
 
-The read-only measurement job calls `benchmark/official.py`, which reuses the existing runner and audits raw results. A separate successful-run-only publishing job uses `benchmark/publish.py` and `benchmark/generate_readme.py` to create one fast-forward commit for latest JSON, unique dated history and both README sections. A failed, incomplete or stale-source run cannot replace the latest verified result. `benchmark/report.py` owns publication validation, not measurement. See [automation](docs/AUTOMATION.md) for trust and transaction boundaries. GitHub Pages remains planned.
+The read-only measurement job calls `benchmark/official.py`, which reuses the existing runner and audits raw results. A separate successful-run-only publishing job uses `benchmark/publish.py` and `benchmark/generate_readme.py` to create one fast-forward commit for latest JSON, unique dated history and both README sections. A failed, incomplete or stale-source run cannot replace the latest verified result. `benchmark/report.py` owns publication validation, not measurement. See [automation](docs/AUTOMATION.md) for trust and transaction boundaries.
+
+### GitHub Pages
+
+`pages.yml` deploys only trusted default-branch content. A successful main CI run can deploy an ordinary source change. Because verified result commits deliberately do not start CI, a successful official benchmark completion can also trigger Pages; `benchmark/pages.py` requires that the current commit be exactly the four-file publication commit produced for that upstream run. Pull-request, fork, failed, stale, malformed, and unrelated workflow events fail before a Pages artifact is uploaded. The build job has read-only repository access; only the dependent deploy job receives `pages: write` and OIDC permissions.
 
 ## Resource limits
 
-The initial v0.1 profile is deliberately easy to explain:
+The v0.1 profile is deliberately easy to explain:
 
 ```text
 API container CPU:          1 CPU
@@ -226,8 +231,8 @@ Runs per test:               3
 Displayed value:             middle result
 ```
 
-The values may be adjusted before the first published benchmark if GitHub-hosted runner measurements show that the load generator becomes the bottleneck. Any change must be documented before publishing results.
+A future baseline change must be explicit, documented, tested, and reviewed before new results are compared with the v0.1 baseline.
 
 ## Security boundary
 
-Framework implementations are executable code. Pull request workflows therefore use read-only repository access and do not receive deployment credentials. Publishing is performed only from trusted code on the default branch.
+Framework implementations are executable code. Pull request workflows therefore use read-only repository access and do not receive deployment credentials. Official benchmark result commits require trusted default-branch code, and GitHub Pages deploys only after an independently validated trusted-main workflow event. Deployment permission exists only in the Pages deploy job.

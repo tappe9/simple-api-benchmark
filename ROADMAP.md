@@ -4,7 +4,7 @@ Simple API Benchmark is developed in small stages. The v0.1 goal is a complete, 
 
 ## v0.1.0
 
-v0.1 is complete when a reader can clone the repository, run one command, and see verified results for four API stacks.
+**Status: released.** v0.1.0 provides a cloneable, one-command benchmark with verified results for four API stacks and a simple GitHub Pages result view.
 
 1. Define the shared API contract.
 2. Add the Docker Compose and PostgreSQL environment.
@@ -17,7 +17,7 @@ v0.1 is complete when a reader can clone the repository, run one command, and se
 9. Add pull request CI and weekly benchmark automation.
 10. Add the GitHub Pages result view and publish v0.1.0.
 
-Detailed work and acceptance criteria are tracked in the `v0.1.0` GitHub milestone.
+The completed work and acceptance criteria are recorded in the `v0.1.0` GitHub milestone.
 
 ## After v0.1
 

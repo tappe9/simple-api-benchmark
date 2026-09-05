@@ -1,12 +1,12 @@
 # Simple API Benchmark
 
-[English](README.md)
+[English](README.md) · [結果サイト](https://tappe9.github.io/simple-api-benchmark/)
 
 **Go・Rust・Node.js・Pythonを、同じAPI・同じ制限・同じ負荷で比較します。**
 
 Simple API Benchmarkは、4つのAPIスタックを同じエンドポイント、同じDockerリソース制限、同じベンチマーク設定で比較するOSSです。普遍的な最速言語を決めることではなく、誰でも理解できて、自分でも再実行できる小さな比較を目指します。
 
-> **現在の状態:** v0.1を開発中です。CIと公式benchmark自動化を利用できます。GitHub Pagesと初回releaseは今後の対象です。
+> **現在の状態:** v0.1.0をリリース済みです。CI、公式benchmark自動化、GitHub Pagesの結果サイトを利用できます。
 
 ## 比較対象
 
@@ -204,6 +204,7 @@ focused testsは`make test-benchmark`、短縮診断は`make benchmark-smoke`で
 
 ## ドキュメント
 
+- [結果サイト](https://tappe9.github.io/simple-api-benchmark/)
 - [アーキテクチャ](ARCHITECTURE.md)
 - [API仕様](docs/API-CONTRACT.md)
 - [測定方法](docs/METHODOLOGY.md)
