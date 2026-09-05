@@ -79,7 +79,7 @@ class SiteBuildTests(unittest.TestCase):
 
     def test_duplicate_keys_and_invalid_json_do_not_replace_previous_build(self):
         self.previous()
-        for raw in (b'{"official":true,"official":false}', b'{"value":NaN}', b'not json'):
+        for raw in (b'{"official":true,"official":false}', b'{"value":NaN}', b"not json"):
             (self.root / "results/latest.json").write_bytes(raw)
             with self.assertRaises(BenchmarkFailure):
                 self.build()
