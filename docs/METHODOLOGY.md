@@ -27,6 +27,10 @@ The Node / Fastify baseline uses [Node.js 24.20.0 LTS](https://nodejs.org/en/blo
 
 Node runs directly as one process with `NODE_ENV=production`, a maximum of 10 DB connections, and the shared 1 CPU / 512 MB limits. Fastify uses its default native-object serialization path without a custom serializer, response schema optimization, cluster mode, or worker threads. CPU requests perform direct recursive Fibonacci(30) on the main event loop, so each CPU calculation occupies that process until completion. This behavior is part of the stack being compared.
 
+The Python / FastAPI baseline uses [Python 3.14.7](https://www.python.org/downloads/release/python-3147/), [FastAPI 0.141.1](https://pypi.org/project/fastapi/0.141.1/), [Uvicorn 0.52.4](https://pypi.org/project/uvicorn/0.52.4/), and [asyncpg 0.31.0](https://pypi.org/project/asyncpg/0.31.0/). The standard CPython release and binary wheels avoid custom interpreter or compiler builds. The official [Python Docker image](https://hub.docker.com/_/python) is fixed as `python:3.14.7-slim-bookworm` plus its index digest. Runtime and development lock files pin the complete resolved dependency graphs and published wheel SHA256 hashes; installation uses `--require-hashes --only-binary=:all:`. Dependency or image updates are deliberate baseline changes, not floating upgrades.
+
+Uvicorn uses one worker, standard asyncio, and h11 for HTTP/1.1, without optional uvloop or httptools acceleration. FastAPI serializes ordinary Python values using its normal response handling. The asyncpg pool is capped at 10, reads the shared database settings, and is checked before HTTP startup. Each async CPU route executes direct recursive Fibonacci(30) on the event loop, occupying the process until the calculation finishes; it does not offload work to a thread or process pool. The common 1 CPU / 512 MB limits remain unchanged. Focused validation is separate from performance measurement.
+
 ## Tests
 
 ### JSON
@@ -165,6 +169,14 @@ make test-node-fastify
 ```
 
 It runs `npm ci`, focused Node tests, syntax validation, production image build, exact API responses against PostgreSQL, BIGINT boundaries, sanitized DB errors, resource/process checks, graceful shutdown, and container/network cleanup. These are focused implementation checks; the shared contract suite and benchmark runner are separate future issues. Start and test API services sequentially because they share local port `8080`.
+
+With Python 3.14.7 on a POSIX host, Python / FastAPI can be verified with:
+
+```bash
+make test-python-fastapi PYTHON=python3.14
+```
+
+The target verifies SHA256-locked installs, dependency consistency, Ruff, compilation, and focused pytest behavior before real Docker acceptance. It checks native JSON, exact signed BIGINT values, actual SQL updates, sanitized DB errors, startup failure, one non-root worker, resource limits, pool cleanup, and removal of containers and project networks. These checks do not generate benchmark results or replace the future shared contract suite. Docker execution is validated separately from mocked focused tests; unsupported or unexecuted environments must not be reported as passing.
 
 The target complete benchmark command remains:
 
