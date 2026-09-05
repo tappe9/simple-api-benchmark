@@ -174,17 +174,37 @@ project name permits manual recovery with `docker compose -p <project> down
 
 Both commands exit non-zero on failure; `run_contract()` raises `ContractFailure`.
 A caller must stop before performance measurement on either failure. The benchmark
-runner that will consume this gate is still a separate issue; these commands never
-measure performance or generate results. Implementation-specific acceptance tests
+runner calls `run_contract()` directly on its own running API; these correctness
+commands never measure performance or generate results. Implementation-specific acceptance tests
 remain responsible for internal SQL, uncached computation, process, and resource
 constraints that a response-only check cannot prove.
 
-The following project-wide commands are added by later v0.1 issues:
+### Benchmark runner checks
 
 ```bash
-make test
-make benchmark
+make test-benchmark    # strict parser, selection, process/lifecycle failure tests
+make benchmark-smoke   # short real-container diagnostic; latest.json unchanged
+make benchmark         # full fixed profile and atomic local result generation
 ```
+
+Read [the benchmark guide](docs/BENCHMARK.md) before running real measurements.
+Use a clean committed source tree and a local Unix-socket Linux Docker daemon.
+The installer verifies both the checksum and version of oha 1.16.0 before use.
+A fixture or smoke test is not a full benchmark, and development validation is
+not an official published result. Keep raw output and failed attempts available
+when diagnosing failures; never rerun simply to obtain a more favorable value.
+
+For source-only lint/format checks with the existing hash-locked Ruff tool:
+
+```bash
+python -m ruff check --target-version py310 --config apps/python-fastapi/pyproject.toml benchmark tests/test_benchmark_*.py tests/test_contract_*.py
+python -m ruff format --target-version py310 --check --config apps/python-fastapi/pyproject.toml benchmark tests/test_benchmark_*.py tests/test_contract_*.py
+ git diff --check
+```
+
+Run all existing DB/API acceptance targets and `make test-contract` after changes
+to shared execution. Permanent CI and the project-wide `make test` target belong
+to the next v0.1 issue.
 
 A pull request must pass the available checks for the area it changes.
 
