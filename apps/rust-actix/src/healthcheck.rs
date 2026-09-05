@@ -27,6 +27,7 @@ impl fmt::Display for HealthcheckError {
 impl Error for HealthcheckError {}
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct HealthResponse {
     status: String,
 }

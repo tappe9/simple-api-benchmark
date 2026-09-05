@@ -114,6 +114,35 @@ services:
       - benchmark
     restart: "no"
 
+  rust-actix:
+    build:
+      context: ./apps/rust-actix
+    environment:
+      <<: *database-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test:
+        - CMD
+        - /usr/local/bin/rust-actix
+        - healthcheck
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    cpus: 1.0
+    mem_limit: 512m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - benchmark
+    restart: "no"
+
 networks:
   benchmark:
     driver: bridge

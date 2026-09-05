@@ -56,6 +56,26 @@ go vet ./...
 
 `make test-go-gin` additionally builds the production image, starts PostgreSQL and Go / Gin through Compose, verifies every documented endpoint, checks the pool and container constraints, and removes all project containers afterward.
 
+The complete Rust / Actix Web validation requires Rustup, Python 3, Docker Compose v2, and Make:
+
+```bash
+make test-rust-actix
+```
+
+For focused source checks without Docker:
+
+```bash
+cd apps/rust-actix
+rustup toolchain install 1.98.1 --profile minimal --component rustfmt,clippy
+cargo fmt --check
+cargo test --locked
+cargo clippy --locked --all-targets --all-features -- -D warnings
+```
+
+The toolchain file selects Rust 1.98.1. Do not regenerate `Cargo.lock`, format files, or apply automatic fixes as part of validation: verify the committed tree. The Docker builder uses a published 1.98.0 image pinned by digest and explicitly installs compiler 1.98.1; the runtime base is independently digest-pinned. Dependency and base-image changes must be intentional and validated with all available DB/API acceptance targets.
+
+The Rust acceptance target also checks native JSON types, real database updates, signed BIGINT boundaries, sanitized query errors, a single non-root server, resource and network settings, startup failure, SIGTERM exit, and connection/container/network cleanup. It does not run a benchmark or replace the future common contract suite.
+
 The complete Node / Fastify validation requires Node.js 24.20.0 (also recorded in `apps/node-fastify/.node-version`), npm, Python 3, Docker Compose v2, and Make:
 
 ```bash

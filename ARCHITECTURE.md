@@ -67,6 +67,16 @@ The process starts one HTTP server on internal port `8080`. Its pgx pool is capp
 
 The production image is built with a multi-stage Dockerfile, contains only the statically linked server binary, and runs as non-root user `65532:65532`. Compose limits the container to 1 CPU and 512 MB, waits for PostgreSQL to become healthy, and publishes API port `8080` only on `127.0.0.1` for local validation. The image's health check invokes the same binary in `healthcheck` mode.
 
+#### Rust / Actix Web
+
+The Rust implementation lives in `apps/rust-actix/` and pins Rust 1.98.1, Actix Web 4.15.0, SQLx 0.9.0, Serde 1.0.228, and serde_json 1.0.145. `Cargo.lock` fixes the transitive dependency graph. One Actix worker serves port `8080`, uses native Serde response values, and performs direct recursive Fibonacci(30) for every CPU request. The SQLx pool connects before HTTP startup and allows at most 10 PostgreSQL connections.
+
+The production Dockerfile uses the published `rust:1.98.0-bookworm` builder pinned by digest and explicitly installs compiler 1.98.1, which fixes a compiler miscompilation. It builds with `cargo +1.98.1 build --release --locked`. The digest-pinned Debian Bookworm slim runtime contains the release binary, not Cargo or the source tree, and runs as `65532:65532`. Compose waits for healthy PostgreSQL, drops capabilities, disallows privilege escalation, applies 1 CPU / 512 MB limits, publishes only `127.0.0.1:8080`, and disables restarts.
+
+`src/api.rs` owns the native response DTOs, ID parsing, and direct recursive CPU calculation. `src/item.rs` binds signed BIGINT IDs to the shared query using SQLx. Invalid IDs return 400 before a store call; absent rows return 404, and query errors produce only `{"error":"internal server error"}`. Configuration diagnostics omit sensitive values. `src/healthcheck.rs` checks the readiness response with bounded connection/read/write timeouts and rejects additional JSON fields.
+
+Rust tests use in-memory configuration lookups rather than mutating process-global environment variables. Docker acceptance verifies real row updates, exact BIGINT values, SQL errors, the direct non-root server process, startup failure, normal SIGTERM exit, and zero remaining application DB connections after shutdown.
+
 #### Node.js / Fastify
 
 The Node implementation lives in `apps/node-fastify/`. Node.js 24.20.0 LTS, Fastify 5.12.3, and pg 8.23.0 are explicitly pinned, including the transitive dependency lock. `src/app.js` owns routes and native JSON responses, `src/database.js` creates the PostgreSQL pool from all five required `DATABASE_*` settings, and `src/server.js` owns startup and shutdown. `src/healthcheck.js` verifies the readiness response with a two-second timeout.

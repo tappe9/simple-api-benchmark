@@ -11,6 +11,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from urllib.parse import quote
 from typing import Any, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -116,6 +117,8 @@ def check_static_contract() -> None:
     ):
         require(dependency in manifest, f"dependency is not pinned: {dependency}")
 
+    require('channel = "1.98.1"' in (RUST_APP / "rust-toolchain.toml").read_text(),
+            "Rust toolchain differs from the production compiler")
     compose = COMPOSE_FILE.read_text(encoding="utf-8")
     service = compose_service_block(compose, "rust-actix")
     require("context: ./apps/rust-actix" in service, "rust-actix build context is incorrect")
@@ -126,9 +129,11 @@ def check_static_contract() -> None:
     require("/usr/local/bin/rust-actix" in service, "rust-actix health check is missing")
 
     dockerfile = (RUST_APP / "Dockerfile").read_text(encoding="utf-8")
-    require("FROM rust:1.98.1-bookworm" in dockerfile, "Rust builder image is not version-pinned")
-    require("cargo build --release --locked" in dockerfile, "release build is missing")
-    require("FROM debian:bookworm-slim" in dockerfile, "runtime image is not Debian slim")
+    require("FROM rust:1.98.0-bookworm@sha256:82150a52ec202c1b14d7817e14516c392bb7f5cfebd88f1ed531cb37ebd39922" in dockerfile, "Rust builder image is not digest-pinned")
+    require("rustup toolchain install 1.98.1 --profile minimal --no-self-update" in dockerfile,
+            "patched Rust compiler is not explicitly installed")
+    require("cargo +1.98.1 build --release --locked" in dockerfile, "release build is missing")
+    require("FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171" in dockerfile, "runtime image is not Debian slim")
     require("USER 65532:65532" in dockerfile, "runtime does not use the non-root user")
     require(
         'ENTRYPOINT ["/usr/local/bin/rust-actix"]' in dockerfile,
@@ -136,6 +141,8 @@ def check_static_contract() -> None:
     )
 
     api_source = (RUST_APP / "src" / "api.rs").read_text(encoding="utf-8")
+    production_api = api_source.split("#[cfg(test)]", 1)[0]
+    require("832040" not in production_api, "precomputed CPU result in production")
     compact_api = re.sub(r"\s+", "", api_source)
     require("fibonacci(n-1)+fibonacci(n-2)" in compact_api, "CPU implementation is not direct recursion")
     require("derive(Serialize)" in compact_api, "native Serde response types are missing")
@@ -185,47 +192,93 @@ def request_json(path: str, expected_status: int) -> dict[str, Any]:
     return payload
 
 
+def expect_json(path: str, status: int, expected: dict[str, Any]) -> None:
+    payload = request_json(path, status)
+    require(payload == expected, f"{path}: unexpected response {payload!r}")
+    for key, value in expected.items():
+        require(type(payload[key]) is type(value), f"{path}: wrong JSON type for {key}")
+        if isinstance(value, list):
+            require(all(type(item) is int for item in payload[key]),
+                    f"{path}: expected an integer array")
+
+
 def check_endpoints() -> None:
-    require(request_json("/health", 200) == {"status": "ok"}, "unexpected /health response")
-    require(
-        request_json("/json", 200)
-        == {"message": "Hello, World!", "items": [1, 2, 3, 4, 5]},
-        "unexpected /json response",
-    )
-    require(
-        request_json("/db/42", 200) == {"id": 42, "name": "Item 42", "price": 4200},
-        "unexpected /db/42 response",
-    )
-    require(
-        request_json("/db/999", 404) == {"error": "not found"},
-        "unexpected unknown-item response",
-    )
-    require(
-        request_json("/db/not-an-integer", 400) == {"error": "invalid id"},
-        "unexpected invalid-ID response",
-    )
-    expected_cpu = {"input": 30, "result": 832040}
-    require(request_json("/cpu", 200) == expected_cpu, "unexpected /cpu response")
-    require(request_json("/cpu", 200) == expected_cpu, "repeated /cpu response changed")
+    expect_json("/health", 200, {"status": "ok"})
+    expect_json("/json", 200, {"message": "Hello, World!", "items": [1, 2, 3, 4, 5]})
+    expect_json("/db/42", 200, {"id": 42, "name": "Item 42", "price": 4200})
+    expect_json("/db/999", 404, {"error": "not found"})
+    expect_json("/db/not-an-integer", 400, {"error": "invalid id"})
+    for _ in range(2):
+        expect_json("/cpu", 200, {"input": 30, "result": 832040})
 
 
-def check_container_contract() -> None:
+def sql(statement: str) -> str:
+    return run([
+        "docker", "compose", "exec", "-T", "postgres", "psql", "-X", "-U", "benchmark",
+        "-d", "benchmark", "-v", "ON_ERROR_STOP=1", "-Atc", statement,
+    ]).stdout.strip()
+
+
+def check_database_behavior() -> None:
+    for identifier in ("+42", "00042"):
+        expect_json(f"/db/{identifier}", 200, {"id": 42, "name": "Item 42", "price": 4200})
+    for identifier in ("0", "-1"):
+        expect_json(f"/db/{identifier}", 404, {"error": "not found"})
+    for identifier in ("1.5", "1e1", " 42", "42 ", "４２", "42 OR 1=1",
+                       "9223372036854775808", "-9223372036854775809"):
+        expect_json("/db/" + quote(identifier, safe=""), 400, {"error": "invalid id"})
+    sql("UPDATE items SET name = 'Updated item', price = 7 WHERE id = 42;")
+    expect_json("/db/42", 200, {"id": 42, "name": "Updated item", "price": 7})
+    for identifier in (9007199254740993, 9223372036854775807, -9223372036854775808):
+        sql(f"INSERT INTO items VALUES ({identifier}, 'Boundary item', 1);")
+        expect_json(f"/db/{identifier}", 200,
+                    {"id": identifier, "name": "Boundary item", "price": 1})
+    sql("DROP TABLE items;")
+    expect_json("/db/42", 500, {"error": "internal server error"})
+    expect_json("/db/not-an-integer", 400, {"error": "invalid id"})
+    expect_json("/health", 200, {"status": "ok"})
+
+
+def check_container_contract() -> str:
     container_id = run(["docker", "compose", "ps", "--quiet", "rust-actix"]).stdout.strip()
     require(bool(container_id), "rust-actix container is not running")
+    state = json.loads(run(["docker", "inspect", container_id]).stdout)[0]
+    require(state["State"]["Health"]["Status"] == "healthy", "Rust is unhealthy")
+    require(state["RestartCount"] == 0, "Rust restarted")
+    host = state["HostConfig"]
+    require(host["NanoCpus"] == 1000000000, "runtime CPU limit differs")
+    require(host["Memory"] == 536870912, "runtime memory limit differs")
+    require(host["RestartPolicy"]["Name"] == "no", "restarts must be disabled")
+    require(not host["Privileged"] and host["CapDrop"] == ["ALL"], "unsafe container privileges")
+    require("no-new-privileges:true" in host["SecurityOpt"], "privilege escalation is allowed")
+    require(state["Config"]["User"] == "65532:65532", "non-root user differs")
+    require(state["Path"] == "/usr/local/bin/rust-actix" and state["Args"] == [],
+            "server is not the direct container process")
+    require(state["NetworkSettings"]["Ports"]["8080/tcp"]
+            == [{"HostIp": "127.0.0.1", "HostPort": "8080"}], "port is not loopback-only")
+    processes = run(["docker", "top", container_id, "-eo", "args"]).stdout.splitlines()[1:]
+    require(sum(line.strip() == "/usr/local/bin/rust-actix" for line in processes) == 1,
+            "expected one server process")
+    run(["docker", "compose", "exec", "-T", "rust-actix", "sh", "-c",
+         "test $(id -u) = 65532 && ! command -v cargo && ! command -v rustc && test ! -d /src"])
+    return container_id
 
-    state = run(
-        [
-            "docker",
-            "inspect",
-            "--format",
-            "{{.State.Health.Status}}|{{.RestartCount}}|{{.HostConfig.NanoCpus}}|{{.HostConfig.Memory}}|{{.Config.User}}",
-            container_id,
-        ]
-    ).stdout.strip()
-    require(
-        state == "healthy|0|1000000000|536870912|65532:65532",
-        f"unexpected rust-actix container configuration: {state!r}",
-    )
+
+def check_startup_failure() -> None:
+    failed = run(["docker", "compose", "run", "--rm", "--no-deps", "-e", "DATABASE_PORT=1",
+                  "rust-actix"], timeout=20, check=False)
+    require(failed.returncode != 0, "unreachable database did not prevent startup")
+
+
+def check_shutdown(container_id: str) -> None:
+    query = ("SELECT COUNT(*) FROM pg_stat_activity WHERE datname = current_database() "
+             "AND pid <> pg_backend_pid();")
+    require(int(sql(query)) > 0, "expected an application database connection before shutdown")
+    run(["docker", "compose", "stop", "--timeout", "15", "rust-actix"])
+    state = json.loads(run(["docker", "inspect", container_id]).stdout)[0]["State"]
+    require(state["Status"] == "exited" and state["ExitCode"] == 0 and not state["OOMKilled"],
+            "Rust did not exit normally after SIGTERM")
+    require(sql(query) == "0", "application database connections remain after shutdown")
 
 
 def check_dynamic_contract() -> None:
@@ -245,7 +298,16 @@ def check_dynamic_contract() -> None:
         cwd=RUST_APP,
         timeout=600,
     )
-    run(["docker", "compose", "config"])
+    config = json.loads(run(["docker", "compose", "config", "--format", "json"]).stdout)
+    project = config["name"]
+    service = config["services"]["rust-actix"]
+    require(service["environment"] == {
+        "DATABASE_HOST": "postgres", "DATABASE_PORT": "5432", "DATABASE_NAME": "benchmark",
+        "DATABASE_USER": "benchmark", "DATABASE_PASSWORD": "benchmark",
+    }, "shared database settings differ")
+    require(service["depends_on"]["postgres"]["condition"] == "service_healthy",
+            "database health dependency differs")
+    require(set(service["networks"]) == {"benchmark"}, "unexpected API network")
 
     primary_error: BaseException | None = None
     try:
@@ -263,8 +325,11 @@ def check_dynamic_contract() -> None:
             ],
             timeout=1200,
         )
-        check_container_contract()
+        container_id = check_container_contract()
         check_endpoints()
+        check_database_behavior()
+        check_startup_failure()
+        check_shutdown(container_id)
     except BaseException as exc:
         primary_error = exc
     finally:
@@ -273,6 +338,10 @@ def check_dynamic_contract() -> None:
             ["docker", "compose", "ps", "-a", "--quiet"],
             check=False,
         )
+        networks = run([
+            "docker", "network", "ls", "--quiet", "--filter",
+            f"label=com.docker.compose.project={project}",
+        ], check=False)
         cleanup_error: CheckFailure | None = None
         if cleanup.returncode != 0:
             cleanup_error = CheckFailure(f"make down exited with status {cleanup.returncode}")
@@ -285,12 +354,16 @@ def check_dynamic_contract() -> None:
                 f"project containers remain after cleanup: {remaining.stdout.strip()}"
             )
 
+        elif networks.returncode != 0 or networks.stdout.strip():
+            cleanup_error = CheckFailure("project network cleanup could not be verified")
+
         if primary_error is not None:
             if cleanup_error is not None:
                 raise CheckFailure(f"{primary_error}; cleanup also failed: {cleanup_error}") from primary_error
             raise primary_error
         if cleanup_error is not None:
             raise cleanup_error
+        run(["git", "diff", "--check"])
 
 
 def parse_args() -> argparse.Namespace:
