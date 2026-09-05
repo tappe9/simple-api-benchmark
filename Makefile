@@ -7,7 +7,7 @@ DB_USER := benchmark
 DB_WAIT_TIMEOUT ?= 60
 PSQL := $(COMPOSE) exec -T $(DB_SERVICE) psql -X --username $(DB_USER) --dbname $(DB_NAME) --set ON_ERROR_STOP=1 --tuples-only --no-align
 
-.PHONY: db-up db-check db-reset test-db test-go-gin test-node-fastify down
+.PHONY: db-up db-check db-reset test-db test-go-gin test-node-fastify test-python-fastapi down
 
 db-up:
 	@echo "Starting PostgreSQL $(DB_SERVICE) service..."
@@ -53,6 +53,10 @@ test-go-gin:
 test-node-fastify:
 	@$(PYTHON) -m unittest discover -s tests -p test_node_fastify_acceptance.py
 	@$(PYTHON) tests/test_node_fastify_service.py
+
+test-python-fastapi:
+	@$(PYTHON) -m unittest discover -s tests -p test_python_fastapi_acceptance.py
+	@$(PYTHON) tests/test_python_fastapi_service.py
 
 down:
 	@echo "Removing benchmark containers and project network..."
