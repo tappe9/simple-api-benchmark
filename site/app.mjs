@@ -13,19 +13,17 @@ const VERSION_KEYS = {
   "node-fastify": ["node", "fastify", "pg"],
   "python-fastapi": ["python", "fastapi", "uvicorn", "asyncpg"],
 };
-const CONDITIONS = {
-  schema_version: 1,
-  api_cpus: 1,
-  api_memory_bytes: 536870912,
-  workers: 1,
-  pool_max: 10,
-  http_version: "1.1",
-  warmup_seconds: 5,
-  duration_seconds: 30,
-  connections: 50,
-  runs: 3,
-  request_timeout_seconds: 15,
-};
+const POSITIVE_INTEGER_CONDITIONS = [
+  "api_cpus",
+  "api_memory_bytes",
+  "workers",
+  "pool_max",
+  "warmup_seconds",
+  "duration_seconds",
+  "connections",
+  "runs",
+  "request_timeout_seconds",
+];
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -56,17 +54,24 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function validateConditions(conditions) {
+  object(conditions, "conditions");
+  assert(Number.isInteger(conditions.schema_version) && conditions.schema_version === 1, "unsupported condition schema");
+  for (const key of POSITIVE_INTEGER_CONDITIONS) {
+    integer(conditions[key], `condition ${key}`);
+    assert(conditions[key] > 0, `condition ${key} must be positive`);
+  }
+  assert(typeof conditions.http_version === "string" && conditions.http_version.length > 0, "invalid HTTP version");
+  assert(Array.isArray(conditions.endpoints) && JSON.stringify(conditions.endpoints) === JSON.stringify(ENDPOINTS), "unexpected endpoints");
+}
+
 function validateReport(report) {
   object(report, "report");
   assert(Number.isInteger(report.schema_version) && report.schema_version === 1, "unsupported schema");
   assert(report.status === "verified", "result is not verified");
   assert(report.mode === "official" && report.official === true, "result is not official");
   assert(typeof report.completed_at === "string" && !Number.isNaN(Date.parse(report.completed_at)), "invalid completion time");
-  object(report.conditions, "conditions");
-  for (const [key, expected] of Object.entries(CONDITIONS)) {
-    assert(typeof report.conditions[key] === typeof expected && report.conditions[key] === expected, `unexpected condition ${key}`);
-  }
-  assert(Array.isArray(report.conditions.endpoints) && JSON.stringify(report.conditions.endpoints) === JSON.stringify(ENDPOINTS), "unexpected endpoints");
+  validateConditions(report.conditions);
 
   const metadata = object(report.metadata, "metadata");
   assert(typeof metadata.source_commit === "string" && /^[0-9a-f]{40}$/.test(metadata.source_commit), "invalid source commit");
