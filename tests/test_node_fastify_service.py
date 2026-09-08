@@ -20,6 +20,7 @@ DB_ENVIRONMENT = {
     "DATABASE_HOST": "postgres", "DATABASE_PORT": "5432", "DATABASE_NAME": "benchmark",
     "DATABASE_USER": "benchmark", "DATABASE_PASSWORD": "benchmark",
 }
+IMPLEMENTATIONS_MAKEFILE = ROOT / "benchmark" / "implementations.mk"
 
 
 class CheckFailure(RuntimeError):
@@ -97,8 +98,11 @@ def check_static_contract() -> None:
     require(re.search(r"max:\s*10\b", database) is not None, "pool cap is missing")
     for key in DB_ENVIRONMENT:
         require(key in database, f"database setting is missing: {key}")
-    require(re.search(r"(?m)^test-node-fastify:", (ROOT / "Makefile").read_text()) is not None,
-            "make test-node-fastify is missing")
+    makefile = (ROOT / "Makefile").read_text()
+    require("include benchmark/implementations.mk" in makefile,
+            "Makefile does not include generated implementation targets")
+    require(re.search(r"(?m)^test-node-fastify:", IMPLEMENTATIONS_MAKEFILE.read_text()) is not None,
+            "generated make test-node-fastify is missing")
 
 
 def request_json(path: str, status: int, expected: dict) -> None:
@@ -206,7 +210,6 @@ def check_dynamic_contract() -> None:
         require(sql("SELECT COUNT(*) FROM pg_stat_activity WHERE datname = current_database() "
                     "AND pid <> pg_backend_pid();") == "0", "database connections remain after shutdown")
     finally:
-        # Attempt every cleanup check even if a test or cleanup command fails.
         cleanup = run(["make", "down"], check=False)
         remaining = run(["docker", "compose", "ps", "-a", "--quiet"], check=False)
         networks = None
