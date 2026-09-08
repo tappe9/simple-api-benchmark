@@ -401,11 +401,23 @@ class DockerEnvironment:
         parsed["memory_samples"] = len(samples)
         return parsed
 
-    def stop(self) -> None:
-        if self.container is None:
-            return
-        self.check()
-        execute(self.prefix + ["down", "--remove-orphans", "--volumes", "--timeout", "10"], timeout=90)
+    def cleanup(self) -> None:
+        execute(
+            self.prefix + ["down", "--remove-orphans", "--volumes", "--timeout", "10"], timeout=60
+        )
+        for arguments in (["ps", "-aq"], ["network", "ls", "-q"], ["volume", "ls", "-q"]):
+            remaining = execute(
+                [
+                    "docker",
+                    *arguments,
+                    "--filter",
+                    "label=com.docker.compose.project=" + self.project,
+                ],
+                timeout=10,
+            )
+            require(
+                not remaining.strip(), f"cleanup left resources for {self.project}: {remaining}"
+            )
         self.container = None
         self.identity = None
         self.implementation = None
