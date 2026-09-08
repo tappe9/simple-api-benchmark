@@ -76,8 +76,7 @@ class CohortPublicationTests(unittest.TestCase):
         self.assert_complete_transaction()
 
     def test_extended_known_cohort_must_be_complete_before_atomic_publication(self):
-        from benchmark import publish
-        from benchmark import registry
+        from benchmark import publish, registry
 
         self.report = expanded_report(self.report, self.repo)
         with self.assertRaises(BenchmarkFailure):
