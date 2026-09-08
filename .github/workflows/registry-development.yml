@@ -1,0 +1,28 @@
+name: Registry development checks
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  registry-red:
+    if: github.head_ref == 'feat/issue-21-implementation-registry'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Snapshot committed source for isolated local development
+        run: |
+          mkdir -p .cache/registry-development
+          git bundle create .cache/registry-development/source.bundle --all
+      - name: Development source only; never a publication input
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: registry-development-source-${{ github.run_id }}
+          path: .cache/registry-development/source.bundle
+          retention-days: 1
+          if-no-files-found: error
+      - name: Registry boundary regressions (expected Red before implementation)
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p test_benchmark_registry.py -v
