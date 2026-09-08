@@ -5,8 +5,11 @@ import re
 import subprocess
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
+
+from registry_fixtures import extended_registry
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -35,7 +38,7 @@ class WorkflowTests(unittest.TestCase):
                             self.assertEqual(step["with"]["persist-credentials"], "false")
                     self.assertNotIn("${{", step.get("run", ""), "pass expression data through env")
 
-    def test_pr_ci_is_read_only_all_gates_and_smoke_never_publish(self):
+    def test_pr_ci_is_split_read_only_and_never_publishes(self):
         ci = load("ci.yml")
         self.assertEqual(ci["permissions"], {"contents": "read"})
         self.assertIn("pull_request", ci.get("on", {}))
@@ -43,6 +46,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(ci["on"]["push"]["branches"], ["main"])
         self.assertEqual(
             set(ci["on"]["push"]["paths-ignore"]), {"results/**", "README.md", "README.ja.md"}
+        )
+        self.assertEqual(
+            set(ci["jobs"]), {"plan", "shared", "implementation", "smoke", "required"}
         )
         content = (ROOT / ".github/workflows/ci.yml").read_text()
         for forbidden in (
@@ -55,27 +61,100 @@ class WorkflowTests(unittest.TestCase):
             "deploy-pages",
         ):
             self.assertNotIn(forbidden, content)
-        for target in (
-            "test-db",
-            "test-implementations",
-            "test-registry",
-            "test-contract",
-            "test-benchmark",
-            "test-site",
-            "benchmark-smoke",
-        ):
-            self.assertIn("make " + target, content)
-        uploads = [
-            step
-            for job in ci["jobs"].values()
-            for step in job["steps"]
-            if step.get("uses", "").startswith("actions/upload-artifact@")
-        ]
-        self.assertEqual(len(uploads), 1)
-        self.assertEqual(uploads[0]["with"]["path"], ".cache/ci/format.patch")
-        self.assertIn("git diff --exit-code HEAD", content)
         self.assertIn("actionlint", content)
         self.assertIn("test_workflows.py", content)
+        self.assertIn("git diff --exit-code HEAD", content)
+
+    def test_split_ci_matrix_is_registry_driven_and_compose_owned(self):
+        ci = load("ci.yml")
+        plan = ci["jobs"]["plan"]
+        implementation = ci["jobs"]["implementation"]
+        self.assertEqual(implementation["needs"], "plan")
+        self.assertEqual(implementation["strategy"]["fail-fast"], "false")
+        self.assertEqual(
+            implementation["strategy"]["matrix"], "${{ fromJSON(needs.plan.outputs.matrix) }}"
+        )
+        self.assertEqual(
+            plan["outputs"]["matrix"], "${{ steps.matrix.outputs.matrix }}"
+        )
+        matrix_step = next(step for step in plan["steps"] if step.get("id") == "matrix")
+        self.assertEqual(matrix_step["run"], 'python -m benchmark.ci matrix >> "$GITHUB_OUTPUT"')
+        registry = json.loads((ROOT / "benchmark/implementations.json").read_text())
+        workflow_text = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertNotIn(
+            "implementation: [" + ", ".join(spec["id"] for spec in registry["implementations"]) + "]",
+            workflow_text,
+        )
+        self.assertEqual(implementation["env"]["IMPLEMENTATION_ID"], "${{ matrix.implementation }}")
+        project = implementation["env"]["COMPOSE_PROJECT_NAME"]
+        for expected in ("github.run_id", "github.run_attempt", "matrix.implementation"):
+            self.assertIn(expected, project)
+        command_text = "\n".join(step.get("run", "") for step in implementation["steps"])
+        self.assertIn('make "test-$IMPLEMENTATION_ID"', command_text)
+        self.assertIn("CONTRACT_IMPL=\"$IMPLEMENTATION_ID\"", command_text)
+        cleanup = next(step for step in implementation["steps"] if "docker compose -p" in step.get("run", ""))
+        self.assertEqual(cleanup["if"], "always()")
+        self.assertIn('docker compose -p "$COMPOSE_PROJECT_NAME" down', cleanup["run"])
+
+    def test_split_ci_preserves_shared_smoke_and_fail_closed_aggregate(self):
+        ci = load("ci.yml")
+        shared = str(ci["jobs"]["shared"])
+        for expected in (
+            "Python 3.10 shared compatibility",
+            "make test-registry",
+            "make test-site",
+            "make test-db",
+            "make test-benchmark",
+            "python -O",
+            "actionlint",
+        ):
+            self.assertIn(expected, shared)
+        smoke = str(ci["jobs"]["smoke"])
+        for expected in (
+            "make benchmark-smoke",
+            "git diff --exit-code HEAD",
+            "git ls-files --others --exclude-standard",
+        ):
+            self.assertIn(expected, smoke)
+        required = ci["jobs"]["required"]
+        self.assertEqual(set(required["needs"]), {"plan", "shared", "implementation", "smoke"})
+        self.assertEqual(required["if"], "always()")
+        run = next(step for step in required["steps"] if "run" in step)
+        self.assertEqual(run["run"], "python -m benchmark.ci require-success")
+        self.assertEqual(
+            run["env"],
+            {
+                "PLAN_RESULT": "${{ needs.plan.result }}",
+                "SHARED_RESULT": "${{ needs.shared.result }}",
+                "IMPLEMENTATION_RESULT": "${{ needs.implementation.result }}",
+                "SMOKE_RESULT": "${{ needs.smoke.result }}",
+            },
+        )
+
+    def test_ci_support_matrix_and_aggregate_are_fail_closed(self):
+        from benchmark import ci as ci_support, registry
+
+        self.assertEqual(
+            ci_support.matrix_payload(),
+            {"implementation": ["go-gin", "rust-actix", "node-fastify", "python-fastapi"]},
+        )
+        with patch.object(registry, "REGISTRY", extended_registry()):
+            self.assertEqual(len(ci_support.matrix_payload()["implementation"]), 8)
+        valid = {
+            "plan": "success",
+            "shared": "success",
+            "implementation": "success",
+            "smoke": "success",
+        }
+        ci_support.require_success(valid)
+        for key in valid:
+            for bad in ("failure", "cancelled", "skipped", "", "success "):
+                results = dict(valid)
+                results[key] = bad
+                with self.subTest(key=key, bad=bad), self.assertRaises(RuntimeError):
+                    ci_support.require_success(results)
+        with self.assertRaises(RuntimeError):
+            ci_support.require_success({**valid, "extra": "success"})
 
     def test_registry_targets_preserve_every_acceptance_and_failure_gate(self):
         path = ROOT / "benchmark/implementations.json"
