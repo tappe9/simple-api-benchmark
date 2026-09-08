@@ -81,14 +81,30 @@ class WorkflowTests(unittest.TestCase):
         path = ROOT / "benchmark/implementations.json"
         self.assertTrue(path.is_file(), "registry is required for CI gate coverage")
         registry = json.loads(path.read_text())
-        commands = subprocess.run(["make", "-n", "test-implementations"], cwd=ROOT, text=True, capture_output=True, check=True).stdout
+        commands = subprocess.run(
+            ["make", "-n", "test-implementations"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout
         self.assertEqual(
             {spec["acceptance_test"] for spec in registry["implementations"]},
-            {path.relative_to(ROOT).as_posix() for path in (ROOT / "tests").glob("test_*_service.py")},
+            {
+                path.relative_to(ROOT).as_posix()
+                for path in (ROOT / "tests").glob("test_*_service.py")
+            },
         )
         self.assertEqual(
-            {spec["failure_test"] for spec in registry["implementations"] if spec["failure_test"] is not None},
-            {path.relative_to(ROOT).as_posix() for path in (ROOT / "tests").glob("test_*_acceptance.py")},
+            {
+                spec["failure_test"]
+                for spec in registry["implementations"]
+                if spec["failure_test"] is not None
+            },
+            {
+                path.relative_to(ROOT).as_posix()
+                for path in (ROOT / "tests").glob("test_*_acceptance.py")
+            },
         )
         previous = -1
         for spec in registry["implementations"]:
@@ -98,7 +114,10 @@ class WorkflowTests(unittest.TestCase):
             if spec["failure_test"] is not None:
                 self.assertIn(Path(spec["failure_test"]).name, commands)
         compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
-        self.assertEqual(set(compose["services"]) - {"postgres"}, {spec["id"] for spec in registry["implementations"]})
+        self.assertEqual(
+            set(compose["services"]) - {"postgres"},
+            {spec["id"] for spec in registry["implementations"]},
+        )
         for spec in registry["implementations"]:
             build = compose["services"][spec["id"]]["build"]
             context = build["context"] if isinstance(build, dict) else build
