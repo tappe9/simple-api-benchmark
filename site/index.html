@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+  <meta name="description" content="Simple API Benchmark results for Go, Rust, Node.js, and Python under the same documented conditions.">
+  <title>Simple API Benchmark — Results</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="shell">
+      <p class="eyebrow">Same API. Same limits. Simple results.</p>
+      <h1>Simple API Benchmark</h1>
+      <p class="lede">A small, reproducible comparison of Go / Gin, Rust / Actix Web, Node.js / Fastify, and Python / FastAPI using the same endpoints and resource limits.</p>
+      <nav aria-label="Project links">
+        <a href="https://github.com/tappe9/simple-api-benchmark">Repository</a>
+        <a href="https://github.com/tappe9/simple-api-benchmark/blob/main/docs/METHODOLOGY.md">Methodology</a>
+      </nav>
+    </div>
+  </header>
+  <main class="shell">
+    <noscript><p class="status">JavaScript is required to read and display the verified result JSON. No benchmark value is embedded in this page.</p></noscript>
+    <section id="results" class="status" role="status" aria-live="polite">Loading verified results…</section>
+  </main>
+  <footer class="shell footer">
+    <p>Complete-stack reference results, not a universal language ranking.</p>
+  </footer>
+  <script type="module" src="./app.mjs"></script>
+</body>
+</html>

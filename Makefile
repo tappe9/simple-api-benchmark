@@ -85,7 +85,7 @@ benchmark:
 benchmark-smoke:
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.run --compose "$(COMPOSE)" --smoke
 
-.PHONY: test test-workflows generate-readme
+.PHONY: test test-workflows test-site generate-readme
 
 # Recursive invocations deliberately serialize services sharing loopback port 8080.
 test:
@@ -97,11 +97,17 @@ test:
 	@$(MAKE) --no-print-directory test-contract
 	@$(MAKE) --no-print-directory test-benchmark
 	@$(MAKE) --no-print-directory test-workflows
+	@$(MAKE) --no-print-directory test-site
 	@$(MAKE) --no-print-directory benchmark-smoke
 
 test-workflows:
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p test_workflows.py -v
 	@actionlint
+
+test-site:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p 'test_site.py' -v
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p 'test_pages.py' -v
+	@node --test tests/test_site.mjs
 
 generate-readme:
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.generate_readme

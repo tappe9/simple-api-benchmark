@@ -97,6 +97,24 @@ already executed. GitHub may delay scheduled jobs, and shared hosted hardware
 can vary. Always read the run date, conditions and versions together. Local,
 fixture and PR smoke reports are not official measurements.
 
+## GitHub Pages and v0.1.0 release
+
+`pages.yml` runs only after a completed `CI` or `Official benchmark` workflow, or
+through an explicit manual dispatch. `benchmark.pages` independently verifies the
+repository, default-branch ref, workflow identity, source SHA, and upstream run
+before the static artifact is built. For official result-publication commits it
+also requires the measured source to be the sole parent and exactly the expected
+README/latest/history files to have changed. Pull-request, fork, failed, stale, or
+unrelated workflow contexts fail before the Pages artifact is uploaded.
+
+The Pages build job has read-only repository access. Only the dependent deploy job
+receives `pages: write` and OIDC permissions. The one-time `v0.1.0` release job runs
+after a successful Pages deployment and only when the upstream workflow is a
+successful `push` CI run for the repository's default branch at the same SHA. It
+receives `contents: write` only for release creation. Manual Pages runs and official
+benchmark result refreshes cannot create the release. If `v0.1.0` already exists,
+the job leaves it unchanged.
+
 ## Developer checks
 
 ```bash
@@ -114,5 +132,3 @@ repositories. They never publish to GitHub. They test complete transactions,
 malformed data, source races, rejected pushes, collision protection and unchanged
 working-tree/index state. The official workflow is first executable as trusted
 code after merge; PR CI must succeed before that merge.
-
-GitHub Pages and release automation belong to Issue #10, not these workflows.

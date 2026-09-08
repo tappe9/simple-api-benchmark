@@ -1,12 +1,12 @@
 # Simple API Benchmark
 
-[日本語](README.ja.md)
+[日本語](README.ja.md) · [Results site](https://tappe9.github.io/simple-api-benchmark/)
 
 **Go vs Rust vs Node.js vs Python — same API, same limits, simple results.**
 
 Simple API Benchmark compares four API stacks with the same endpoints, Docker resource limits, and benchmark settings. The goal is not to declare a universal winner. The goal is to make a small, repeatable comparison that anyone can understand.
 
-> **Project status:** v0.1 is in development. CI and official benchmark automation are available; GitHub Pages and the first release are still pending.
+> **Project status:** v0.1.0 is released. CI, official benchmark automation, and the GitHub Pages results site are available.
 
 ## What is compared?
 
@@ -150,7 +150,7 @@ make down
 make test-node-fastify
 ```
 
-`make test-node-fastify` requires Node.js 24.20.0, npm, Python 3, Docker Compose v2, and Make. It runs focused tests, syntax validation, image and API checks (including real DB updates and errors), resource and process checks, graceful shutdown, and container/network cleanup.
+`make test-node-fastify` requires Node.js 24.20.0, npm, Python 3, Docker Compose v2, and Make. It runs focused tests, syntax validation, production image build, exact API responses against PostgreSQL, BIGINT boundaries, sanitized DB errors, resource/process checks, graceful shutdown, and container/network cleanup.
 
 ## Python / FastAPI implementation
 
@@ -206,6 +206,7 @@ for requirements, exact units, result schema, deadlines and memory-sampling limi
 
 ## Documentation
 
+- [Results site](https://tappe9.github.io/simple-api-benchmark/)
 - [Architecture](ARCHITECTURE.md)
 - [API contract](docs/API-CONTRACT.md)
 - [Benchmark methodology](docs/METHODOLOGY.md)
