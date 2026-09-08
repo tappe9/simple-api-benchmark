@@ -130,9 +130,7 @@ class StateTests(unittest.TestCase):
 
             def execute(arguments, *, timeout, tick=None, cwd=environment.ROOT):
                 if arguments[:2] == ["docker", "stats"]:
-                    return json.dumps(
-                        {"ID": env.container, "MemUsage": "1MiB / 512MiB"}
-                    )
+                    return json.dumps({"ID": env.container, "MemUsage": "1MiB / 512MiB"})
                 if "--output" in arguments:
                     output = Path(arguments[arguments.index("--output") + 1])
                     output.write_bytes(b"{}")
@@ -150,7 +148,9 @@ class StateTests(unittest.TestCase):
             with (
                 patch.object(env, "check"),
                 patch.object(environment, "execute", side_effect=execute),
-                patch("benchmark.results.parse_oha", autospec=True, return_value=parsed_result) as parser,
+                patch(
+                    "benchmark.results.parse_oha", autospec=True, return_value=parsed_result
+                ) as parser,
             ):
                 result = env.measure("/json", 1, 2)
 
