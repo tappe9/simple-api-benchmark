@@ -58,7 +58,9 @@ class RegistryBoundaryTests(unittest.TestCase):
 
 class CohortTests(unittest.TestCase):
     def setUp(self):
-        self.assertIsNotNone(importlib.util.find_spec("benchmark.registry"), "registry policy is missing")
+        self.assertIsNotNone(
+            importlib.util.find_spec("benchmark.registry"), "registry policy is missing"
+        )
         from benchmark import registry
 
         self.registry = registry
@@ -97,6 +99,7 @@ class CohortTests(unittest.TestCase):
 
         valid = expanded_report(self.report)
         mutations = []
+
         def changed(path, value):
             report = copy.deepcopy(valid)
             target = report
@@ -104,6 +107,7 @@ class CohortTests(unittest.TestCase):
                 target = target[key]
             target[path[-1]] = value
             mutations.append(report)
+
         changed(("benchmark", "cohort"), "unknown-v1")
         changed(("benchmark", "cohort"), "__proto__")
         changed(("benchmark", "cohort"), [])
@@ -116,7 +120,10 @@ class CohortTests(unittest.TestCase):
         changed(("implementations", 1, "implementation"), "go-gin")
         changed(("implementations", 1, "implementation"), "unknown-id")
         changed(("implementations", 7, "endpoints"), valid["implementations"][7]["endpoints"][:-1])
-        changed(("implementations", 7, "endpoints"), list(reversed(valid["implementations"][7]["endpoints"])))
+        changed(
+            ("implementations", 7, "endpoints"),
+            list(reversed(valid["implementations"][7]["endpoints"])),
+        )
         changed(("metadata", "versions", "synthetic-python"), {"runtime": "1.2.3"})
         changed(("metadata", "versions", "synthetic-python", "runtime"), None)
         changed(("metadata", "versions"), {**valid["metadata"]["versions"], "unknown": {}})
@@ -148,7 +155,10 @@ class CohortTests(unittest.TestCase):
                 self.assertNotIn("<script>", output)
                 self.assertIn("\\| fixture", output)
                 self.assertEqual(sum(line.startswith("| ") for line in output.splitlines()), 26)
-                self.assertEqual(sum(line.startswith("| ") for line in render(self.report, locale).splitlines()), 14)
+                self.assertEqual(
+                    sum(line.startswith("| ") for line in render(self.report, locale).splitlines()),
+                    14,
+                )
 
     def test_registry_rejects_duplicates_unknown_members_and_invalid_paths(self):
         valid = self.registry.load_registry()
@@ -160,7 +170,13 @@ class CohortTests(unittest.TestCase):
         data = copy.deepcopy(valid)
         data["implementations"].append(copy.deepcopy(data["implementations"][0]))
         mutations.append(data)
-        for field, value in (("id", "../escape"), ("source_path", "../escape"), ("acceptance_test", "$(touch bad)"), ("version_fields", []), ("version_fields", ["go", "go"])):
+        for field, value in (
+            ("id", "../escape"),
+            ("source_path", "../escape"),
+            ("acceptance_test", "$(touch bad)"),
+            ("version_fields", []),
+            ("version_fields", ["go", "go"]),
+        ):
             data = copy.deepcopy(valid)
             data["implementations"][0][field] = value
             mutations.append(data)
@@ -208,8 +224,13 @@ class CohortTests(unittest.TestCase):
         actual = pinned_versions()
         self.assertEqual(tuple(actual), self.registry.active_members())
         for identifier, versions in actual.items():
-            self.assertTrue(set(self.registry.implementation(identifier)["version_fields"]) <= set(versions))
-        with patch.object(self.registry, "REGISTRY", extended_registry()), self.assertRaises(BenchmarkFailure):
+            self.assertTrue(
+                set(self.registry.implementation(identifier)["version_fields"]) <= set(versions)
+            )
+        with (
+            patch.object(self.registry, "REGISTRY", extended_registry()),
+            self.assertRaises(BenchmarkFailure),
+        ):
             pinned_versions()
 
     def test_runner_emits_explicit_cohort_and_keeps_smoke_non_publishable(self):
@@ -220,11 +241,26 @@ class CohortTests(unittest.TestCase):
 
         output = self.root / "result.json"
         environment = Environment()
-        with patch.object(self.registry, "REGISTRY", extended_registry()), contextlib.redirect_stdout(io.StringIO()):
-            result = run.run_benchmark(environment, copy.deepcopy(run.PROFILE), output, metadata={}, contract=environment.contract, smoke=True)
+        with (
+            patch.object(self.registry, "REGISTRY", extended_registry()),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            result = run.run_benchmark(
+                environment,
+                copy.deepcopy(run.PROFILE),
+                output,
+                metadata={},
+                contract=environment.contract,
+                smoke=True,
+            )
             self.assertEqual(result["schema_version"], 2)
-            self.assertEqual(result["benchmark"], {"definition": "simple-api-v1", "cohort": "synthetic-eight-v1"})
-            self.assertEqual([item["implementation"] for item in result["implementations"]], list(self.registry.active_members()))
+            self.assertEqual(
+                result["benchmark"], {"definition": "simple-api-v1", "cohort": "synthetic-eight-v1"}
+            )
+            self.assertEqual(
+                [item["implementation"] for item in result["implementations"]],
+                list(self.registry.active_members()),
+            )
             self.assertFalse(output.exists())
             with self.assertRaises(BenchmarkFailure):
                 validate_report(result)
