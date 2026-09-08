@@ -28,7 +28,10 @@ def build(root: Path = ROOT) -> Path:
     output = root / ".cache" / "site"
 
     assets = {name: regular_file(site / name, root) for name in ASSETS}
-    require(assets["registry.mjs"] == generated_files()["site/registry.mjs"].encode("utf-8"), "stale site registry projection")
+    require(
+        assets["registry.mjs"] == generated_files()["site/registry.mjs"].encode("utf-8"),
+        "stale site registry projection",
+    )
     result_bytes = None
     if results.exists() or results.is_symlink():
         result_bytes = regular_file(results, root)
