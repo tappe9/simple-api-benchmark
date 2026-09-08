@@ -24,7 +24,11 @@ class SiteBuildTests(unittest.TestCase):
         self.root = Path(temporary.name)
         (self.root / "site").mkdir()
         for name in ASSETS:
-            content = (ROOT / "site" / name).read_text() if name == "registry.mjs" and (ROOT / "site" / name).exists() else "isolated test asset: " + name
+            content = (
+                (ROOT / "site" / name).read_text()
+                if name == "registry.mjs" and (ROOT / "site" / name).exists()
+                else "isolated test asset: " + name
+            )
             (self.root / "site" / name).write_text(content)
         (self.root / "results").mkdir()
         self.raw = (ROOT / "results/latest.json").read_bytes()
@@ -81,7 +85,9 @@ class SiteBuildTests(unittest.TestCase):
         report = expanded_report(synthetic_report(self.root))
         (self.root / "results/latest.json").write_text(json.dumps(report))
         with patch.object(registry, "REGISTRY", extended_registry()):
-            (self.root / "site/registry.mjs").write_text(registry.generated_files()["site/registry.mjs"])
+            (self.root / "site/registry.mjs").write_text(
+                registry.generated_files()["site/registry.mjs"]
+            )
             self.build()
         self.assertEqual(json.loads((self.output / "results/latest.json").read_bytes()), report)
         self.assertEqual(len(report["implementations"]), 8)
