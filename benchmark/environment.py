@@ -186,7 +186,6 @@ def provenance(oha: Path) -> dict:
     require(not dirty.strip(), f"commit source changes before benchmarking:\n{dirty}")
     commit = execute(["git", "rev-parse", "HEAD"], timeout=10).strip()
     require(re.fullmatch(r"[0-9a-f]{40}", commit) is not None, "source commit unavailable")
-    # HTTP always targets host loopback. A remote daemon would measure the wrong host.
     endpoint = os.environ.get("DOCKER_HOST")
     if os.environ.get("DOCKER_CONTEXT") or not endpoint:
         context = strict_json(execute(["docker", "context", "inspect"], timeout=10).encode())
@@ -390,16 +389,25 @@ class DockerEnvironment:
                     "5s",
                     "http://127.0.0.1:8080" + endpoint,
                 ],
-                timeout=duration + self.request_timeout + 30,
+                timeout=duration + self.request_timeout + 15,
                 tick=sample,
-                interval=0.25,
             )
         self.check()
-        require(bool(samples), "no memory samples captured")
-        parsed = parse_oha(path, duration_seconds=duration)
-        parsed["peak_memory_bytes"] = max(samples)
-        parsed["memory_samples"] = len(samples)
-        return parsed
+        require(bool(samples), "memory collection produced no samples")
+        require(
+            path.is_file() and path.stat().st_size <= 1024 * 1024, "oha result missing or oversized"
+        )
+        result = parse_oha(
+            path.read_bytes(), duration=duration, request_timeout=self.request_timeout
+        )
+        result.update(
+            run=max(index, 1), peak_memory_bytes=max(samples), memory_samples=len(samples)
+        )
+        print(
+            f"[{self.implementation}] {label}: {result['requests_per_second']:.3f} requests/s; {len(samples)} API memory samples",
+            flush=True,
+        )
+        return result
 
     def cleanup(self) -> None:
         execute(
