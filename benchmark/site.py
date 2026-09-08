@@ -6,11 +6,12 @@ import sys
 import tempfile
 from pathlib import Path
 
+from .registry import generated_files
 from .report import validate_report
 from .results import BenchmarkFailure, require, strict_json
 
 ROOT = Path(__file__).resolve().parents[1]
-ASSETS = ("index.html", "style.css", "app.mjs")
+ASSETS = ("index.html", "style.css", "app.mjs", "registry.mjs")
 
 
 def regular_file(path: Path, root: Path) -> bytes:
@@ -27,6 +28,7 @@ def build(root: Path = ROOT) -> Path:
     output = root / ".cache" / "site"
 
     assets = {name: regular_file(site / name, root) for name in ASSETS}
+    require(assets["registry.mjs"] == generated_files()["site/registry.mjs"].encode("utf-8"), "stale site registry projection")
     result_bytes = None
     if results.exists() or results.is_symlink():
         result_bytes = regular_file(results, root)

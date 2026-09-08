@@ -4,7 +4,10 @@
 
 `ci.yml` runs on pull requests and non-result-only pushes to `main`. It uses
 `contents: read`, no publishing/deployment secret, and SHA-pinned official actions.
-Every checkout disables `persist-credentials`. All four application quality gates,
+Every checkout disables `persist-credentials`. `make test-registry` verifies the
+registry and deterministic projections. `make test-implementations` invokes the
+same application acceptance/failure gates in registry order, sequentially. The
+current four application quality gates,
 the shared contract, focused benchmark/publication tests, workflow validation and
 a shortened `make benchmark-smoke` run are required. The smoke run never changes
 `results/latest.json`, history, or README. Only a formatting patch may be uploaded
@@ -115,9 +118,24 @@ receives `contents: write` only for release creation. Manual Pages runs and offi
 benchmark result refreshes cannot create the release. If `v0.1.0` already exists,
 the job leaves it unchanged.
 
+## Registry compatibility
+
+The implementation list comes from `benchmark/implementations.json`, not a second
+CI-specific list. Make targets preserve focused failure tests and service
+acceptance tests; workflow tests check the complete mapping and Compose build
+contexts. The workflow name `CI`, check name `quality`, read-only permissions,
+existing timeout, smoke profile and Pages trusted-success authorization are
+unchanged. CI partitioning is a separate change.
+
+New reports use explicit schema-v2 definition/cohort identity. Complete historical
+schema-v1 four-stack reports remain accepted without rewriting results. See
+[implementation and cohort compatibility](IMPLEMENTATIONS.md). An expanded test
+fixture is not an official measurement and is never enabled in production.
+
 ## Developer checks
 
 ```bash
+make test-registry
 make test-benchmark
 python -m pip install --only-binary=:all: PyYAML==6.0.3
 go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12

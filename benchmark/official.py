@@ -86,7 +86,8 @@ def main() -> int:
         validate_report(report, expected_context=context)
         audit_raw(report, ROOT)
         atomic_json(selected, report)
-        print("All 36 measurements and cleanup passed; official artifact is ready for publication.")
+        count = sum(len(endpoint["runs"]) for backend in report["implementations"] for endpoint in backend["endpoints"])
+        print(f"All {count} measurements and cleanup passed; official artifact is ready for publication.")
         return 0
     except (BenchmarkFailure, OSError, ValueError, KeyboardInterrupt) as error:
         print(f"Official benchmark failed: {error}", file=sys.stderr)

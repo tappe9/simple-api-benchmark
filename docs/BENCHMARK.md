@@ -151,7 +151,9 @@ committed. The local command does not create official README/Pages results or hi
 Once an official result is committed, a local run replaces only your working copy
 with `official: false`; do not commit that local replacement as project results.
 
-Schema version 1 contains:
+New schema-v2 reports contain the fields below plus an explicit
+`benchmark.definition` / `benchmark.cohort` identity. Existing schema-v1 reports
+retain the original fields and the frozen legacy cohort:
 
 - `schema_version`, `status: verified`, `mode: local`, `official: false`,
   `started_at` and `completed_at` in UTC, and complete `conditions`.
@@ -182,6 +184,16 @@ transaction or a guarantee against storage/host failure.
 GitHub-hosted machines are shared infrastructure. Full-profile development
 validation artifacts are real measurements but **not official project results**.
 Do not interpret small differences as universal rankings.
+
+## Registry and report compatibility
+
+New reports use schema-v2 with an explicit `benchmark.definition` and
+`benchmark.cohort`. The condition schema, measurements and units are unchanged.
+The original schema-v1 reports remain valid only as the frozen ordered
+`four-stack-v1` cohort, independent of the current active list; existing JSON is
+not rewritten. Both versions receive the same complete official-result and
+raw-data validation. See [the registry and cohort guide](IMPLEMENTATIONS.md) for
+identity rules, drift checks and the framework-addition procedure.
 
 ## Official automation
 

@@ -101,6 +101,22 @@ The environment uses `postgres:18.6-bookworm` pinned to index digest `sha256:1c5
 
 The schema and fixture data are created from `database/init.sql`. The DB test uses the same parameterized query, the exact row `(42, 'Item 42', 4200)`, and a maximum pool size of 10 connections for every backend. `make db-up` waits for the Compose health check and validates the fixture, while `make db-reset` removes the current environment before recreating it.
 
+### Implementation identity and cohorts
+
+`benchmark/implementations.json` owns implementation identity, source/build paths,
+required version fields and acceptance entry points. Python reads it directly;
+`benchmark/registry.py` generates and checks the Make and JavaScript projections.
+CI invokes registry-backed sequential acceptance targets and verifies Compose
+build-context agreement. Version extraction remains language-specific.
+
+`benchmark/definition.py` holds the unchanged measurement profile independently
+of orchestration. `benchmark/report.py` resolves complete ordered membership from
+a known versioned cohort, not from `run.py` or a report-supplied member list.
+Untagged schema-v1 results resolve only to frozen `four-stack-v1`; new schema-v2
+reports carry an explicit definition/cohort identity. Adding a registered stack
+cannot invalidate historical results merely by changing the active list. See
+[implementation registration and compatibility](docs/IMPLEMENTATIONS.md).
+
 ### Contract tests
 
 `benchmark/contract_test.py` reads the HTTP/JSON examples in `docs/API-CONTRACT.md`
@@ -161,6 +177,10 @@ simple-api-benchmark/
 │   └── python-fastapi/
 ├── benchmark/
 │   ├── config.json
+│   ├── definition.py
+│   ├── implementations.json
+│   ├── implementations.mk
+│   ├── registry.py
 │   ├── contract_test.py
 │   ├── contract_runner.py
 │   ├── generate_readme.py
@@ -177,6 +197,7 @@ simple-api-benchmark/
 │   └── history/
 ├── site/
 │   ├── app.mjs
+│   ├── registry.mjs
 │   ├── index.html
 │   └── style.css
 ├── docker-compose.yml
