@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 GO_APP = ROOT / "apps" / "go-gin"
 COMPOSE_FILE = ROOT / "docker-compose.yml"
 MAKEFILE = ROOT / "Makefile"
+IMPLEMENTATIONS_MAKEFILE = ROOT / "benchmark" / "implementations.mk"
 BASE_URL = "http://127.0.0.1:8080"
 
 
@@ -79,6 +80,7 @@ def check_static_contract() -> None:
         GO_APP / "go.sum",
         COMPOSE_FILE,
         MAKEFILE,
+        IMPLEMENTATIONS_MAKEFILE,
     )
     for path in required_files:
         require(path.is_file(), f"required file is missing: {path.relative_to(ROOT)}")
@@ -114,8 +116,13 @@ def check_static_contract() -> None:
 
     makefile = MAKEFILE.read_text(encoding="utf-8")
     require(
-        re.search(r"(?m)^test-go-gin\s*:", makefile) is not None,
-        "Makefile target is missing: test-go-gin",
+        "include benchmark/implementations.mk" in makefile,
+        "Makefile does not include generated implementation targets",
+    )
+    generated = IMPLEMENTATIONS_MAKEFILE.read_text(encoding="utf-8")
+    require(
+        re.search(r"(?m)^test-go-gin\s*:", generated) is not None,
+        "generated Makefile target is missing: test-go-gin",
     )
 
 
