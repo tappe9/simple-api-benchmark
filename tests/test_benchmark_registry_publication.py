@@ -16,7 +16,9 @@ from benchmark.results import BenchmarkFailure
 
 class CohortPublicationTests(unittest.TestCase):
     def git(self, *args, cwd=None, **kwargs):
-        return subprocess.check_output(["git", *args], cwd=cwd or self.repo, **kwargs).decode().strip()
+        return (
+            subprocess.check_output(["git", *args], cwd=cwd or self.repo, **kwargs).decode().strip()
+        )
 
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -58,7 +60,9 @@ class CohortPublicationTests(unittest.TestCase):
         changed = self.git("diff-tree", "--no-commit-id", "--name-only", "-r", commit).splitlines()
         history = [path for path in changed if path.startswith("results/history/")]
         self.assertEqual(len(history), 1)
-        self.assertEqual(set(changed), {"README.md", "README.ja.md", "results/latest.json", *history})
+        self.assertEqual(
+            set(changed), {"README.md", "README.ja.md", "results/latest.json", *history}
+        )
         self.assertEqual(
             self.git("show", commit + ":results/latest.json"),
             self.git("show", commit + ":" + history[0]),
@@ -72,8 +76,8 @@ class CohortPublicationTests(unittest.TestCase):
         self.assert_complete_transaction()
 
     def test_extended_known_cohort_must_be_complete_before_atomic_publication(self):
-        from benchmark import registry
         from benchmark import publish
+        from benchmark import registry
 
         self.report = expanded_report(self.report, self.repo)
         with self.assertRaises(BenchmarkFailure):
