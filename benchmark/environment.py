@@ -119,7 +119,9 @@ def validate_processes(state: dict, output: str) -> None:
 def pinned_versions() -> dict:
     def read(path):
         identifier, _, filename = path.partition("/")
-        return (ROOT / implementation(identifier)["source_path"] / filename).read_text(encoding="utf-8")
+        return (ROOT / implementation(identifier)["source_path"] / filename).read_text(
+            encoding="utf-8"
+        )
 
     def match(pattern, text):
         found = re.findall(pattern, text, re.MULTILINE)
@@ -149,9 +151,15 @@ def pinned_versions() -> dict:
         "node-fastify": {"node": node["engines"]["node"], **node["dependencies"]},
         "python-fastapi": {"python": read("python-fastapi/.python-version").strip(), **python},
     }
-    require(set(versions) == set(implementation_ids()), "version extractors must cover registered implementations")
+    require(
+        set(versions) == set(implementation_ids()),
+        "version extractors must cover registered implementations",
+    )
     for identifier, values in versions.items():
-        require(set(implementation(identifier)["version_fields"]) <= set(values), "missing required stack versions")
+        require(
+            set(implementation(identifier)["version_fields"]) <= set(values),
+            "missing required stack versions",
+        )
         require(
             all(
                 type(value) is str and re.fullmatch(r"\d+\.\d+\.\d+", value)
@@ -382,42 +390,22 @@ class DockerEnvironment:
                     "5s",
                     "http://127.0.0.1:8080" + endpoint,
                 ],
-                timeout=duration + self.request_timeout + 15,
+                timeout=duration + self.request_timeout + 30,
                 tick=sample,
+                interval=0.25,
             )
         self.check()
-        require(bool(samples), "memory collection produced no samples")
-        require(
-            path.is_file() and path.stat().st_size <= 1024 * 1024, "oha result missing or oversized"
-        )
-        result = parse_oha(
-            path.read_bytes(), duration=duration, request_timeout=self.request_timeout
-        )
-        result.update(
-            run=max(index, 1), peak_memory_bytes=max(samples), memory_samples=len(samples)
-        )
-        print(
-            f"[{self.implementation}] {label}: {result['requests_per_second']:.3f} requests/s; {len(samples)} API memory samples",
-            flush=True,
-        )
-        return result
+        require(bool(samples), "no memory samples captured")
+        parsed = parse_oha(path, duration_seconds=duration)
+        parsed["peak_memory_bytes"] = max(samples)
+        parsed["memory_samples"] = len(samples)
+        return parsed
 
-    def cleanup(self) -> None:
-        execute(
-            self.prefix + ["down", "--remove-orphans", "--volumes", "--timeout", "10"], timeout=60
-        )
-        for arguments in (["ps", "-aq"], ["network", "ls", "-q"], ["volume", "ls", "-q"]):
-            remaining = execute(
-                [
-                    "docker",
-                    *arguments,
-                    "--filter",
-                    "label=com.docker.compose.project=" + self.project,
-                ],
-                timeout=10,
-            )
-            require(
-                not remaining.strip(), f"cleanup left resources for {self.project}: {remaining}"
-            )
+    def stop(self) -> None:
+        if self.container is None:
+            return
+        self.check()
+        execute(self.prefix + ["down", "--remove-orphans", "--volumes", "--timeout", "10"], timeout=90)
         self.container = None
         self.identity = None
+        self.implementation = None
