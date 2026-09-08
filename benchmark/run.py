@@ -1,4 +1,4 @@
-"""Run all four APIs sequentially; publish only after every run and cleanup passes."""
+"""Run every active cohort member sequentially; publish only after every run and cleanup passes."""
 
 import argparse
 import copy
@@ -7,8 +7,10 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .contract_runner import IMPLEMENTATIONS, protect_cleanup
+from .contract_runner import protect_cleanup
 from .contract_test import ContractFailure, load_cases, run_contract
+from .definition import PROFILE
+from .registry import active_benchmark, active_members, report_members
 from .results import (
     BenchmarkFailure,
     atomic_json,
@@ -20,20 +22,7 @@ from .results import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-PROFILE = {
-    "schema_version": 1,
-    "api_cpus": 1,
-    "api_memory_bytes": 536870912,
-    "workers": 1,
-    "pool_max": 10,
-    "http_version": "1.1",
-    "warmup_seconds": 5,
-    "duration_seconds": 30,
-    "connections": 50,
-    "runs": 3,
-    "request_timeout_seconds": 15,
-    "endpoints": ["/json", "/db/42", "/cpu"],
-}
+IMPLEMENTATIONS = active_members()
 
 
 def load_config(path: Path = ROOT / "benchmark" / "config.json") -> dict:
@@ -58,8 +47,11 @@ def run_benchmark(
     conditions = copy.deepcopy(config)
     if smoke:
         conditions.update(warmup_seconds=1, duration_seconds=2, connections=2)
+    identity = active_benchmark()
+    members = report_members({"schema_version": 2, "benchmark": identity})
     report = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "benchmark": identity,
         "status": "verified",
         "mode": "smoke" if smoke else "local",
         "official": False,
@@ -68,7 +60,7 @@ def run_benchmark(
         "metadata": metadata,
         "implementations": [],
     }
-    for implementation in IMPLEMENTATIONS:
+    for implementation in members:
         failure = None
         stage = "build"
         print(

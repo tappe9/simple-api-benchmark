@@ -1,21 +1,24 @@
 """Render both README result sections from one verified official report."""
 
 import argparse
+import html
+import re
 import sys
 from pathlib import Path
 
+from .registry import implementation
 from .report import validate_report
 from .results import BenchmarkFailure, require, strict_json
 
 START = "<!-- benchmark-results:start -->"
 END = "<!-- benchmark-results:end -->"
-NAMES = {
-    "go-gin": "Go / Gin",
-    "rust-actix": "Rust / Actix Web",
-    "node-fastify": "Node.js / Fastify",
-    "python-fastapi": "Python / FastAPI",
-}
 TESTS = {"/json": "JSON", "/db/42": "PostgreSQL", "/cpu": "CPU"}
+
+
+def label(identifier: str) -> str:
+    # Registry identity is trusted source, but labels must still be safe Markdown.
+    value = html.escape(implementation(identifier)["display_name"])
+    return re.sub(r"([\\`*_{}\[\]()#|])", r"\\\1", value)
 
 
 def render(report: dict | None, locale: str) -> str:
@@ -54,7 +57,7 @@ def render(report: dict | None, locale: str) -> str:
         for endpoint in backend["endpoints"]:
             selected = endpoint["selected"]
             lines.append(
-                f"| {NAMES[backend['implementation']]} | {TESTS[endpoint['endpoint']]} | "
+                f"| {label(backend['implementation'])} | {TESTS[endpoint['endpoint']]} | "
                 f"{selected['requests_per_second']:,.3f} | {selected['mean_response_time_ms']:,.3f} | "
                 f"{selected['peak_memory_bytes'] / 1048576:,.3f} |"
             )

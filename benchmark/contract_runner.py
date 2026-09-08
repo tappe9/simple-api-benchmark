@@ -12,9 +12,10 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .contract_test import ContractFailure, load_cases, run_contract
+from .registry import implementation_ids
 
 ROOT = Path(__file__).resolve().parents[1]
-IMPLEMENTATIONS = ("go-gin", "rust-actix", "node-fastify", "python-fastapi")
+IMPLEMENTATIONS = implementation_ids()
 
 
 def command(arguments: list[str], *, timeout: float) -> None:
@@ -66,7 +67,11 @@ def protect_cleanup():
 def run_implementations(
     implementations: Sequence[str] = IMPLEMENTATIONS, *, compose: str = "docker compose"
 ) -> int:
-    if not implementations or any(name not in IMPLEMENTATIONS for name in implementations):
+    if (
+        not implementations
+        or any(name not in IMPLEMENTATIONS for name in implementations)
+        or len(implementations) != len(set(implementations))
+    ):
         raise ContractFailure("select at least one of: " + ", ".join(IMPLEMENTATIONS))
     try:
         executable = shlex.split(compose)

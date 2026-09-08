@@ -13,6 +13,7 @@ from pathlib import Path
 
 from .install_oha import SHA256, VERSION, platform_asset
 from .process import ROOT, execute
+from .registry import active_members, implementation, implementation_ids
 from .results import BenchmarkFailure, require, strict_json
 
 
@@ -117,7 +118,10 @@ def validate_processes(state: dict, output: str) -> None:
 
 def pinned_versions() -> dict:
     def read(path):
-        return (ROOT / "apps" / path).read_text(encoding="utf-8")
+        identifier, _, filename = path.partition("/")
+        return (ROOT / implementation(identifier)["source_path"] / filename).read_text(
+            encoding="utf-8"
+        )
 
     def match(pattern, text):
         found = re.findall(pattern, text, re.MULTILINE)
@@ -147,15 +151,23 @@ def pinned_versions() -> dict:
         "node-fastify": {"node": node["engines"]["node"], **node["dependencies"]},
         "python-fastapi": {"python": read("python-fastapi/.python-version").strip(), **python},
     }
-    for implementation, values in versions.items():
+    require(
+        set(versions) == set(implementation_ids()),
+        "version extractors must cover registered implementations",
+    )
+    for identifier, values in versions.items():
+        require(
+            set(implementation(identifier)["version_fields"]) <= set(values),
+            "missing required stack versions",
+        )
         require(
             all(
                 type(value) is str and re.fullmatch(r"\d+\.\d+\.\d+", value)
                 for value in values.values()
             ),
-            f"unrecognized pinned versions for {implementation}",
+            f"unrecognized pinned versions for {identifier}",
         )
-    return versions
+    return {identifier: versions[identifier] for identifier in active_members()}
 
 
 def provenance(oha: Path) -> dict:
@@ -174,7 +186,6 @@ def provenance(oha: Path) -> dict:
     require(not dirty.strip(), f"commit source changes before benchmarking:\n{dirty}")
     commit = execute(["git", "rev-parse", "HEAD"], timeout=10).strip()
     require(re.fullmatch(r"[0-9a-f]{40}", commit) is not None, "source commit unavailable")
-    # HTTP always targets host loopback. A remote daemon would measure the wrong host.
     endpoint = os.environ.get("DOCKER_HOST")
     if os.environ.get("DOCKER_CONTEXT") or not endpoint:
         context = strict_json(execute(["docker", "context", "inspect"], timeout=10).encode())
@@ -417,3 +428,4 @@ class DockerEnvironment:
             )
         self.container = None
         self.identity = None
+        self.implementation = None

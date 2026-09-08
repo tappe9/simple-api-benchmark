@@ -1,0 +1,67 @@
+{
+  "implementations": [
+    {
+      "id": "synthetic-go",
+      "language": "Synthetic go",
+      "framework": "Fixture",
+      "display_name": "Synthetic go / Fixture",
+      "source_path": "apps/synthetic-go",
+      "version_fields": [
+        "runtime",
+        "framework"
+      ],
+      "acceptance_test": "tests/test_synthetic_go_service.py",
+      "failure_test": null
+    },
+    {
+      "id": "synthetic-rust",
+      "language": "Synthetic rust",
+      "framework": "Fixture",
+      "display_name": "Synthetic rust / Fixture",
+      "source_path": "apps/synthetic-rust",
+      "version_fields": [
+        "runtime",
+        "framework"
+      ],
+      "acceptance_test": "tests/test_synthetic_rust_service.py",
+      "failure_test": null
+    },
+    {
+      "id": "synthetic-node",
+      "language": "Synthetic node",
+      "framework": "Fixture",
+      "display_name": "Synthetic node / Fixture",
+      "source_path": "apps/synthetic-node",
+      "version_fields": [
+        "runtime",
+        "framework"
+      ],
+      "acceptance_test": "tests/test_synthetic_node_service.py",
+      "failure_test": null
+    },
+    {
+      "id": "synthetic-python",
+      "language": "Synthetic python",
+      "framework": "Fixture",
+      "display_name": "Synthetic python / Fixture",
+      "source_path": "apps/synthetic-python",
+      "version_fields": [
+        "runtime",
+        "framework"
+      ],
+      "acceptance_test": "tests/test_synthetic_python_service.py",
+      "failure_test": null
+    }
+  ],
+  "cohort_id": "synthetic-eight-v1",
+  "members": [
+    "go-gin",
+    "rust-actix",
+    "node-fastify",
+    "python-fastapi",
+    "synthetic-go",
+    "synthetic-rust",
+    "synthetic-node",
+    "synthetic-python"
+  ]
+}

@@ -8,7 +8,7 @@ DB_USER := benchmark
 DB_WAIT_TIMEOUT ?= 60
 PSQL := $(COMPOSE) exec -T $(DB_SERVICE) psql -X --username $(DB_USER) --dbname $(DB_NAME) --set ON_ERROR_STOP=1 --tuples-only --no-align
 
-.PHONY: db-up db-check db-reset test-db test-go-gin test-node-fastify test-python-fastapi test-rust-actix test-contract down
+.PHONY: db-up db-check db-reset test-db test-implementations test-registry test-contract down
 
 db-up:
 	@echo "Starting PostgreSQL $(DB_SERVICE) service..."
@@ -48,20 +48,16 @@ db-reset:
 test-db:
 	@$(PYTHON) tests/test_database_environment.py
 
-test-go-gin:
-	@$(PYTHON) tests/test_go_gin_service.py
+include benchmark/implementations.mk
 
-test-node-fastify:
-	@$(PYTHON) -m unittest discover -s tests -p test_node_fastify_acceptance.py
-	@$(PYTHON) tests/test_node_fastify_service.py
+# Keep even `make -j test-implementations` sequential on shared host port 8080.
+test-implementations: test-registry
+	@set -eu; for target in $(IMPLEMENTATION_TARGETS); do \
+		$(MAKE) --no-print-directory "$$target"; \
+	done
 
-test-python-fastapi:
-	@$(PYTHON) -m unittest discover -s tests -p test_python_fastapi_acceptance.py
-	@$(PYTHON) tests/test_python_fastapi_service.py
-
-test-rust-actix:
-	@$(PYTHON) -m unittest discover -s tests -p test_rust_actix_acceptance.py
-	@$(PYTHON) tests/test_rust_actix_service.py
+test-registry:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.registry --check
 
 test-contract:
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p 'test_contract_*.py'
@@ -89,11 +85,9 @@ benchmark-smoke:
 
 # Recursive invocations deliberately serialize services sharing loopback port 8080.
 test:
+	@$(MAKE) --no-print-directory test-registry
 	@$(MAKE) --no-print-directory test-db
-	@$(MAKE) --no-print-directory test-go-gin
-	@$(MAKE) --no-print-directory test-rust-actix
-	@$(MAKE) --no-print-directory test-node-fastify
-	@$(MAKE) --no-print-directory test-python-fastapi
+	@$(MAKE) --no-print-directory test-implementations
 	@$(MAKE) --no-print-directory test-contract
 	@$(MAKE) --no-print-directory test-benchmark
 	@$(MAKE) --no-print-directory test-workflows

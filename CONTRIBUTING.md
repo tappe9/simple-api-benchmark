@@ -212,6 +212,15 @@ A pull request must pass the available checks for the area it changes.
 
 ## Adding or updating an implementation
 
+Follow [the registry and cohort guide](docs/IMPLEMENTATIONS.md) when registering a
+stack. `benchmark/implementations.json` owns identity, source paths, required
+version fields, and acceptance entry points. Regenerate its Make/JavaScript
+projections with `python -m benchmark.registry --write`, then run
+`make test-registry`. `make test-implementations` runs the registered acceptance
+targets sequentially; existing focused `make test-<ID>` commands remain available.
+Keep historical cohorts unchanged and add a new versioned cohort when the measured
+member set changes. Registration is not evidence of a measured result.
+
 Each backend belongs under:
 
 ```text

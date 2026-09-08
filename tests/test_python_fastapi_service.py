@@ -22,6 +22,7 @@ DB_ENVIRONMENT = {
     "DATABASE_HOST": "postgres", "DATABASE_PORT": "5432", "DATABASE_NAME": "benchmark",
     "DATABASE_USER": "benchmark", "DATABASE_PASSWORD": "benchmark",
 }
+IMPLEMENTATIONS_MAKEFILE = ROOT / "benchmark" / "implementations.mk"
 SERVER_ARGS = [
     "-m", "uvicorn", "benchmark_api.app:app", "--host", "0.0.0.0", "--port", "8080",
     "--workers", "1", "--loop", "asyncio", "--http", "h11", "--no-access-log",
@@ -105,7 +106,11 @@ def check_static_contract() -> None:
     for expected in ("<<: *database-environment", "condition: service_healthy", "cpus: 1.0",
                      "mem_limit: 512m", '"127.0.0.1:8080:8080"', 'restart: "no"'):
         require(expected in match.group(), f"missing Compose constraint: {expected}")
-    require("test-python-fastapi:" in (ROOT / "Makefile").read_text(), "Make target is missing")
+    makefile = (ROOT / "Makefile").read_text()
+    require("include benchmark/implementations.mk" in makefile,
+            "Makefile does not include generated implementation targets")
+    require("test-python-fastapi:" in IMPLEMENTATIONS_MAKEFILE.read_text(),
+            "generated Make target is missing: test-python-fastapi")
 
 
 def check_configuration(config: dict) -> None:
@@ -240,7 +245,6 @@ def check_startup_failure() -> None:
 def check_shutdown(container: str) -> None:
     run(["docker", "compose", "stop", "--timeout", "15", "python-fastapi"])
     stopped = json.loads(run(["docker", "inspect", container]).stdout)[0]
-    # Uvicorn may re-raise SIGTERM after its lifespan shutdown has completed.
     require(stopped["State"]["ExitCode"] in (0, 128 + signal.SIGTERM), "server did not stop gracefully")
     require(not stopped["State"]["OOMKilled"], "server was killed by its memory limit")
     logs = run(["docker", "compose", "logs", "--no-color", "python-fastapi"]).stdout
@@ -263,7 +267,6 @@ def check_dynamic_contract() -> None:
         check_startup_failure()
         check_shutdown(container)
     finally:
-        # Attempt all cleanup checks even when an earlier check fails.
         cleanup = run(["make", "down"], check=False)
         remaining = run(["docker", "compose", "ps", "-a", "--quiet"], check=False)
         networks = None

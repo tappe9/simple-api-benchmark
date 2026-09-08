@@ -148,6 +148,7 @@ class LifecycleTests(unittest.TestCase):
             (("not-a-service",), self.compose),
             ((), self.compose),
             (("go-gin",), ""),
+            (("go-gin", "go-gin"), self.compose),
         ):
             with self.subTest(implementations=implementations), self.assertRaises(ContractFailure):
                 runner.run_implementations(implementations, compose=compose)

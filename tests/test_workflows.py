@@ -1,6 +1,8 @@
 """Parse actual workflow YAML to verify the read/write and trusted-source boundaries."""
 
+import json
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -55,10 +57,8 @@ class WorkflowTests(unittest.TestCase):
             self.assertNotIn(forbidden, content)
         for target in (
             "test-db",
-            "test-go-gin",
-            "test-rust-actix",
-            "test-node-fastify",
-            "test-python-fastapi",
+            "test-implementations",
+            "test-registry",
             "test-contract",
             "test-benchmark",
             "test-site",
@@ -76,6 +76,52 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("git diff --exit-code HEAD", content)
         self.assertIn("actionlint", content)
         self.assertIn("test_workflows.py", content)
+
+    def test_registry_targets_preserve_every_acceptance_and_failure_gate(self):
+        path = ROOT / "benchmark/implementations.json"
+        self.assertTrue(path.is_file(), "registry is required for CI gate coverage")
+        registry = json.loads(path.read_text())
+        commands = subprocess.run(
+            ["make", "-n", "test-implementations"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout
+        self.assertEqual(
+            {spec["acceptance_test"] for spec in registry["implementations"]},
+            {
+                path.relative_to(ROOT).as_posix()
+                for path in (ROOT / "tests").glob("test_*_service.py")
+            },
+        )
+        self.assertEqual(
+            {
+                spec["failure_test"]
+                for spec in registry["implementations"]
+                if spec["failure_test"] is not None
+            },
+            {
+                path.relative_to(ROOT).as_posix()
+                for path in (ROOT / "tests").glob("test_*_acceptance.py")
+            },
+        )
+        previous = -1
+        for spec in registry["implementations"]:
+            position = commands.index(spec["acceptance_test"])
+            self.assertGreater(position, previous, "local acceptance checks must remain sequential")
+            previous = position
+            if spec["failure_test"] is not None:
+                self.assertIn(Path(spec["failure_test"]).name, commands)
+        compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
+        self.assertEqual(
+            set(compose["services"]) - {"postgres"},
+            {spec["id"] for spec in registry["implementations"]},
+        )
+        for spec in registry["implementations"]:
+            build = compose["services"][spec["id"]]["build"]
+            context = build["context"] if isinstance(build, dict) else build
+            self.assertEqual(context.removeprefix("./"), spec["source_path"])
 
     def test_official_workflow_has_no_pr_or_push_trigger_and_only_default_ref(self):
         workflow = load("benchmark.yml")

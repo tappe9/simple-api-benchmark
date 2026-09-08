@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "active_cohort": "four-stack-v1",
+  "implementations": [
+    {
+      "id": "go-gin",
+      "language": "Go",
+      "framework": "Gin",
+      "display_name": "Go / Gin",
+      "source_path": "apps/go-gin",
+      "version_fields": [
+        "go",
+        "gin",
+        "pgx"
+      ],
+      "acceptance_test": "tests/test_go_gin_service.py",
+      "failure_test": null
+    },
+    {
+      "id": "rust-actix",
+      "language": "Rust",
+      "framework": "Actix Web",
+      "display_name": "Rust / Actix Web",
+      "source_path": "apps/rust-actix",
+      "version_fields": [
+        "rust",
+        "actix-web",
+        "sqlx",
+        "serde",
+        "serde_json"
+      ],
+      "acceptance_test": "tests/test_rust_actix_service.py",
+      "failure_test": "tests/test_rust_actix_acceptance.py"
+    },
+    {
+      "id": "node-fastify",
+      "language": "Node.js",
+      "framework": "Fastify",
+      "display_name": "Node.js / Fastify",
+      "source_path": "apps/node-fastify",
+      "version_fields": [
+        "node",
+        "fastify",
+        "pg"
+      ],
+      "acceptance_test": "tests/test_node_fastify_service.py",
+      "failure_test": "tests/test_node_fastify_acceptance.py"
+    },
+    {
+      "id": "python-fastapi",
+      "language": "Python",
+      "framework": "FastAPI",
+      "display_name": "Python / FastAPI",
+      "source_path": "apps/python-fastapi",
+      "version_fields": [
+        "python",
+        "fastapi",
+        "uvicorn",
+        "asyncpg"
+      ],
+      "acceptance_test": "tests/test_python_fastapi_service.py",
+      "failure_test": "tests/test_python_fastapi_acceptance.py"
+    }
+  ],
+  "cohorts": {
+    "four-stack-v1": {
+      "definition": "simple-api-v1",
+      "members": [
+        "go-gin",
+        "rust-actix",
+        "node-fastify",
+        "python-fastapi"
+      ]
+    }
+  }
+}

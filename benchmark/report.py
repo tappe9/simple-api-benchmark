@@ -4,7 +4,9 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import registry
 from .contract_test import load_cases
+from .definition import PROFILE
 from .results import (
     number,
     object_fields,
@@ -14,17 +16,10 @@ from .results import (
     strict_json,
     validate_run,
 )
-from .run import IMPLEMENTATIONS, PROFILE
 
 REPOSITORY = "tappe9/simple-api-benchmark"
 REF = "refs/heads/main"
 WORKFLOW = REPOSITORY + "/.github/workflows/benchmark.yml@" + REF
-VERSION_KEYS = {
-    "go-gin": ("go", "gin", "pgx"),
-    "rust-actix": ("rust", "actix-web", "sqlx", "serde", "serde_json"),
-    "node-fastify": ("node", "fastify", "pg"),
-    "python-fastapi": ("python", "fastapi", "uvicorn", "asyncpg"),
-}
 
 
 def timestamp(value: str) -> datetime:
@@ -80,6 +75,7 @@ def validate_context(context: dict) -> None:
 
 
 def validate_report(report: dict, *, expected_context: dict | None = None) -> None:
+    members = registry.report_members(report)
     object_fields(
         report,
         (
@@ -92,10 +88,10 @@ def validate_report(report: dict, *, expected_context: dict | None = None) -> No
             "conditions",
             "metadata",
             "implementations",
+            *(("benchmark",) if report["schema_version"] == 2 else ()),
         ),
         "report",
     )
-    require(type(report["schema_version"]) is int and report["schema_version"] == 1, "schema")
     require(report["official"] is True and report["mode"] == "official", "not an official result")
     require(report["status"] == "verified", "unverified result")
     conditions = object_fields(report["conditions"], PROFILE, "conditions")
@@ -134,8 +130,9 @@ def validate_report(report: dict, *, expected_context: dict | None = None) -> No
     text(metadata["docker"].get("ServerVersion"), "Docker server version required")
     text(metadata.get("docker_cli"), "Docker CLI version required")
     text(metadata.get("docker_compose"), "Docker Compose version required")
-    versions = object_fields(metadata.get("versions"), IMPLEMENTATIONS, "versions")
-    for implementation, keys in VERSION_KEYS.items():
+    versions = object_fields(metadata.get("versions"), members, "versions")
+    for implementation in members:
+        keys = registry.implementation(implementation)["version_fields"]
         values = versions[implementation]
         require(type(values) is dict and set(keys) <= set(values), "missing stack versions")
         for value in values.values():
@@ -144,8 +141,8 @@ def validate_report(report: dict, *, expected_context: dict | None = None) -> No
                 "invalid stack version",
             )
     backends = report["implementations"]
-    require(type(backends) is list and len(backends) == len(IMPLEMENTATIONS), "four APIs required")
-    for backend, implementation in zip(backends, IMPLEMENTATIONS):
+    require(type(backends) is list and len(backends) == len(members), "complete cohort required")
+    for backend, implementation in zip(backends, members):
         object_fields(
             backend, ("implementation", "container", "contract_checks", "endpoints"), "backend"
         )

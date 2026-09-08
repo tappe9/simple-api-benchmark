@@ -122,6 +122,46 @@ class StateTests(unittest.TestCase):
             for command in arguments[1:]:
                 self.assertIn("label=com.docker.compose.project=" + env.project, command)
 
+    def test_measure_uses_existing_process_and_oha_parser_contracts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env = environment.DockerEnvironment(Path("/fake/oha"), Path(directory))
+            env.container = "a" * 64
+            env.implementation = "go-gin"
+
+            def execute(arguments, *, timeout, tick=None, cwd=environment.ROOT):
+                if arguments[:2] == ["docker", "stats"]:
+                    return json.dumps({"ID": env.container, "MemUsage": "1MiB / 512MiB"})
+                if "--output" in arguments:
+                    output = Path(arguments[arguments.index("--output") + 1])
+                    output.write_bytes(b"{}")
+                    if tick is not None:
+                        tick()
+                return ""
+
+            parsed_result = {
+                "requests_per_second": 1.0,
+                "mean_response_time_ms": 1.0,
+                "elapsed_seconds": 1.0,
+                "successful_requests": 1,
+                "response_bytes": 1,
+            }
+            with (
+                patch.object(env, "check"),
+                patch.object(environment, "execute", side_effect=execute),
+                patch(
+                    "benchmark.results.parse_oha", autospec=True, return_value=parsed_result
+                ) as parser,
+            ):
+                result = env.measure("/json", 1, 2)
+
+            parser.assert_called_once()
+            args, kwargs = parser.call_args
+            self.assertEqual(args[0], b"{}")
+            self.assertEqual(kwargs, {"duration": 1, "request_timeout": 15})
+            self.assertEqual(result["run"], 2)
+            self.assertEqual(result["peak_memory_bytes"], 1024 * 1024)
+            self.assertEqual(result["memory_samples"], 1)
+
 
 class InstallerTests(unittest.TestCase):
     def test_cached_checksum_is_checked_before_executing_binary(self):

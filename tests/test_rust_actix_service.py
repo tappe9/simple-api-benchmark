@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUST_APP = ROOT / "apps" / "rust-actix"
 COMPOSE_FILE = ROOT / "docker-compose.yml"
 MAKEFILE = ROOT / "Makefile"
+IMPLEMENTATIONS_MAKEFILE = ROOT / "benchmark" / "implementations.mk"
 BASE_URL = "http://127.0.0.1:8080"
 
 
@@ -104,6 +105,7 @@ def check_static_contract() -> None:
         RUST_APP / "src" / "item.rs",
         COMPOSE_FILE,
         MAKEFILE,
+        IMPLEMENTATIONS_MAKEFILE,
     )
     for path in required_files:
         require(path.is_file(), f"required file is missing: {path.relative_to(ROOT)}")
@@ -160,8 +162,13 @@ def check_static_contract() -> None:
 
     makefile = MAKEFILE.read_text(encoding="utf-8")
     require(
-        re.search(r"(?m)^test-rust-actix\s*:", makefile) is not None,
-        "Makefile target is missing: test-rust-actix",
+        "include benchmark/implementations.mk" in makefile,
+        "Makefile does not include generated implementation targets",
+    )
+    generated = IMPLEMENTATIONS_MAKEFILE.read_text(encoding="utf-8")
+    require(
+        re.search(r"(?m)^test-rust-actix\s*:", generated) is not None,
+        "generated Makefile target is missing: test-rust-actix",
     )
 
 
@@ -355,7 +362,6 @@ def check_dynamic_contract() -> None:
             cleanup_error = CheckFailure(
                 f"project containers remain after cleanup: {remaining.stdout.strip()}"
             )
-
         elif networks.returncode != 0 or networks.stdout.strip():
             cleanup_error = CheckFailure("project network cleanup could not be verified")
 

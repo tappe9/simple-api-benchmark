@@ -285,3 +285,79 @@ for (const previous of ['missing', 'older']) {
     }
   });
 }
+
+test("explicit versioned current cohort renders the same legacy measurements", async () => {
+  const { viewModel, renderReport } = await subject();
+  const legacy = await report();
+  const explicit = structuredClone(legacy);
+  explicit.schema_version = 2;
+  explicit.benchmark = { definition: "simple-api-v1", cohort: "four-stack-v1" };
+  assert.deepEqual(viewModel(explicit).rows, viewModel(legacy).rows);
+  assert.match(renderReport(explicit), /href="\.\/results\/latest\.json"/);
+  for (const mutation of [
+    (value) => { delete value.benchmark; },
+    (value) => { value.benchmark.cohort = "unknown-v1"; },
+    (value) => { value.benchmark.cohort = "__proto__"; },
+    (value) => { value.benchmark.definition = "unknown-v1"; },
+    (value) => { value.benchmark.members = ["go-gin"]; },
+    (value) => { value.schema_version = 1; },
+  ]) {
+    const bad = structuredClone(explicit);
+    mutation(bad);
+    assert.throws(() => viewModel(bad));
+  }
+});
+
+test("isolated extended cohort supports old and new reports without enabling production stacks", async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "sab-registry-fixture-"));
+  try {
+    await cp(new URL("../site/app.mjs", import.meta.url), join(temporary, "app.mjs"));
+    const source = `
+import json, sys
+from pathlib import Path
+from unittest.mock import patch
+sys.path.insert(0, "tests")
+from registry_fixtures import extended_registry, expanded_report
+from test_benchmark_publication import synthetic_report
+from benchmark import registry
+root = Path(sys.argv[1])
+data = extended_registry()
+data["implementations"][-1]["display_name"] = "<script>fixture</script>"
+legacy = synthetic_report(root)
+expanded = expanded_report(legacy)
+with patch.object(registry, "REGISTRY", data):
+    (root / "registry.mjs").write_text(registry.generated_files()["site/registry.mjs"])
+print(json.dumps({"legacy": legacy, "expanded": expanded}))
+`;
+    const fixtures = JSON.parse(execFileSync(process.env.PYTHON || "python3", ["-c", source, temporary], { cwd: fileURLToPath(new URL("..", import.meta.url)), encoding: "utf8" }));
+    const { viewModel, chartRows, renderReport } = await import(pathToFileURL(join(temporary, "app.mjs")).href);
+    assert.equal(viewModel(fixtures.legacy).rows.length, 12);
+    const model = viewModel(fixtures.expanded);
+    assert.equal(model.rows.length, 24);
+    assert.equal(chartRows(model, "/json", "rps").length, 8);
+    const html = renderReport(fixtures.expanded);
+    assert.equal((html.match(/data-result-row/g) || []).length, 24);
+    assert.equal((html.match(/<meter /g) || []).length, 48);
+    assert.match(html, /&lt;script&gt;fixture&lt;\/script&gt;/);
+    assert.ok(!html.includes("<script>fixture"));
+    assert.match(html, /href="\.\/results\/latest\.json"/);
+    assert.ok(html.includes(`/tree/${fixtures.expanded.metadata.source_commit}/apps/synthetic-python`));
+    for (const mutation of [
+      (value) => { value.implementations.pop(); },
+      (value) => { value.implementations.reverse(); },
+      (value) => { value.implementations[7].implementation = "go-gin"; },
+      (value) => { value.implementations[7].endpoints.pop(); },
+      (value) => { value.implementations[7].endpoints.reverse(); },
+      (value) => { delete value.metadata.versions["synthetic-python"].runtime; },
+      (value) => { value.metadata.versions["unknown-id"] = {}; },
+      (value) => { value.schema_version = 1; delete value.benchmark; },
+      (value) => { value.benchmark.cohort = "four-stack-v1"; },
+    ]) {
+      const bad = structuredClone(fixtures.expanded);
+      mutation(bad);
+      assert.throws(() => viewModel(bad));
+    }
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});

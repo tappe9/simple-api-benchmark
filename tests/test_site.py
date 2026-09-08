@@ -5,11 +5,15 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+from registry_fixtures import expanded_report, extended_registry
+from test_benchmark_publication import synthetic_report
 
 from benchmark.results import BenchmarkFailure
 
 ROOT = Path(__file__).resolve().parents[1]
-ASSETS = ("index.html", "style.css", "app.mjs")
+ASSETS = ("index.html", "style.css", "app.mjs", "registry.mjs")
 PAGES_URL = "https://tappe9.github.io/simple-api-benchmark/"
 
 
@@ -20,7 +24,12 @@ class SiteBuildTests(unittest.TestCase):
         self.root = Path(temporary.name)
         (self.root / "site").mkdir()
         for name in ASSETS:
-            (self.root / "site" / name).write_text("isolated test asset: " + name)
+            content = (
+                (ROOT / "site" / name).read_text()
+                if name == "registry.mjs" and (ROOT / "site" / name).exists()
+                else "isolated test asset: " + name
+            )
+            (self.root / "site" / name).write_text(content)
         (self.root / "results").mkdir()
         self.raw = (ROOT / "results/latest.json").read_bytes()
         (self.root / "results/latest.json").write_bytes(self.raw)
@@ -69,6 +78,27 @@ class SiteBuildTests(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaises(BenchmarkFailure):
                 self.build()
             self.assertEqual((self.output / "index.html").read_bytes(), b"previous site")
+
+    def test_extended_trusted_fixture_builds_without_enabling_production_members(self):
+        from benchmark import registry
+
+        report = expanded_report(synthetic_report(self.root))
+        (self.root / "results/latest.json").write_text(json.dumps(report))
+        with patch.object(registry, "REGISTRY", extended_registry()):
+            (self.root / "site/registry.mjs").write_text(
+                registry.generated_files()["site/registry.mjs"]
+            )
+            self.build()
+        self.assertEqual(json.loads((self.output / "results/latest.json").read_bytes()), report)
+        self.assertEqual(len(report["implementations"]), 8)
+        self.assertEqual(len(registry.implementation_ids()), 4)
+
+    def test_stale_registry_projection_cannot_replace_previous_site(self):
+        self.previous()
+        (self.root / "site/registry.mjs").write_text("stale projection")
+        with self.assertRaises(BenchmarkFailure):
+            self.build()
+        self.assertEqual((self.output / "index.html").read_bytes(), b"previous site")
 
     def test_missing_report_builds_the_shell_without_fake_or_stale_data(self):
         self.build()

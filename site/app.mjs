@@ -1,29 +1,9 @@
-const IMPLEMENTATIONS = ["go-gin", "rust-actix", "node-fastify", "python-fastapi"];
-const ENDPOINTS = ["/json", "/db/42", "/cpu"];
-const NAMES = {
-  "go-gin": "Go / Gin",
-  "rust-actix": "Rust / Actix Web",
-  "node-fastify": "Node.js / Fastify",
-  "python-fastapi": "Python / FastAPI",
-};
+import { REGISTRY } from "./registry.mjs";
+
+const STACKS = Object.fromEntries(REGISTRY.implementations.map((spec) => [spec.id, spec]));
+const ENDPOINTS = REGISTRY.definition.conditions.endpoints;
+const NAMES = Object.fromEntries(REGISTRY.implementations.map((spec) => [spec.id, spec.display_name]));
 const TESTS = { "/json": "JSON", "/db/42": "PostgreSQL", "/cpu": "CPU" };
-const VERSION_KEYS = {
-  "go-gin": ["go", "gin", "pgx"],
-  "rust-actix": ["rust", "actix-web", "sqlx", "serde", "serde_json"],
-  "node-fastify": ["node", "fastify", "pg"],
-  "python-fastapi": ["python", "fastapi", "uvicorn", "asyncpg"],
-};
-const POSITIVE_INTEGER_CONDITIONS = [
-  "api_cpus",
-  "api_memory_bytes",
-  "workers",
-  "pool_max",
-  "warmup_seconds",
-  "duration_seconds",
-  "connections",
-  "runs",
-  "request_timeout_seconds",
-];
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -54,20 +34,37 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function exactKeys(value, keys, label) {
+  object(value, label);
+  assert(Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key)), `unexpected ${label} fields`);
+}
+
 function validateConditions(conditions) {
-  object(conditions, "conditions");
-  assert(Number.isInteger(conditions.schema_version) && conditions.schema_version === 1, "unsupported condition schema");
-  for (const key of POSITIVE_INTEGER_CONDITIONS) {
-    integer(conditions[key], `condition ${key}`);
-    assert(conditions[key] > 0, `condition ${key} must be positive`);
+  const expected = REGISTRY.definition.conditions;
+  exactKeys(conditions, Object.keys(expected), "conditions");
+  for (const [key, value] of Object.entries(expected)) {
+    assert(JSON.stringify(conditions[key]) === JSON.stringify(value), `unsupported condition ${key}`);
   }
-  assert(typeof conditions.http_version === "string" && conditions.http_version.length > 0, "invalid HTTP version");
-  assert(Array.isArray(conditions.endpoints) && JSON.stringify(conditions.endpoints) === JSON.stringify(ENDPOINTS), "unexpected endpoints");
+}
+
+function reportCohort(report) {
+  assert(Number.isInteger(report.schema_version) && [1, 2].includes(report.schema_version), "unsupported schema");
+  let id = REGISTRY.legacy_cohort;
+  if (report.schema_version === 1) {
+    assert(!Object.hasOwn(report, "benchmark"), "schema-v1 uses only the legacy cohort");
+  } else {
+    exactKeys(report.benchmark, ["definition", "cohort"], "benchmark identity");
+    id = report.benchmark.cohort;
+    assert(typeof id === "string" && Object.hasOwn(REGISTRY.cohorts, id), "unknown cohort");
+    assert(report.benchmark.definition === REGISTRY.definition.id && report.benchmark.definition === REGISTRY.cohorts[id].definition, "unknown definition/cohort pairing");
+  }
+  return { id, members: REGISTRY.cohorts[id].members };
 }
 
 function validateReport(report) {
   object(report, "report");
-  assert(Number.isInteger(report.schema_version) && report.schema_version === 1, "unsupported schema");
+  const cohort = reportCohort(report);
+  const members = cohort.members;
   assert(report.status === "verified", "result is not verified");
   assert(report.mode === "official" && report.official === true, "result is not official");
   assert(typeof report.completed_at === "string" && !Number.isNaN(Date.parse(report.completed_at)), "invalid completion time");
@@ -78,21 +75,23 @@ function validateReport(report) {
   const github = object(metadata.github, "GitHub metadata");
   assert(typeof github.run_url === "string" && /^https:\/\/github\.com\/tappe9\/simple-api-benchmark\/actions\/runs\/[1-9][0-9]*$/.test(github.run_url), "invalid Actions URL");
   const versions = object(metadata.versions, "versions");
+  exactKeys(versions, members, "stack versions");
   const runner = object(metadata.runner, "runner");
   for (const key of ["environment", "os", "architecture", "image_os", "image_version", "cpu_model"]) {
     assert(typeof runner[key] === "string" && runner[key].length > 0, `missing runner ${key}`);
   }
 
-  assert(Array.isArray(report.implementations) && report.implementations.length === IMPLEMENTATIONS.length, "four implementations required");
+  assert(Array.isArray(report.implementations) && report.implementations.length === members.length, "complete cohort required");
   const rows = [];
   report.implementations.forEach((backend, backendIndex) => {
     object(backend, "implementation");
     const id = backend.implementation;
-    assert(id === IMPLEMENTATIONS[backendIndex], "implementation identity/order mismatch");
+    assert(id === members[backendIndex], "implementation identity/order mismatch");
     const versionSet = object(versions[id], `versions for ${id}`);
-    for (const key of VERSION_KEYS[id]) {
+    for (const key of STACKS[id].version_fields) {
       assert(typeof versionSet[key] === "string" && /^\d+\.\d+\.\d+$/.test(versionSet[key]), `invalid ${id} ${key} version`);
     }
+    assert(Object.values(versionSet).every((value) => typeof value === "string" && /^\d+\.\d+\.\d+$/.test(value)), "invalid stack version");
     assert(Array.isArray(backend.endpoints) && backend.endpoints.length === ENDPOINTS.length, "three endpoints required");
     backend.endpoints.forEach((entry, endpointIndex) => {
       object(entry, "endpoint result");
@@ -107,13 +106,15 @@ function validateReport(report) {
       rows.push({ id, endpoint: entry.endpoint, rps, mean, memory: memoryBytes / 1048576 });
     });
   });
-  return { rows, metadata, versions };
+  return { rows, metadata, versions, cohort };
 }
 
 export function viewModel(report) {
-  const { rows, metadata, versions } = validateReport(report);
+  const { rows, metadata, versions, cohort } = validateReport(report);
   return {
     rows,
+    implementations: [...cohort.members],
+    cohort: cohort.id,
     versions,
     source: metadata.source_commit,
     completedAt: report.completed_at,
@@ -127,7 +128,7 @@ export function chartRows(model, endpoint, metric) {
   assert(ENDPOINTS.includes(endpoint), "unsupported endpoint");
   assert(metric === "rps" || metric === "memory", "unsupported metric");
   const rows = model.rows.filter((row) => row.endpoint === endpoint);
-  assert(rows.length === IMPLEMENTATIONS.length, "incomplete chart rows");
+  assert(rows.length === model.implementations.length, "incomplete chart rows");
   const values = rows.map((row) => finite(row[metric], metric, { positive: true }));
   const maximum = Math.max(...values);
   const bestValue = metric === "rps" ? maximum : Math.min(...values);
@@ -167,11 +168,11 @@ function chart(model, endpoint, metric) {
 }
 
 function versions(model) {
-  return IMPLEMENTATIONS.map((id) => {
+  return model.implementations.map((id) => {
     const entries = Object.entries(model.versions[id])
       .map(([key, value]) => `<li><code>${escapeHtml(key)}</code> ${escapeHtml(value)}</li>`)
       .join("");
-    return `<section class="version-card"><h3>${escapeHtml(NAMES[id])}</h3><ul>${entries}</ul><a href="https://github.com/tappe9/simple-api-benchmark/tree/${model.source}/apps/${id}">Implementation code</a></section>`;
+    return `<section class="version-card"><h3>${escapeHtml(NAMES[id])}</h3><ul>${entries}</ul><a href="https://github.com/tappe9/simple-api-benchmark/tree/${model.source}/${escapeHtml(STACKS[id].source_path)}">Implementation code</a></section>`;
   }).join("");
 }
 
@@ -184,7 +185,7 @@ export function renderReport(report) {
   const model = viewModel(report);
   const charts = ENDPOINTS.flatMap((endpoint) => [chart(model, endpoint, "rps"), chart(model, endpoint, "memory")]).join("");
   const conditions = model.conditions;
-  return `<article class="results"><header><p class="eyebrow">Verified official benchmark</p><h2>Results</h2><p>Measured <time datetime="${escapeHtml(model.completedAt)}">${escapeHtml(model.completedAt)}</time> on shared GitHub-hosted hardware. <a href="${escapeHtml(model.runUrl)}">Actions run</a>.</p><p>${conditions.api_cpus} CPU · ${(conditions.api_memory_bytes / 1048576).toFixed(0)} MiB · ${conditions.workers} worker · DB pool ${conditions.pool_max} · HTTP/${escapeHtml(conditions.http_version)} · ${conditions.connections} connections · ${conditions.warmup_seconds}s warm-up · ${conditions.runs} × ${conditions.duration_seconds}s.</p>${environment(model)}</header>${table(model)}<section><h2>Comparison bars</h2><div class="charts">${charts}</div></section><section><h2>Versions in this run</h2><div class="version-grid">${versions(model)}</div></section><section class="limitation"><h2>What this result means</h2><p>This compares complete API stacks on shared hosted hardware, including runtime, framework, HTTP server, database driver, and container configuration. It is a reference for this run, not universal proof that one language or framework is always faster.</p><p><a href="https://github.com/tappe9/simple-api-benchmark/blob/${model.source}/docs/METHODOLOGY.md">Read the methodology</a> · <a href="./results/latest.json">Inspect the result JSON</a></p></section></article>`;
+  return `<article class="results"><header><p class="eyebrow">Verified official benchmark</p><h2>Results</h2><p>Cohort: <code>${escapeHtml(model.cohort)}</code> · Definition: <code>${escapeHtml(REGISTRY.definition.id)}</code>.</p><p>Measured <time datetime="${escapeHtml(model.completedAt)}">${escapeHtml(model.completedAt)}</time> on shared GitHub-hosted hardware. <a href="${escapeHtml(model.runUrl)}">Actions run</a>.</p><p>${conditions.api_cpus} CPU · ${(conditions.api_memory_bytes / 1048576).toFixed(0)} MiB · ${conditions.workers} worker · DB pool ${conditions.pool_max} · HTTP/${escapeHtml(conditions.http_version)} · ${conditions.connections} connections · ${conditions.warmup_seconds}s warm-up · ${conditions.runs} × ${conditions.duration_seconds}s.</p>${environment(model)}</header>${table(model)}<section><h2>Comparison bars</h2><div class="charts">${charts}</div></section><section><h2>Versions in this run</h2><div class="version-grid">${versions(model)}</div></section><section class="limitation"><h2>What this result means</h2><p>This compares complete API stacks on shared hosted hardware, including runtime, framework, HTTP server, database driver, and container configuration. It is a reference for this run, not universal proof that one language or framework is always faster.</p><p><a href="https://github.com/tappe9/simple-api-benchmark/blob/${model.source}/docs/METHODOLOGY.md">Read the methodology</a> · <a href="./results/latest.json">Inspect the result JSON</a></p></section></article>`;
 }
 
 export async function loadReport(fetcher = fetch) {
