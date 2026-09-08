@@ -36,7 +36,9 @@ def expanded_report(report, root=None):
         backend = copy.deepcopy(original)
         backend["implementation"] = spec["id"]
         result["implementations"].append(backend)
-        result["metadata"]["versions"][spec["id"]] = {key: "1.2.3" for key in spec["version_fields"]}
+        result["metadata"]["versions"][spec["id"]] = {
+            key: "1.2.3" for key in spec["version_fields"]
+        }
         if root is not None:
             directory = root / result["metadata"]["artifact_directory"]
             for path in list(directory.glob(original["implementation"] + "-*")):
