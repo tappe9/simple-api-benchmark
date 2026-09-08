@@ -47,9 +47,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(
             set(ci["on"]["push"]["paths-ignore"]), {"results/**", "README.md", "README.ja.md"}
         )
-        self.assertEqual(
-            set(ci["jobs"]), {"plan", "shared", "implementation", "smoke", "required"}
-        )
+        self.assertEqual(set(ci["jobs"]), {"plan", "shared", "implementation", "smoke", "required"})
         content = (ROOT / ".github/workflows/ci.yml").read_text()
         for forbidden in (
             "secrets.",
@@ -74,15 +72,15 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(
             implementation["strategy"]["matrix"], "${{ fromJSON(needs.plan.outputs.matrix) }}"
         )
-        self.assertEqual(
-            plan["outputs"]["matrix"], "${{ steps.matrix.outputs.matrix }}"
-        )
+        self.assertEqual(plan["outputs"]["matrix"], "${{ steps.matrix.outputs.matrix }}")
         matrix_step = next(step for step in plan["steps"] if step.get("id") == "matrix")
         self.assertEqual(matrix_step["run"], 'python -m benchmark.ci matrix >> "$GITHUB_OUTPUT"')
         registry = json.loads((ROOT / "benchmark/implementations.json").read_text())
         workflow_text = (ROOT / ".github/workflows/ci.yml").read_text()
         self.assertNotIn(
-            "implementation: [" + ", ".join(spec["id"] for spec in registry["implementations"]) + "]",
+            "implementation: ["
+            + ", ".join(spec["id"] for spec in registry["implementations"])
+            + "]",
             workflow_text,
         )
         self.assertEqual(implementation["env"]["IMPLEMENTATION_ID"], "${{ matrix.implementation }}")
@@ -91,8 +89,10 @@ class WorkflowTests(unittest.TestCase):
             self.assertIn(expected, project)
         command_text = "\n".join(step.get("run", "") for step in implementation["steps"])
         self.assertIn('make "test-$IMPLEMENTATION_ID"', command_text)
-        self.assertIn("CONTRACT_IMPL=\"$IMPLEMENTATION_ID\"", command_text)
-        cleanup = next(step for step in implementation["steps"] if "docker compose -p" in step.get("run", ""))
+        self.assertIn('CONTRACT_IMPL="$IMPLEMENTATION_ID"', command_text)
+        cleanup = next(
+            step for step in implementation["steps"] if "docker compose -p" in step.get("run", "")
+        )
         self.assertEqual(cleanup["if"], "always()")
         self.assertIn('docker compose -p "$COMPOSE_PROJECT_NAME" down', cleanup["run"])
 
