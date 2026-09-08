@@ -8,7 +8,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import yaml
-
 from registry_fixtures import extended_registry
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -132,7 +131,8 @@ class WorkflowTests(unittest.TestCase):
         )
 
     def test_ci_support_matrix_and_aggregate_are_fail_closed(self):
-        from benchmark import ci as ci_support, registry
+        from benchmark import ci as ci_support
+        from benchmark import registry
 
         self.assertEqual(
             ci_support.matrix_payload(),
