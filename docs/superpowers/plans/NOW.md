@@ -1,1 +1,0 @@
-Red phase active.
