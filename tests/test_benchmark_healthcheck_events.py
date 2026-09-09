@@ -171,12 +171,8 @@ class EnvironmentAuditTests(unittest.TestCase):
             env.container = CID
             env.implementation = "go-gin"
             env.probe_command = PROBE
-            started = environment.datetime(
-                2026, 9, 9, 2, 0, 0, tzinfo=environment.timezone.utc
-            )
-            completed = environment.datetime(
-                2026, 9, 9, 2, 0, 30, tzinfo=environment.timezone.utc
-            )
+            started = environment.datetime(2026, 9, 9, 2, 0, 0, tzinfo=environment.timezone.utc)
+            completed = environment.datetime(2026, 9, 9, 2, 0, 30, tzinfo=environment.timezone.utc)
             base = epoch_ns(started)
             raw = encoded(
                 event("exec_create: /go-gin healthcheck", at=base + 10),
