@@ -1,0 +1,38 @@
+# Temporary Issue #30 development diagnostics; removed before final review.
+name: Axum development
+on:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: axum-development-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  diagnostic:
+    if: github.head_ref == 'issue-30-rust-axum' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Check registration behavior
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p test_benchmark_axum_registration.py -v
+      - name: Export tracked source snapshot for review
+        if: always()
+        run: |
+          mkdir -p .cache/axum-development
+          git archive --format=tar HEAD -o .cache/axum-development/source.tar
+          git rev-parse HEAD > .cache/axum-development/source-sha.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: axum-development-${{ github.run_id }}
+          path: .cache/axum-development/
+          include-hidden-files: true
+          retention-days: 1
+          if-no-files-found: error
