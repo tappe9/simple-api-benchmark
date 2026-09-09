@@ -4,6 +4,8 @@ import copy
 import json
 from pathlib import Path
 
+from benchmark.healthcheck import CONTAINER_HEALTHCHECK
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -25,6 +27,7 @@ def explicit_report(report, cohort="four-stack-v1"):
     result = copy.deepcopy(report)
     result["schema_version"] = 2
     result["benchmark"] = {"definition": "simple-api-v1", "cohort": cohort}
+    result["metadata"]["api_health_policy"] = CONTAINER_HEALTHCHECK
     return result
 
 

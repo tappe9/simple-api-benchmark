@@ -67,7 +67,7 @@ down:
 	@echo "Removing benchmark containers and project network..."
 	@$(COMPOSE) down --remove-orphans --volumes
 
-.PHONY: benchmark test-benchmark benchmark-smoke install-oha
+.PHONY: benchmark test-benchmark benchmark-smoke healthcheck-investigation install-oha
 
 install-oha:
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.run --install-only
@@ -80,6 +80,9 @@ benchmark:
 
 benchmark-smoke:
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.run --compose "$(COMPOSE)" --smoke
+
+healthcheck-investigation:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.healthcheck_investigation
 
 .PHONY: test test-workflows test-site generate-readme
 

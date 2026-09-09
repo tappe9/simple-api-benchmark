@@ -44,9 +44,13 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(set(ci["on"]), {"pull_request", "push"})
         self.assertEqual(ci["on"]["push"]["branches"], ["main"])
         self.assertEqual(
-            set(ci["on"]["push"]["paths-ignore"]), {"results/**", "README.md", "README.ja.md"}
+            set(ci["on"]["push"]["paths-ignore"]),
+            {"results/**", "README.md", "README.ja.md"},
         )
-        self.assertEqual(set(ci["jobs"]), {"plan", "shared", "implementation", "smoke", "required"})
+        self.assertEqual(
+            set(ci["jobs"]),
+            {"plan", "shared", "implementation", "smoke", "required"},
+        )
         content = (ROOT / ".github/workflows/ci.yml").read_text()
         for forbidden in (
             "secrets.",
@@ -61,6 +65,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("actionlint", content)
         self.assertIn("test_workflows.py", content)
         self.assertIn("git diff --exit-code HEAD", content)
+        self.assertNotIn("healthcheck-investigation", content)
 
     def test_split_ci_matrix_is_registry_driven_and_compose_owned(self):
         ci = load("ci.yml")

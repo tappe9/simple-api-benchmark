@@ -23,18 +23,27 @@ dirty tracked/untracked source tree, but permits the previous local result file.
 Stop manually started APIs before running: every API uses port 8080. A port conflict
 fails startup; the runner does not stop the process occupying that port.
 
-`benchmark/config.json` fixes the v0.1 baseline. Changing the baseline requires
-updating its validator, tests and methodology in a reviewed change, not silently
-adjusting a slow implementation. The full profile is 1 CPU, 512 MiB (536,870,912
-bytes), one server/worker, pool maximum 10, HTTP/1.1, 50 connections, a 5-second
-warm-up per endpoint, and exactly three 30-second measured runs for each of JSON,
-PostgreSQL and CPU. All four implementations run sequentially on the same host.
-API dependencies and Dockerfile pins are not changed by the runner.
+`benchmark/config.json` fixes the v0.1 load/resource baseline. Changing that
+profile requires updating its validator, tests and methodology in a reviewed
+change, not silently adjusting a slow implementation. The full profile is 1 CPU,
+512 MiB (536,870,912 bytes), one server/worker, pool maximum 10, HTTP/1.1, 50
+connections, a 5-second warm-up per endpoint, and exactly three 30-second measured
+runs for each of JSON, PostgreSQL and CPU. All four implementations run
+sequentially on the same host. API dependencies and Dockerfile pins are not
+changed by the runner.
+
+The benchmark measurement health policy is `external-readiness`. The normal
+Compose file still contains healthchecks for PostgreSQL and each API. Benchmark
+execution overlays only the currently measured API service with
+`healthcheck.disable: true`; normal implementation acceptance and standalone
+contract workflows keep their existing healthchecks.
 
 The smoke profile uses one-second warm-ups, two-second runs and two connections,
-still with three runs and all four APIs. Its report is explicitly `mode: smoke`,
-`official: false`, saved only in its unique `.cache/benchmark/` directory. It does
-not substitute for full-profile validation or publishable measurements.
+still with three runs and all four APIs. It exercises the same
+`external-readiness` startup path as the full benchmark, but its report is
+explicitly `mode: smoke`, `official: false`, saved only in its unique
+`.cache/benchmark/` directory. It does not substitute for full-profile validation
+or publishable measurements.
 
 ## Verified load generator
 
@@ -69,17 +78,38 @@ Actual captured outputs, including HTTP errors and timeouts, are committed under
 
 ## Execution and failure boundary
 
-Each backend follows: build its pinned image; start PostgreSQL and that API; wait
-for Compose readiness; verify container identity, resource limits and one server
-process; call the existing shared `run_contract()` against the running API; then
-warm and measure each endpoint. The shared suite is not copied or specialized,
-and `make test-contract` is not nested inside another lifecycle.
+Each benchmark backend follows this lifecycle:
+
+1. build its pinned API image;
+2. start PostgreSQL and require its existing Docker healthcheck to become healthy;
+3. start that API with only its recurring Docker healthcheck disabled by a
+   benchmark-owned Compose override;
+4. inspect the API container and fail unless Docker reports its healthcheck as
+   disabled;
+5. from the host, poll the shared `/health` contract endpoint with a finite
+   absolute deadline until the exact expected response succeeds;
+6. stop readiness polling before shared-contract execution, warm-up, and load;
+7. verify container identity, resource limits and exactly one server process;
+8. call the existing shared `run_contract()` against the running API;
+9. warm and measure each endpoint with the fixed profile.
+
+Readiness transport failures may retry only within the absolute deadline. An
+unexpected health response fails immediately rather than being treated as a
+transient startup condition. Deadline expiry, startup failure, or any later
+validation failure prevents measurement publication and enters the same bounded
+cleanup path. No host-side readiness request runs during warm-up or any oha load
+window.
+
+PostgreSQL is deliberately different: its Docker healthcheck remains active and
+is used by `docker compose up --wait`. The policy change applies only to the API
+container whose CPU, latency, throughput, and memory are being measured.
 
 The unique `sab-benchmark-*` Compose project is removed after every backend,
 recreating the PostgreSQL tmpfs fixture for the next one. It is also removed after
-build, startup, contract, measurement, parser, metric or handled-interruption
-failure. Teardown checks that its own containers, networks and volumes are gone.
-No other project is removed. Cleanup failure invalidates the whole result.
+build, startup/readiness, contract, measurement, parser, metric or handled-
+interruption failure. Teardown checks that its own containers, networks and
+volumes are gone. No other project is removed. Cleanup failure invalidates the
+whole result.
 
 A failed run is not retried. A low throughput value is kept when valid; there is
 no adaptive load search, score, outlier removal, or retry-until-fast behavior.
@@ -89,13 +119,15 @@ Raw oha JSON and per-sample memory diagnostics remain under the printed unique
 artifact directory, including partial attempts; their existence is not success.
 
 Build/startup/cleanup commands have 900/120/60-second deadlines. Docker metadata,
-state and statistics commands have finite deadlines of 8–30 seconds. On timeout,
-metric failure, SIGINT or SIGTERM, load-generator/Compose process groups are killed
-and their direct children reaped before project teardown. An early-exiting command
-cannot leave descendants running in that group. Cleanup ignores a second handled
-signal while finishing its bounded work. SIGKILL, host failure, uninterruptible
-kernel I/O or an unavailable Docker daemon cannot guarantee teardown. Recover only
-the printed project once Docker is available:
+state and statistics commands have finite deadlines of 8–30 seconds. External API
+readiness has its own finite 60-second absolute deadline and short per-request
+bound. On timeout, metric failure, SIGINT or SIGTERM, load-generator/Compose
+process groups are killed and their direct children reaped before project
+teardown. An early-exiting command cannot leave descendants running in that
+group. Cleanup ignores a second handled signal while finishing its bounded work.
+SIGKILL, host failure, uninterruptible kernel I/O or an unavailable Docker daemon
+cannot guarantee teardown. Recover only the printed project once Docker is
+available:
 
 ```bash
 docker compose -f docker-compose.yml -p <printed-sab-benchmark-project> down --remove-orphans --volumes
@@ -147,19 +179,21 @@ Short spikes between samples can be missed. See the
 
 `results/latest.json` is an ignored local output generated only after **all 36
 measured runs and all four teardowns** succeed. No fabricated result file is
-committed. The local command does not create official README/Pages results or history.
-Once an official result is committed, a local run replaces only your working copy
-with `official: false`; do not commit that local replacement as project results.
+committed. The local command does not create official README/Pages results or
+history. Once an official result is committed, a local run replaces only your
+working copy with `official: false`; do not commit that local replacement as
+project results.
 
 New schema-v2 reports contain the fields below plus an explicit
-`benchmark.definition` / `benchmark.cohort` identity. Existing schema-v1 reports
-retain the original fields and the frozen legacy cohort:
+`benchmark.definition` / `benchmark.cohort` identity and an explicit
+`metadata.api_health_policy`:
 
 - `schema_version`, `status: verified`, `mode: local`, `official: false`,
   `started_at` and `completed_at` in UTC, and complete `conditions`.
 - `metadata`: source commit/tree, host and Docker environment, declared exact
   runtime/framework/server/driver versions read from source manifests, lock-file
-  hashes, oha version/asset/hash and measurement-method descriptions.
+  hashes, oha version/asset/hash, API health policy, and measurement-method
+  descriptions.
 - `implementations`: API/image IDs, command, actual PostgreSQL version and shared
   contract count; each endpoint has its three normalized `runs` and `selected`.
 
@@ -187,19 +221,41 @@ Do not interpret small differences as universal rankings.
 
 ## Registry and report compatibility
 
-New reports use schema-v2 with an explicit `benchmark.definition` and
-`benchmark.cohort`. The condition schema, measurements and units are unchanged.
-The original schema-v1 reports remain valid only as the frozen ordered
-`four-stack-v1` cohort, independent of the current active list; existing JSON is
-not rewritten. Both versions receive the same complete official-result and
-raw-data validation. See [the registry and cohort guide](IMPLEMENTATIONS.md) for
-identity rules, drift checks and the framework-addition procedure.
+Schema-v2 reports have explicit `benchmark.definition`, `benchmark.cohort`, and
+`metadata.api_health_policy` identities. A schema-v2 report without an API health
+policy is rejected rather than silently assigned one.
+
+Historical schema-v1 reports remain readable as the frozen ordered
+`four-stack-v1` cohort. Those files predate the policy field, so a missing policy
+on schema-v1 resolves specifically to the legacy `container-healthcheck` method.
+Schema-v1 cannot claim `external-readiness`. Existing JSON is not rewritten.
+
+Comparison compatibility includes the definition/cohort, ordered implementation
+members, fixed benchmark conditions, and API health policy. A legacy
+`container-healthcheck` result therefore is not methodology-compatible with a new
+`external-readiness` result even when endpoints and resource limits are the same.
+That distinction preserves historical meaning; it does not declare historical
+results invalid.
+
+The policy was changed after the controlled Issue #23 investigation demonstrated
+practically relevant recurring-probe interference on one same-runner experiment.
+The observed +2.3% to +23.1% selected throughput differences are investigation
+evidence, not guaranteed speedups for future runs. See
+[the investigation record](investigations/2026-09-09-healthcheck-interference.md).
+
+See [the registry and cohort guide](IMPLEMENTATIONS.md) for identity rules, drift
+checks and the framework-addition procedure.
 
 ## Official automation
 
 [CI and official automation](AUTOMATION.md) describes the separate trusted-main
 wrapper, complete raw-data audit, runner provenance, same-run artifacts and atomic
-publication of latest/history/README. Official records use `mode: official` and
-`official: true`, plus `metadata.github`, `metadata.runner`, `metadata.docker_cli`
-and `metadata.docker_compose`. Local and smoke behavior above is unchanged.
-GitHub Pages and release automation remain outside this runner.
+publication of latest/history/README. The official wrapper explicitly selects
+`external-readiness`, while the generic environment default remains the legacy
+Compose-health behavior so non-benchmark development workflows are not changed
+globally. Official records use `mode: official` and `official: true`, plus
+`metadata.github`, `metadata.runner`, `metadata.docker_cli`,
+`metadata.docker_compose`, and `metadata.api_health_policy`.
+
+Local and smoke benchmark paths use the same external-readiness measurement
+boundary. GitHub Pages and release automation remain outside this runner.

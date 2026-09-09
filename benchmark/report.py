@@ -7,6 +7,7 @@ from pathlib import Path
 from . import registry
 from .contract_test import load_cases
 from .definition import PROFILE
+from .healthcheck import CONTAINER_HEALTHCHECK, validate_policy
 from .results import (
     number,
     object_fields,
@@ -40,6 +41,52 @@ def text(value, label: str) -> str:
 def sha(value, label: str) -> str:
     require(type(value) is str and re.fullmatch(r"[0-9a-f]{40}", value) is not None, label)
     return value
+
+
+def api_health_policy(report: dict) -> str:
+    """Resolve measurement health policy without reinterpreting legacy results."""
+    require(type(report) is dict, "report must be an object")
+    schema_version = report.get("schema_version")
+    require(schema_version in (1, 2), "unsupported report schema")
+    metadata = report.get("metadata")
+    require(type(metadata) is dict, "metadata required")
+    value = metadata.get("api_health_policy")
+    if schema_version == 1:
+        if value is None:
+            return CONTAINER_HEALTHCHECK
+        policy = validate_policy(value)
+        require(
+            policy == CONTAINER_HEALTHCHECK,
+            "schema-v1 cannot claim a post-legacy API health policy",
+        )
+        return policy
+    require(value is not None, "schema-v2 API health policy provenance required")
+    return validate_policy(value)
+
+
+def comparison_compatibility(report: dict) -> tuple:
+    """Return a stable key for result sets that may be compared as one methodology."""
+    members = registry.report_members(report)
+    conditions = object_fields(report.get("conditions"), PROFILE, "conditions")
+    schema_version = report["schema_version"]
+    if schema_version == 1:
+        benchmark_identity = ("simple-api-v1", registry.LEGACY_COHORT)
+    else:
+        benchmark = object_fields(report.get("benchmark"), ("definition", "cohort"), "benchmark")
+        benchmark_identity = (benchmark["definition"], benchmark["cohort"])
+    condition_identity = tuple(
+        (
+            field,
+            tuple(conditions[field]) if type(conditions[field]) is list else conditions[field],
+        )
+        for field in PROFILE
+    )
+    return (
+        benchmark_identity,
+        tuple(members),
+        condition_identity,
+        api_health_policy(report),
+    )
 
 
 def validate_context(context: dict) -> None:
@@ -103,6 +150,7 @@ def validate_report(report: dict, *, expected_context: dict | None = None) -> No
     require(timestamp(report["completed_at"]) >= timestamp(report["started_at"]), "time order")
     metadata = report["metadata"]
     require(type(metadata) is dict, "metadata required")
+    api_health_policy(report)
     sha(metadata.get("source_commit"), "source commit missing")
     sha(metadata.get("source_tree"), "source tree missing")
     validate_context(metadata.get("github"))
