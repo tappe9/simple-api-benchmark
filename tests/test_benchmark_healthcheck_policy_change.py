@@ -27,6 +27,7 @@ class ProvenanceCompatibilityTests(unittest.TestCase):
                 metadata={"source_commit": "fixture-only"},
                 contract=environment.contract,
             )
+        self.assertIn("api_health_policy", value["metadata"])
         self.assertEqual(
             value["metadata"]["api_health_policy"],
             healthcheck.EXTERNAL_READINESS,
