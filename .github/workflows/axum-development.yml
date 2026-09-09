@@ -20,6 +20,17 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+      - name: Generate Axum lock and format development sources
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt
+          cargo +1.98.1 generate-lockfile --manifest-path apps/rust-axum/Cargo.toml
+          cargo +1.98.1 fmt --manifest-path apps/rust-axum/Cargo.toml
+      - name: Axum unit and startup behavior
+        run: |
+          status=0
+          cargo +1.98.1 test --locked --manifest-path apps/rust-axum/Cargo.toml --lib || status=$?
+          cargo +1.98.1 test --locked --manifest-path apps/rust-axum/Cargo.toml --test startup || status=$?
+          exit "$status"
       - name: Check registration behavior
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p test_benchmark_axum_registration.py -v
       - name: Export tracked source snapshot for review
@@ -28,6 +39,8 @@ jobs:
           mkdir -p .cache/axum-development
           git archive --format=tar HEAD -o .cache/axum-development/source.tar
           git rev-parse HEAD > .cache/axum-development/source-sha.txt
+          cp apps/rust-axum/Cargo.lock .cache/axum-development/Cargo.lock
+          git diff -- apps/rust-axum > .cache/axum-development/format.patch
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
