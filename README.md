@@ -4,20 +4,21 @@
 
 **Go vs Rust vs Node.js vs Python — same API, same limits, simple results.**
 
-Simple API Benchmark compares four API stacks with the same endpoints, Docker resource limits, and benchmark settings. The goal is not to declare a universal winner. The goal is to make a small, repeatable comparison that anyone can understand.
+Simple API Benchmark contains five API implementations with the same endpoints, Docker resource limits, and validation rules. The goal is not to declare a universal winner. The goal is to make a small, repeatable comparison that anyone can understand.
 
-> **Project status:** v0.1.0 is released. CI, official benchmark automation, and the GitHub Pages results site are available.
+> **Project status:** v0.1.0 is released. CI, official benchmark automation, and the GitHub Pages results site are available. Go / Echo is implemented and CI-covered, while the published official benchmark remains on the frozen `four-stack-v1` cohort until a complete expanded cohort is enabled.
 
 ## What is compared?
 
 | Language | Framework |
 |---|---|
 | Go | Gin |
+| Go | Echo |
 | Rust | Actix Web |
 | Node.js | Fastify |
 | Python | FastAPI |
 
-Each implementation will provide the same three benchmark endpoints:
+Each implementation provides the same three benchmark endpoints:
 
 | Test | Endpoint | Simple explanation |
 |---|---|---|
@@ -26,6 +27,8 @@ Each implementation will provide the same three benchmark endpoints:
 | CPU | `GET /cpu` | Calculate Fibonacci(30) and return the result |
 
 A separate `GET /health` endpoint is used only to check readiness.
+
+The published result below still represents `four-stack-v1`: Go / Gin, Rust / Actix Web, Node.js / Fastify, and Python / FastAPI. Go / Echo is not silently added to that historical cohort.
 
 ## Results
 
@@ -97,7 +100,7 @@ PostgreSQL data lives on `tmpfs`. It is never reused across a recreated environm
 
 ## Go / Gin implementation
 
-The Go implementation lives in `apps/go-gin/` and currently uses Go 1.27.1, Gin 1.12.0, and pgx/v5 5.10.0. It runs one server process with a PostgreSQL pool capped at 10 connections. Docker Compose limits the API container to 1 CPU and 512 MB, runs it as non-root user `65532:65532`, and publishes port `8080` only on the loopback interface.
+The Go / Gin implementation lives in `apps/go-gin/` and currently uses Go 1.27.1, Gin 1.12.0, and pgx/v5 5.10.0. It runs one server process with a PostgreSQL pool capped at 10 connections. Docker Compose limits the API container to 1 CPU and 512 MB, runs it as non-root user `65532:65532`, and publishes port `8080` only on the loopback interface.
 
 ```bash
 docker compose up --detach --build --wait go-gin
@@ -113,6 +116,24 @@ Run the complete Go formatting, unit-test, vet, container, API-contract, resourc
 ```bash
 make test-go-gin
 ```
+
+## Go / Echo implementation
+
+The Go / Echo implementation lives in `apps/go-echo/` and pins Go 1.27.1, Echo v5.3.1, and pgx/v5 5.10.0 so it stays directly comparable with the Gin baseline without silently upgrading the Go runtime or PostgreSQL driver. It uses the same SQL and fixture, connects before serving HTTP, and caps the PostgreSQL pool at 10 connections.
+
+One `net/http` server process serves the Echo router. The implementation adds no unrelated middleware, response cache, or CPU precomputation; `/cpu` performs direct recursive Fibonacci(30) for every request. The production image contains only the statically built binary, runs as non-root `65532:65532`, and inherits the shared 1 CPU / 512 MB isolation envelope, capability drop, no-new-privileges policy, loopback-only port publication, and restart policy from Compose.
+
+```bash
+docker compose up --detach --build --wait go-echo
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/json
+curl http://127.0.0.1:8080/db/42
+curl http://127.0.0.1:8080/cpu
+make down
+make test-go-echo
+```
+
+`make test-go-echo` runs formatting, unit tests, vet, production image and real PostgreSQL/API acceptance checks, BIGINT boundaries, startup failure, graceful SIGTERM shutdown, resource/process isolation, and cleanup. The shared contract suite runs against Echo unchanged. A future Gin-versus-Echo result is still a complete-stack comparison of framework/router behavior under this repository's fixed conditions, not a universal ranking of Go frameworks.
 
 ## Rust / Actix Web implementation
 
@@ -172,11 +193,11 @@ make test-python-fastapi PYTHON=python3.14
 
 The complete acceptance target requires Python 3.14.7 on a POSIX host, Docker Compose v2, and Make. It installs the hash-locked development dependencies in a temporary virtual environment, runs Ruff and focused pytest tests, and verifies the real Docker service, DB errors and updates, resources, one worker, startup failure, SIGTERM shutdown, and container/network cleanup. See [Contributing](CONTRIBUTING.md) for focused tests without Docker.
 
-All four API implementations and the shared contract suite are available:
+All five API implementations and the shared contract suite are available:
 
 ```bash
-make test-contract                      # all four APIs, one at a time
-make test-contract CONTRACT_IMPL=go-gin  # one API with the same contract
+make test-contract                       # all five APIs, one at a time
+make test-contract CONTRACT_IMPL=go-echo # one API with the same contract
 ```
 
 The suite checks exact statuses, JSON content and types, documented errors, and
@@ -185,6 +206,8 @@ See [the shared contract guide](CONTRIBUTING.md#shared-contract-checks) for
 requirements, standalone base-URL checks, and cleanup limits. The local benchmark runner
 is available, and pull requests run the same checks plus a non-publishing smoke benchmark.
 Official results come only from the trusted-main [weekly/manual workflow](docs/AUTOMATION.md).
+The active official cohort remains `four-stack-v1`, so adding Echo to the implementation
+registry does not alter or republish the existing official result set.
 
 ## Run the local benchmark
 
@@ -217,7 +240,7 @@ for requirements, exact units, result schema, deadlines and memory-sampling limi
 
 ## Important limitation
 
-This project compares complete API stacks, not programming languages in isolation. Results include the framework, runtime, HTTP server, JSON library, PostgreSQL driver, and container configuration. A result such as “Rust / Actix Web was fastest in this run” does not mean “Rust is always fastest.”
+This project compares complete API stacks, not programming languages or frameworks in isolation. Results include the framework, runtime, HTTP server, JSON library, PostgreSQL driver, and container configuration. A result such as “Rust / Actix Web was fastest in this run” does not mean “Rust is always fastest,” and a future Gin-versus-Echo difference would not establish a universal ordering between those Go frameworks.
 
 ## License
 

@@ -46,6 +46,18 @@ export const REGISTRY = {
       ]
     },
     {
+      "display_name": "Go / Echo",
+      "framework": "Echo",
+      "id": "go-echo",
+      "language": "Go",
+      "source_path": "apps/go-echo",
+      "version_fields": [
+        "go",
+        "echo",
+        "pgx"
+      ]
+    },
+    {
       "display_name": "Rust / Actix Web",
       "framework": "Actix Web",
       "id": "rust-actix",

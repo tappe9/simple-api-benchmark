@@ -61,6 +61,22 @@ services:
       retries: 30
       start_period: 5s
 
+  go-echo:
+    <<: *api-defaults
+    build:
+      context: ./apps/go-echo
+    environment:
+      <<: *database-environment
+    healthcheck:
+      test:
+        - CMD
+        - /go-echo
+        - healthcheck
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
   node-fastify:
     <<: *api-defaults
     build:

@@ -82,6 +82,7 @@ class SiteBuildTests(unittest.TestCase):
     def test_extended_trusted_fixture_builds_without_enabling_production_members(self):
         from benchmark import registry
 
+        production_ids = registry.implementation_ids()
         report = expanded_report(synthetic_report(self.root))
         (self.root / "results/latest.json").write_text(json.dumps(report))
         with patch.object(registry, "REGISTRY", extended_registry()):
@@ -91,7 +92,7 @@ class SiteBuildTests(unittest.TestCase):
             self.build()
         self.assertEqual(json.loads((self.output / "results/latest.json").read_bytes()), report)
         self.assertEqual(len(report["implementations"]), 8)
-        self.assertEqual(len(registry.implementation_ids()), 4)
+        self.assertEqual(registry.implementation_ids(), production_ids)
 
     def test_stale_registry_projection_cannot_replace_previous_site(self):
         self.previous()
