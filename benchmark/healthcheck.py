@@ -92,36 +92,81 @@ def wait_external_readiness(
         }
 
 
+def _validate_window(started: int | None, completed: int | None) -> bool:
+    bounded = started is not None or completed is not None
+    if not bounded:
+        return False
+    require(
+        type(started) is int
+        and not isinstance(started, bool)
+        and started > 0
+        and type(completed) is int
+        and not isinstance(completed, bool)
+        and completed >= started,
+        "invalid exact Docker event audit window",
+    )
+    return True
+
+
 def parse_exec_events(
     raw: bytes,
     *,
     container_id: str,
     probe_command: list[str] | None,
     max_events: int = 128,
+    window_started_ns: int | None = None,
+    window_completed_ns: int | None = None,
 ) -> dict:
-    """Parse one bounded Docker exec-event window for the owned API container."""
+    """Parse Docker exec events and attribute activity to the exact audit interval.
+
+    Without explicit interval bounds this retains the original strict fixture contract:
+    every observed execution must contain create/start/die. With bounds, callers may
+    query a padded history window. Complete executions before the exact interval are
+    ignored, executions overlapping the left boundary are counted, and an execution
+    started before the right boundary may legitimately have its die event outside the
+    query window.
+    """
     require(
         type(container_id) is str and len(container_id) == 64,
         "invalid API container ID for event audit",
     )
-    require(type(max_events) is int and not isinstance(max_events, bool) and max_events > 0, "invalid event limit")
+    require(
+        type(max_events) is int and not isinstance(max_events, bool) and max_events > 0,
+        "invalid event limit",
+    )
     require(type(raw) is bytes, "Docker event payload must be bytes")
+    bounded = _validate_window(window_started_ns, window_completed_ns)
     lines = [line for line in raw.splitlines() if line]
     require(len(lines) <= max_events, "Docker event window exceeds audit limit")
     expected_probe = shlex.join(probe_command) if probe_command is not None else None
     executions: dict[str, dict] = {}
     for line in lines:
         value = strict_json(line)
-        require(type(value) is dict and value.get("Type") == "container", "unexpected Docker event type")
+        require(
+            type(value) is dict and value.get("Type") == "container",
+            "unexpected Docker event type",
+        )
         actor = value.get("Actor")
-        require(type(actor) is dict and actor.get("ID") == container_id, "Docker event belongs to wrong container")
+        require(
+            type(actor) is dict and actor.get("ID") == container_id,
+            "Docker event belongs to wrong container",
+        )
         attributes = actor.get("Attributes")
         require(type(attributes) is dict, "Docker exec event attributes missing")
         exec_id = attributes.get("execID")
-        require(type(exec_id) is str and len(exec_id) == 64, "Docker exec ID missing or invalid")
+        require(
+            type(exec_id) is str and len(exec_id) == 64,
+            "Docker exec ID missing or invalid",
+        )
         action = value.get("Action")
         timestamp = value.get("timeNano")
-        require(type(action) is str and type(timestamp) is int and not isinstance(timestamp, bool) and timestamp > 0, "invalid Docker exec event")
+        require(
+            type(action) is str
+            and type(timestamp) is int
+            and not isinstance(timestamp, bool)
+            and timestamp > 0,
+            "invalid Docker exec event",
+        )
         prefix, separator, command = action.partition(": ")
         require(prefix in _EXEC_PREFIXES, "unexpected Docker exec action")
         if prefix in ("exec_create", "exec_start"):
@@ -133,22 +178,53 @@ def parse_exec_events(
             if record["command"] is None:
                 record["command"] = command
             else:
-                require(record["command"] == command, "Docker exec command changed within lifecycle")
+                require(
+                    record["command"] == command,
+                    "Docker exec command changed within lifecycle",
+                )
+
     probe_starts = []
     non_probe = 0
+    attributed = 0
     for record in executions.values():
-        require(
-            set(record["events"]) == set(_EXEC_PREFIXES),
-            "incomplete Docker exec lifecycle in audit window",
-        )
+        events = record["events"]
+        if not bounded:
+            require(
+                set(events) == set(_EXEC_PREFIXES),
+                "incomplete Docker exec lifecycle in audit window",
+            )
+        create = events.get("exec_create")
+        start = events.get("exec_start")
+        die = events.get("exec_die")
+        if create is not None and start is not None:
+            require(create <= start, "Docker exec create/start order is invalid")
+        if start is not None and die is not None:
+            require(start <= die, "Docker exec start/die order is invalid")
+        if create is not None and die is not None:
+            require(create <= die, "Docker exec create/die order is invalid")
+
+        if bounded:
+            if start is None:
+                if die is not None and die >= window_started_ns:
+                    raise BenchmarkFailure(
+                        "cannot attribute exec overlapping left audit boundary"
+                    )
+                continue
+            overlaps = start <= window_completed_ns and (
+                die is None or die >= window_started_ns
+            )
+            if not overlaps:
+                continue
         require(record["command"] is not None, "Docker exec lifecycle has no command")
+        attributed += 1
         if expected_probe is not None and record["command"] == expected_probe:
-            probe_starts.append(record["events"]["exec_start"])
+            probe_starts.append(start)
         else:
             non_probe += 1
+
     probe_starts.sort()
     return {
-        "total_execs": len(executions),
+        "total_execs": attributed,
         "probe_execs": len(probe_starts),
         "non_probe_execs": non_probe,
         "probe_start_timestamps_ns": probe_starts,
@@ -160,9 +236,15 @@ def require_probe_only_activity(summary: dict) -> None:
     require(type(summary) is dict, "health event summary missing")
     require(summary.get("probe_execs", 0) > 0, "no API health probe activity observed")
     require(summary.get("non_probe_execs") == 0, "unexpected non-health exec activity observed")
-    require(summary.get("total_execs") == summary.get("probe_execs"), "inconsistent health event summary")
+    require(
+        summary.get("total_execs") == summary.get("probe_execs"),
+        "inconsistent health event summary",
+    )
 
 
 def require_no_exec_activity(summary: dict) -> None:
     """Controlled mode must not execute any command inside the measured API container."""
-    require(type(summary) is dict and summary.get("total_execs") == 0, "unexpected API exec activity observed")
+    require(
+        type(summary) is dict and summary.get("total_execs") == 0,
+        "unexpected API exec activity observed",
+    )
