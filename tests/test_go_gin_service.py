@@ -86,13 +86,14 @@ def check_static_contract() -> None:
         require(path.is_file(), f"required file is missing: {path.relative_to(ROOT)}")
 
     compose = COMPOSE_FILE.read_text(encoding="utf-8")
-    require(re.search(r"(?m)^  go-gin:\s*$", compose) is not None, "go-gin service is missing")
-    require("context: ./apps/go-gin" in compose, "go-gin build context is incorrect")
-    require("condition: service_healthy" in compose, "go-gin does not wait for PostgreSQL health")
-    require('127.0.0.1:8080:8080' in compose, "go-gin host port is not loopback-only")
-    require(re.search(r"(?m)^    cpus: 1(?:\.0)?\s*$", compose) is not None, "go-gin CPU limit is not 1")
-    require(re.search(r"(?m)^    mem_limit: 512m\s*$", compose) is not None, "go-gin memory limit is not 512 MB")
-    require('GIN_MODE: release' in compose, "Gin release mode is not configured")
+    match = re.search(r"(?ms)^  go-gin:\n.*?(?=^  [\w-]+:|^\S|\Z)", compose)
+    require(match is not None, "go-gin service is missing")
+    service = match.group()
+    require("<<: *api-defaults" in service, "go-gin does not inherit shared API defaults")
+    require("context: ./apps/go-gin" in service, "go-gin build context is incorrect")
+    require("<<: *database-environment" in service, "go-gin database environment is missing")
+    require("GIN_MODE: release" in service, "Gin release mode is not configured")
+    require("/go-gin" in service and "healthcheck" in service, "go-gin health check is missing")
 
     dockerfile = (GO_APP / "Dockerfile").read_text(encoding="utf-8")
     require(
@@ -181,18 +182,22 @@ def check_container_contract() -> None:
     container_id = run(["docker", "compose", "ps", "--quiet", "go-gin"]).stdout.strip()
     require(bool(container_id), "go-gin container is not running")
 
-    state = run(
-        [
-            "docker",
-            "inspect",
-            "--format",
-            "{{.State.Health.Status}}|{{.HostConfig.NanoCpus}}|{{.HostConfig.Memory}}|{{.Config.User}}",
-            container_id,
-        ]
-    ).stdout.strip()
+    state = json.loads(run(["docker", "inspect", container_id]).stdout)[0]
+    require(state["State"]["Health"]["Status"] == "healthy", "Go is unhealthy")
+    require(state["RestartCount"] == 0, "Go restarted")
+    host = state["HostConfig"]
+    require(host["NanoCpus"] == 1000000000, "runtime CPU limit differs")
+    require(host["Memory"] == 536870912, "runtime memory limit differs")
+    require(host["RestartPolicy"]["Name"] == "no", "restarts must be disabled")
+    require(not host["Privileged"], "privileged container")
+    require(host["CapDrop"] == ["ALL"], "capabilities were not dropped")
+    require("no-new-privileges:true" in host["SecurityOpt"], "privilege escalation is allowed")
+    require(state["Config"]["User"] == "65532:65532", "runtime user differs")
+    require(state["Path"] == "/go-gin" and state["Args"] == [], "server is not the direct process")
     require(
-        state == "healthy|1000000000|536870912|65532:65532",
-        f"unexpected go-gin container configuration: {state!r}",
+        state["NetworkSettings"]["Ports"]["8080/tcp"]
+        == [{"HostIp": "127.0.0.1", "HostPort": "8080"}],
+        "runtime port is not loopback-only",
     )
 
 
