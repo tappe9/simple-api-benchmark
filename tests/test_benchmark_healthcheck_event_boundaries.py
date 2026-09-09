@@ -23,9 +23,7 @@ def event(action: str, *, exec_id: str, at: int) -> dict:
 
 
 def encoded(*events: dict) -> bytes:
-    return (
-        "\n".join(json.dumps(value, separators=(",", ":")) for value in events) + "\n"
-    ).encode()
+    return ("\n".join(json.dumps(value, separators=(",", ":")) for value in events) + "\n").encode()
 
 
 def epoch_ns(value: datetime) -> int:
