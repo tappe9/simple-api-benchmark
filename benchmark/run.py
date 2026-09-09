@@ -10,6 +10,7 @@ from pathlib import Path
 from .contract_runner import protect_cleanup
 from .contract_test import ContractFailure, load_cases, run_contract
 from .definition import PROFILE
+from .healthcheck import CONTAINER_HEALTHCHECK, EXTERNAL_READINESS, validate_policy
 from .registry import active_benchmark, active_members, report_members
 from .results import (
     BenchmarkFailure,
@@ -40,10 +41,31 @@ def now() -> str:
 
 
 def run_benchmark(
-    environment, config: dict, output: Path, *, metadata: dict, contract=None, smoke: bool = False
+    environment,
+    config: dict,
+    output: Path,
+    *,
+    metadata: dict,
+    contract=None,
+    smoke: bool = False,
+    health_policy: str | None = None,
 ) -> dict:
     load_cases()  # Fail closed on a malformed shared contract before starting resources.
     contract = run_contract if contract is None else contract
+    environment_policy = getattr(environment, "health_policy", None)
+    if health_policy is None:
+        policy = validate_policy(
+            CONTAINER_HEALTHCHECK if environment_policy is None else environment_policy
+        )
+    else:
+        policy = validate_policy(health_policy)
+        if environment_policy is not None:
+            require(
+                validate_policy(environment_policy) == policy,
+                "benchmark environment health policy mismatch",
+            )
+    report_metadata = copy.deepcopy(metadata)
+    report_metadata["api_health_policy"] = policy
     conditions = copy.deepcopy(config)
     if smoke:
         conditions.update(warmup_seconds=1, duration_seconds=2, connections=2)
@@ -57,7 +79,7 @@ def run_benchmark(
         "official": False,
         "started_at": now(),
         "conditions": conditions,
-        "metadata": metadata,
+        "metadata": report_metadata,
         "implementations": [],
     }
     for implementation in members:
@@ -149,6 +171,7 @@ def main(argv: list[str] | None = None) -> int:
             compose=args.compose,
             connections=2 if args.smoke else config["connections"],
             request_timeout=config["request_timeout_seconds"],
+            health_policy=EXTERNAL_READINESS,
         )
         metadata["artifact_directory"] = str(environment.artifacts.relative_to(ROOT))
         report = run_benchmark(
@@ -157,6 +180,7 @@ def main(argv: list[str] | None = None) -> int:
             ROOT / "results" / "latest.json",
             metadata=metadata,
             smoke=args.smoke,
+            health_policy=EXTERNAL_READINESS,
         )
         # The smoke diagnostic belongs only in its isolated artifact directory.
         if args.smoke:
