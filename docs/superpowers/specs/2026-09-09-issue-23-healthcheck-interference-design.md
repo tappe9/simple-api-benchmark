@@ -77,9 +77,13 @@ The investigation output is diagnostic only. It is never eligible for official p
 
 Record Docker event evidence around every warm-up and measured interval so the investigation can confirm whether recurring health commands were active.
 
-For the baseline policy, collect container-scoped Docker events covering `exec_create`, `exec_start`, and `exec_die` for the selected API container and classify events that correspond to the configured health command. Record at minimum the count and timestamps per interval.
+For every interval, record an RFC3339 UTC start timestamp immediately before load generation and an end timestamp immediately after it. After the interval has ended, query Docker events for only the owned API container, only that start/end window, and only `exec_create`, `exec_start`, and `exec_die`. Do not run a background event-streaming collector during load generation.
 
-For the controlled policy, assert that no health-probe exec events occur during warm-up or measured intervals. Unexpected exec activity is an investigation failure rather than something to ignore.
+Docker retains only a bounded recent event history, so event collection happens after each individual interval rather than once after the entire experiment. Reject an event window that reaches the configured diagnostic event-count bound instead of silently accepting possible truncation.
+
+For the baseline policy, the API container has a validated direct health command and the benchmark itself does not use `docker exec` against that API container during measurement. API-container exec events in the bounded interval are therefore recorded as health-probe activity; unexpected event shapes or additional exec activity are failures rather than ignored noise.
+
+For the controlled policy, assert that no API-container exec events occur during warm-up or measured intervals. Unexpected exec activity is an investigation failure.
 
 Do not estimate or subtract health-probe CPU or memory from measured values. The question is whether the complete observed measurement changes when recurring probes are removed under otherwise equivalent conditions.
 
@@ -132,8 +136,8 @@ Add tests for:
 - external readiness requires the exact `/health` contract and is bounded;
 - controlled mode rejects restart/OOM/identity change while waiting;
 - process validation allows server + configured probe only in baseline and exactly one server in controlled mode;
-- event parser attributes only the owned container and configured health command;
-- controlled mode rejects health-probe exec activity during measurement;
+- event parser attributes only the owned container and requested interval and rejects malformed/truncated windows;
+- controlled mode rejects API exec activity during measurement;
 - diagnostic artifact cannot be treated as official or publishable;
 - deterministic analysis handles positive/negative/zero differences, zero denominators, tied runs, and malformed/incomplete data;
 - normal benchmark and official workflow behavior remains unchanged.
