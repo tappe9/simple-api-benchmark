@@ -4,7 +4,7 @@
 
 **Goal:** Add a non-publishing same-runner A/B investigation that measures the existing recurring API-container healthcheck policy against bounded external readiness without changing official benchmark behavior.
 
-**Architecture:** Keep `DockerEnvironment` default behavior exactly compatible with the current `container-healthcheck` path. Put health-policy parsing, deterministic Compose override generation, readiness validation, Docker event parsing, and descriptive comparison helpers in a focused `benchmark/healthcheck.py`; add `benchmark/healthcheck_investigation.py` as the only orchestration entry point that runs both policies and writes a diagnostic-only artifact. A temporary PR-only CI job gathers full-profile evidence and is removed before merge.
+**Architecture:** Keep `DockerEnvironment` default behavior exactly compatible with the current `container-healthcheck` path. Put health-policy parsing, deterministic Compose override generation, readiness validation, Docker event parsing, and descriptive comparison helpers in a focused `benchmark/healthcheck.py`; keep the existing process validator in `benchmark/environment.py` with one backward-compatible keyword; add `benchmark/healthcheck_investigation.py` as the only orchestration entry point that runs both policies and writes a diagnostic-only artifact. A temporary PR-only CI job gathers full-profile evidence and is removed before merge.
 
 **Tech Stack:** Python 3.10+, Docker Engine/Compose, existing `benchmark.contract_test` HTTP/JSON validation, existing registry/profile/oha parser, GitHub Actions.
 
@@ -26,263 +26,76 @@
 
 ### Task 1: Health policy and process contract
 
-**Files:**
-- Create: `benchmark/healthcheck.py`
-- Modify: `benchmark/environment.py`
-- Modify: `tests/test_benchmark_environment.py`
-- Create: `tests/test_benchmark_healthcheck.py`
+**Files:** Create `benchmark/healthcheck.py`; modify `benchmark/environment.py`; create `tests/test_benchmark_healthcheck.py`.
 
 **Interfaces:**
-- Produces: `CONTAINER_HEALTHCHECK`, `EXTERNAL_READINESS`, `validate_policy(value: str) -> str`, `override_text(implementation_id: str) -> str`.
-- Changes: `validate_processes(state: dict, output: str, *, allow_health_probe: bool = True) -> None` while preserving the current default.
-- Changes: `DockerEnvironment(..., health_policy: str = CONTAINER_HEALTHCHECK)`.
+- `benchmark.healthcheck.CONTAINER_HEALTHCHECK = "container-healthcheck"`.
+- `benchmark.healthcheck.EXTERNAL_READINESS = "external-readiness"`.
+- `benchmark.healthcheck.validate_policy(value: str) -> str` rejects every other value with `BenchmarkFailure`.
+- `benchmark.healthcheck.override_text(implementation_id: str) -> str` validates the registry ID and emits only that service with `healthcheck.disable: true`.
+- `benchmark.environment.validate_processes(state, output, *, allow_health_probe: bool = True)` keeps current behavior by default; `False` requires exactly the server process.
+- `DockerEnvironment(..., health_policy: str = CONTAINER_HEALTHCHECK)` stores the validated policy.
 
-- [ ] **Step 1: Write failing policy/override/process tests**
-
-```python
-class PolicyTests(unittest.TestCase):
-    def test_default_policy_is_current_container_healthcheck(self):
-        env = environment.DockerEnvironment(Path('/fake/oha'), Path(self.directory))
-        self.assertEqual(env.health_policy, healthcheck.CONTAINER_HEALTHCHECK)
-
-    def test_external_override_disables_only_registered_api_health(self):
-        text = healthcheck.override_text('go-gin')
-        self.assertIn('go-gin:', text)
-        self.assertIn('disable: true', text)
-        self.assertNotIn('postgres:', text)
-
-    def test_controlled_process_contract_requires_exactly_one_server(self):
-        value = process_state_with_healthcheck()
-        one = 'PID COMMAND\n123 /go-gin serve\n'
-        healthcheck.validate_processes(value, one, allow_health_probe=False)
-        with self.assertRaises(BenchmarkFailure):
-            healthcheck.validate_processes(value, one + '124 /go-gin healthcheck\n', allow_health_probe=False)
-```
-
-- [ ] **Step 2: Run focused tests and verify Red**
-
-Run: `python -m unittest tests.test_benchmark_healthcheck tests.test_benchmark_environment -v`
-Expected: FAIL because `benchmark.healthcheck` and policy-aware signatures do not exist.
-
-- [ ] **Step 3: Implement minimal policy support**
-
-```python
-CONTAINER_HEALTHCHECK = 'container-healthcheck'
-EXTERNAL_READINESS = 'external-readiness'
-_POLICIES = (CONTAINER_HEALTHCHECK, EXTERNAL_READINESS)
-
-def validate_policy(value: str) -> str:
-    require(value in _POLICIES, 'unsupported API health policy')
-    return value
-
-def override_text(implementation_id: str) -> str:
-    implementation(implementation_id)
-    return f'services:\n  {implementation_id}:\n    healthcheck:\n      disable: true\n'
-```
-
-Move or delegate process validation so `allow_health_probe=False` accepts exactly the server command and rejects all additional container processes. Keep `allow_health_probe=True` byte-for-byte equivalent in behavior to the current rule.
-
-- [ ] **Step 4: Run focused tests and verify Green**
-
-Run: `python -m unittest tests.test_benchmark_healthcheck tests.test_benchmark_environment -v`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add benchmark/healthcheck.py benchmark/environment.py tests/test_benchmark_healthcheck.py tests/test_benchmark_environment.py
-git commit -m 'test: define benchmark health policies'
-```
+TDD cycle: add `tests/test_benchmark_healthcheck.py`; verify it fails because the module/signatures do not exist; implement only these interfaces; run `make test-benchmark`; commit.
 
 ### Task 2: Bounded external readiness
 
-**Files:**
-- Modify: `benchmark/healthcheck.py`
-- Modify: `benchmark/environment.py`
-- Modify: `tests/test_benchmark_healthcheck.py`
-- Modify: `tests/test_benchmark_environment.py`
+**Files:** Modify `benchmark/healthcheck.py`, `benchmark/environment.py`, `tests/test_benchmark_healthcheck.py`, and focused environment tests.
 
 **Interfaces:**
-- Produces: `wait_external_readiness(base_url: str, implementation_id: str, check_state: Callable[[], None], *, timeout_seconds: float = 60.0, request_timeout: float = 2.0, clock=time.monotonic, sleep=time.sleep, reader=read_response) -> dict` returning `{"attempts": int, "duration_seconds": float}`.
-- `DockerEnvironment.start()` uses current `up --detach --wait --wait-timeout 60` only for baseline. Controlled mode starts PostgreSQL with `--wait`, starts the API detached without `--wait`, captures/validates identity, runs external readiness, then enforces `allow_health_probe=False`.
+- `wait_external_readiness(base_url, implementation_id, check_state, *, timeout_seconds=60.0, request_timeout=2.0, clock=time.monotonic, sleep=time.sleep, reader=read_response)` returns `{"attempts": int, "duration_seconds": float}`.
+- It reuses the documented `/health` `Case`, `read_response`, and `assert_response`; transport failures retry only until the absolute deadline, while wrong status/content-type/payload fails immediately.
+- Controlled `DockerEnvironment.start()` starts PostgreSQL with `--detach --wait --wait-timeout 60`, starts the selected API detached without `--wait`, captures/validates identity, performs external readiness, and then calls `validate_processes(..., allow_health_probe=False)`.
+- Baseline `start()` remains the current single `up --detach --wait --wait-timeout 60 <implementation>` path.
 
-- [ ] **Step 1: Write failing readiness tests**
-
-```python
-def test_external_readiness_requires_exact_health_contract_and_deadline(self):
-    responses = iter([ContractFailure('transport: refused'), Response(200, 'application/json', b'{"status":"ok"}')])
-    result = healthcheck.wait_external_readiness(..., reader=lambda *_a, **_k: next(responses), clock=fake_clock, sleep=fake_sleep)
-    self.assertEqual(result['attempts'], 2)
-
-for bad in (Response(200, 'text/plain', b'{"status":"ok"}'), Response(200, 'application/json', b'{"status":"bad"}')):
-    with self.assertRaises(...): ...
-```
-
-Add an environment command-capture test proving controlled mode starts `postgres` with `--wait` but does not pass `--wait` when starting the API.
-
-- [ ] **Step 2: Verify Red**
-
-Run: `python -m unittest tests.test_benchmark_healthcheck tests.test_benchmark_environment -v`
-Expected: FAIL because external readiness/start path is absent.
-
-- [ ] **Step 3: Implement bounded readiness**
-
-Reuse `contract_test.Case`, `Response`, `assert_response`, `read_response`, and the `/health` case loaded from `load_cases()` rather than duplicating response semantics. Call `check_state()` before each attempt and after success. Convert timeout/transport failures into bounded retries until the absolute deadline; contract-shape/status errors fail immediately.
-
-- [ ] **Step 4: Verify Green and existing runner tests**
-
-Run: `make test-benchmark`
-Expected: PASS, including existing `DockerEnvironment` process/oha parser contracts.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add benchmark/healthcheck.py benchmark/environment.py tests/test_benchmark_healthcheck.py tests/test_benchmark_environment.py
-git commit -m 'feat: add bounded external API readiness'
-```
+TDD cycle: command-capture and deterministic fake-clock readiness tests Red; minimal implementation; `make test-benchmark` Green; commit.
 
 ### Task 3: Interval-scoped Docker probe event audit
 
-**Files:**
-- Modify: `benchmark/healthcheck.py`
-- Modify: `benchmark/environment.py`
-- Modify: `tests/test_benchmark_healthcheck.py`
+**Files:** Modify `benchmark/healthcheck.py`, `benchmark/environment.py`, `tests/test_benchmark_healthcheck.py`.
 
 **Interfaces:**
-- Produces: `parse_exec_events(raw: bytes, *, container_id: str, probe_command: list[str], max_events: int = 128) -> dict`.
-- Produces: `DockerEnvironment.probe_events(started_at: datetime, completed_at: datetime) -> dict` that executes `docker events --since ... --until ... --filter type=container --filter container=<id> --format '{{json .}}'`, with bounded output and no long-lived collector.
-- `measure()` records interval start/end and, only when investigation event auditing is enabled, attaches `probe_events` to the diagnostic summary. Normal benchmark summaries remain unchanged.
+- `parse_exec_events(raw: bytes, *, container_id: str, probe_command: list[str], max_events: int = 128) -> dict` parses bounded Docker JSONL and validates complete health-probe exec lifecycles.
+- `require_no_probe_activity(summary: dict) -> None` fails controlled mode on probe activity.
+- `DockerEnvironment.probe_events(started_at, completed_at)` uses container/type/time filters and retrieves history immediately after each interval; it never runs a collector concurrently with `oha`.
+- `measure()` attaches probe-event diagnostics only when investigation auditing is enabled; normal benchmark result fields stay unchanged.
 
-- [ ] **Step 1: Write failing parser/audit tests**
-
-```python
-def test_event_parser_counts_only_matching_owned_health_execs(self):
-    raw = b'...exec_create...exec_start...exec_die...'
-    result = healthcheck.parse_exec_events(raw, container_id='a'*64, probe_command=['/go-gin','healthcheck'])
-    self.assertEqual(result['probe_execs'], 1)
-
-
-def test_controlled_mode_rejects_probe_exec_activity(self):
-    with self.assertRaises(BenchmarkFailure):
-        healthcheck.require_no_probe_activity({'probe_execs': 1})
-```
-
-Also reject malformed JSONL, wrong container IDs, >128 events, unmatched exec lifecycle, and unexpected controlled-mode execs.
-
-- [ ] **Step 2: Verify Red**
-
-Run: `python -m unittest tests.test_benchmark_healthcheck -v`
-Expected: FAIL because event parsing/audit support is absent.
-
-- [ ] **Step 3: Implement event parsing and bounded retrieval**
-
-Use strict JSONL parsing. Attribute health execs by container ID and Docker event attributes containing the configured probe command; require complete create/start/die lifecycles. Retrieve events immediately after each interval using explicit RFC3339 UTC boundaries. Do not run `docker events` concurrently with `oha`.
-
-- [ ] **Step 4: Verify Green**
-
-Run: `make test-benchmark`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add benchmark/healthcheck.py benchmark/environment.py tests/test_benchmark_healthcheck.py
-git commit -m 'feat: audit health probe activity per measurement interval'
-```
+TDD cycle: malformed/wrong-container/overflow/lifecycle/controlled-activity tests Red; implement; `make test-benchmark` Green; commit.
 
 ### Task 4: Diagnostic-only A/B runner and descriptive analysis
 
-**Files:**
-- Create: `benchmark/healthcheck_investigation.py`
-- Create: `tests/test_benchmark_healthcheck_investigation.py`
-- Modify: `Makefile`
-- Modify: `benchmark/report.py`
-- Modify: `tests/test_benchmark_report.py`
+**Files:** Create `benchmark/healthcheck_investigation.py`, `tests/test_benchmark_healthcheck_investigation.py`; modify `Makefile`; add publication-safety regression tests using `benchmark.report.validate_report`.
 
 **Interfaces:**
-- Produces: `analyze_pair(baseline: dict, controlled: dict) -> dict` with selected-value absolute/percent deltas, three-run min/max, and paired-direction counts for throughput, latency, memory.
-- Produces CLI: `python -m benchmark.healthcheck_investigation --output .cache/healthcheck-investigation/result.json`.
-- Adds `make healthcheck-investigation` as diagnostic-only command.
+- `analyze_pair(baseline, controlled) -> dict` reports selected absolute/percentage differences, each three-run min/max, and paired direction counts for throughput, mean latency, and peak memory; zero denominators produce `null` percentage rather than division failure.
+- CLI: `python -m benchmark.healthcheck_investigation --output .cache/healthcheck-investigation/result.json`.
+- `make healthcheck-investigation` invokes only that diagnostic CLI.
+- Orchestration alternates policy order by registry index, creates a fresh environment per policy, uses the unchanged full `PROFILE`, fails without writing partial output, and only permits output under `.cache/healthcheck-investigation/`.
+- Diagnostic root fields include `schema_version`, `official: false`, `publishable: false`, `mode: "healthcheck-investigation"`, source/provenance/benchmark identity, policy order, full conditions, implementation observations, and analysis.
+- Normal official report validation must reject diagnostic artifacts.
 
-- [ ] **Step 1: Write failing analysis/publication-safety tests**
-
-```python
-def test_analysis_handles_positive_negative_zero_and_zero_denominator(self): ...
-
-def test_diagnostic_identity_is_never_official(self):
-    artifact = {'official': False, 'publishable': False, 'mode': 'healthcheck-investigation', ...}
-    with self.assertRaises(BenchmarkFailure):
-        report.validate_report(artifact)
-```
-
-Add orchestration tests using fake environments to prove alternating policy order by registry index, both policies use the exact full `PROFILE`, failures do not write partial output, and output path must remain under `.cache/healthcheck-investigation/`.
-
-- [ ] **Step 2: Verify Red**
-
-Run: `python -m unittest tests.test_benchmark_healthcheck_investigation tests.test_benchmark_report -v`
-Expected: FAIL because investigation runner/analysis are absent.
-
-- [ ] **Step 3: Implement minimal diagnostic runner**
-
-For each active member, run two fresh `DockerEnvironment` instances sequentially, alternating policy order by registry index. Reuse the existing full-profile measurement/selection contracts, but write only the dedicated diagnostic schema and raw artifacts below `.cache/healthcheck-investigation/`. Mark `official: false`, `publishable: false`, `mode: healthcheck-investigation`.
-
-- [ ] **Step 4: Verify Green and all non-Docker unit gates**
-
-Run: `make test-benchmark && make test-workflows`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add benchmark/healthcheck_investigation.py tests/test_benchmark_healthcheck_investigation.py Makefile benchmark/report.py tests/test_benchmark_report.py
-git commit -m 'feat: add non-publishing healthcheck A/B investigation'
-```
+TDD cycle: analysis/orchestration/path/publication tests Red; implement; `make test-benchmark && make test-workflows` Green; commit.
 
 ### Task 5: Temporary PR full-profile evidence, decision record, and final cleanup
 
-**Files:**
-- Temporarily modify: `.github/workflows/ci.yml`
-- Modify: `tests/test_workflows.py`
-- Create after evidence: `docs/investigations/2026-09-healthcheck-interference.md`
-- Modify after evidence: `docs/METHODOLOGY.md`
-- Final state: remove temporary investigation job from `.github/workflows/ci.yml` before merge.
+**Files:** Temporarily modify `.github/workflows/ci.yml` and workflow tests; create `docs/investigations/2026-09-healthcheck-interference.md`; update `docs/METHODOLOGY.md` only after evidence; remove the temporary CI job before merge.
 
-**Interfaces:**
-- Temporary job name: `healthcheck-investigation`.
-- Artifact name: `healthcheck-investigation-${{ github.run_id }}-${{ github.run_attempt }}`.
-- Final normal CI job topology remains `plan`, `shared`, `implementation`, `smoke`, `required` only.
+Temporary job contract:
+- name `healthcheck-investigation`;
+- PR-only and branch-specific;
+- `ubuntu-24.04`, read-only repository permissions, pinned actions, finite timeout no greater than 90 minutes;
+- runs `make healthcheck-investigation` and uploads only `.cache/healthcheck-investigation/` diagnostic/raw evidence;
+- no official/publish/Pages command or write credential;
+- scoped cleanup under `if: always()`.
 
-- [ ] **Step 1: Add a failing workflow contract for the temporary diagnostic boundary**
+Evidence gate:
+- download the artifact and verify source SHA/cohort/full conditions, baseline probe-event presence, controlled probe-event absence, selected deltas, and three-run spreads;
+- record exact workflow run/job/artifact identity and digest;
+- if effects are small/inconsistent relative to spread, retain the current official policy and disclose included probe overhead in methodology;
+- if effects are consistent/practically relevant, stop and obtain explicit owner methodology approval before any official behavior change.
 
-```python
-def test_healthcheck_investigation_job_is_read_only_and_non_publishing(self):
-    job = load('ci.yml')['jobs']['healthcheck-investigation']
-    self.assertNotIn('benchmark.official', str(job))
-    self.assertNotIn('benchmark.publish', str(job))
-    self.assertIn('make healthcheck-investigation', str(job))
-    self.assertIn('.cache/healthcheck-investigation', str(job))
-```
-
-- [ ] **Step 2: Verify Red, then add the temporary job and open draft PR**
-
-Run through PR CI. Expected initial workflow test failure until the temporary job exists. The job uses `ubuntu-24.04`, read-only permissions, pinned checkout/setup-python/upload-artifact actions, finite timeout <= 90 minutes, and `if: github.event_name == 'pull_request' && github.head_ref == 'investigate/issue-23-healthcheck-interference'`.
-
-- [ ] **Step 3: Collect and audit the full-profile artifact**
-
-Wait for the temporary job to complete. Download the artifact, validate schema/source commit/cohort/conditions, verify baseline probe events are present and controlled probe events are absent, calculate selected deltas and three-run spreads, and record exact run/job IDs and artifact digest.
-
-- [ ] **Step 4: Record evidence and choose the supported outcome**
-
-Create `docs/investigations/2026-09-healthcheck-interference.md` containing measured raw/selected summaries and descriptive interpretation. If the effect is small/inconsistent relative to observed spread, retain current official policy and update `docs/METHODOLOGY.md` to disclose recurring probes are included. If effect is consistent/practically relevant, stop before changing official behavior and present the evidence to the owner for separate methodology approval.
-
-- [ ] **Step 5: Remove the temporary full-profile job before merge**
-
-Update workflow tests to assert the permanent topology is restored and no `healthcheck-investigation` job remains. Keep reusable investigation code/command and the evidence document only if they are useful to reproduce/audit the decision; no permanent PR runtime doubling.
-
-- [ ] **Step 6: Run final quality gates**
-
-Final PR head must pass normal split CI: `plan`, `shared`, all registry implementation jobs, `smoke`, `required`. Confirm `.github/workflows/benchmark.yml` remains sequential and unchanged, Pages trust tests remain Green, and `results/latest.json`/history blobs are unchanged from base.
-
-- [ ] **Step 7: Self-review, mark ready, squash merge, and post-merge verify**
-
-Re-review the diff for methodology drift/publication paths, check latest head CI, squash merge only after all final gates pass, then verify exact-main CI and Pages. Do not dispatch an official benchmark as part of this issue unless the owner separately approves a methodology change.
+Finalization:
+- remove the temporary job and its temporary-positive workflow assertion;
+- final CI topology returns to `plan/shared/implementation/smoke/required`;
+- run normal split CI, self-review, verify `.github/workflows/benchmark.yml` remains sequential and results/history blobs are unchanged;
+- squash merge only when final head is Green; post-merge verify exact-main CI and Pages; do not dispatch an official benchmark without separate approval.
