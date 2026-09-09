@@ -227,6 +227,52 @@ class ExternalReadinessTests(unittest.TestCase):
             self.assertEqual(env.readiness, {"attempts": 2, "duration_seconds": 0.25})
             self.assertEqual(info["id"], value["Id"])
 
+    def test_audited_baseline_records_probe_readiness_evidence_without_changing_start_mode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env = environment.DockerEnvironment(
+                Path("/fake/oha"),
+                Path(directory),
+                audit_health_events=True,
+            )
+            value = container_state(
+                env.project,
+                ["CMD", "/go-gin", "healthcheck"],
+            )
+            value["State"]["Health"] = {"Status": "healthy"}
+            commands = []
+
+            def execute(arguments, **_kwargs):
+                commands.append(arguments)
+                if "ps" in arguments and "--quiet" in arguments:
+                    return value["Id"]
+                if arguments[:2] == ["docker", "top"]:
+                    return "PID COMMAND\n123 /go-gin serve\n"
+                if "SELECT version();" in arguments:
+                    return "PostgreSQL 18.6 (Debian 18.6-1.pgdg13+1)"
+                return ""
+
+            readiness_events = {
+                "total_execs": 3,
+                "probe_execs": 3,
+                "non_probe_execs": 0,
+                "probe_start_timestamps_ns": [1, 2, 3],
+            }
+            with (
+                patch.object(environment, "execute", side_effect=execute),
+                patch.object(env, "inspect", return_value=value),
+                patch.object(env, "probe_events", return_value=readiness_events) as probe_events,
+            ):
+                info = env.start("go-gin")
+
+            up_commands = [command for command in commands if "up" in command]
+            self.assertEqual(len(up_commands), 1)
+            self.assertIn("--wait", up_commands[0])
+            self.assertEqual(up_commands[0][-1], "go-gin")
+            probe_events.assert_called_once()
+            self.assertEqual(env.readiness["attempts"], 3)
+            self.assertGreaterEqual(env.readiness["duration_seconds"], 0.0)
+            self.assertEqual(info["id"], value["Id"])
+
 
 if __name__ == "__main__":
     unittest.main()
