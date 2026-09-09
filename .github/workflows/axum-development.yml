@@ -30,6 +30,7 @@ jobs:
           status=0
           cargo +1.98.1 test --locked --manifest-path apps/rust-axum/Cargo.toml --lib || status=$?
           cargo +1.98.1 test --locked --manifest-path apps/rust-axum/Cargo.toml --test startup || status=$?
+          cargo +1.98.1 test --locked --manifest-path apps/rust-axum/Cargo.toml --bins || status=$?
           exit "$status"
       - name: Check registration behavior
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p test_benchmark_axum_registration.py -v
