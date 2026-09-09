@@ -11,7 +11,13 @@ from datetime import datetime, timezone
 from decimal import ROUND_CEILING, Decimal
 from pathlib import Path
 
-from .healthcheck import CONTAINER_HEALTHCHECK, validate_policy
+from .healthcheck import (
+    CONTAINER_HEALTHCHECK,
+    EXTERNAL_READINESS,
+    override_text,
+    validate_policy,
+    wait_external_readiness,
+)
 from .install_oha import SHA256, VERSION, platform_asset
 from .process import ROOT, execute
 from .registry import active_members, implementation, implementation_ids
@@ -267,6 +273,7 @@ class DockerEnvironment:
         self.container = None
         self.identity = None
         self.implementation = None
+        self.readiness = None
         print(
             f"Owned Compose project: {self.project}; raw diagnostics: {self.artifacts}", flush=True
         )
@@ -282,12 +289,26 @@ class DockerEnvironment:
         return data[0]
 
     def start(self, implementation: str) -> dict:
-        execute(
-            self.prefix + ["up", "--detach", "--wait", "--wait-timeout", "60", implementation],
-            timeout=120,
-        )
+        self.implementation = implementation
+        runtime_prefix = self.prefix
+        if self.health_policy == EXTERNAL_READINESS:
+            override = self.artifacts / f"{implementation}-external-readiness.compose.yml"
+            override.write_text(override_text(implementation), encoding="utf-8")
+            runtime_prefix = self.prefix[:-2] + ["-f", str(override), *self.prefix[-2:]]
+            execute(
+                runtime_prefix
+                + ["up", "--detach", "--wait", "--wait-timeout", "60", "postgres"],
+                timeout=120,
+            )
+            execute(runtime_prefix + ["up", "--detach", implementation], timeout=120)
+        else:
+            execute(
+                runtime_prefix
+                + ["up", "--detach", "--wait", "--wait-timeout", "60", implementation],
+                timeout=120,
+            )
         self.container = execute(
-            self.prefix + ["ps", "--quiet", implementation], timeout=10
+            runtime_prefix + ["ps", "--quiet", implementation], timeout=10
         ).strip()
         require(
             re.fullmatch(r"[0-9a-f]{64}", self.container) is not None,
@@ -295,15 +316,26 @@ class DockerEnvironment:
         )
         state = self.inspect()
         self.identity = validate_state(state, self.project, implementation)
-        require(
-            state["State"].get("Health", {}).get("Status") == "healthy",
-            "API readiness was not healthy",
-        )
+        if self.health_policy == EXTERNAL_READINESS:
+            self.readiness = wait_external_readiness(
+                "http://127.0.0.1:8080",
+                implementation,
+                self.check,
+                timeout_seconds=60.0,
+                request_timeout=min(float(self.request_timeout), 2.0),
+            )
+        else:
+            require(
+                state["State"].get("Health", {}).get("Status") == "healthy",
+                "API readiness was not healthy",
+            )
         validate_processes(
-            state, execute(["docker", "top", self.container, "-eo", "pid,args"], timeout=10)
+            state,
+            execute(["docker", "top", self.container, "-eo", "pid,args"], timeout=10),
+            allow_health_probe=self.health_policy == CONTAINER_HEALTHCHECK,
         )
         pg_version = execute(
-            self.prefix
+            runtime_prefix
             + [
                 "exec",
                 "-T",
@@ -438,3 +470,4 @@ class DockerEnvironment:
         self.container = None
         self.identity = None
         self.implementation = None
+        self.readiness = None
