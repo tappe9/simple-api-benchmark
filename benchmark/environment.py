@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from decimal import ROUND_CEILING, Decimal
 from pathlib import Path
 
+from .healthcheck import CONTAINER_HEALTHCHECK, validate_policy
 from .install_oha import SHA256, VERSION, platform_asset
 from .process import ROOT, execute
 from .registry import active_members, implementation, implementation_ids
@@ -92,7 +93,7 @@ def memory_bytes(raw: str, container: str) -> int:
     return usage
 
 
-def validate_processes(state: dict, output: str) -> None:
+def validate_processes(state: dict, output: str, *, allow_health_probe: bool = True) -> None:
     """Count OS processes, not framework threads, using the same rule for all APIs."""
 
     def normalized(arguments):
@@ -100,9 +101,11 @@ def validate_processes(state: dict, output: str) -> None:
         return [Path(arguments[0]).name, *arguments[1:]]
 
     server = normalized([state["Path"], *state["Args"]])
-    probe = state["Config"]["Healthcheck"]["Test"]
-    require(probe[0] == "CMD", "expected a direct, separately identifiable health probe")
-    probe = normalized(probe[1:])
+    allowed = (server,)
+    if allow_health_probe:
+        probe = state["Config"]["Healthcheck"]["Test"]
+        require(probe[0] == "CMD", "expected a direct, separately identifiable health probe")
+        allowed = (server, normalized(probe[1:]))
     rows = output.strip().splitlines()
     require(bool(rows) and "PID" in rows[0], "container process list unavailable")
     commands = []
@@ -111,8 +114,12 @@ def validate_processes(state: dict, output: str) -> None:
         require(len(pieces) == 2 and pieces[0].isdigit(), "invalid process list row")
         commands.append(normalized(shlex.split(pieces[1])))
     require(
-        commands.count(server) == 1 and all(command in (server, probe) for command in commands),
-        "expected one server process and only independent health probes",
+        commands.count(server) == 1 and all(command in allowed for command in commands),
+        (
+            "expected one server process and only independent health probes"
+            if allow_health_probe
+            else "expected exactly one server process"
+        ),
     )
 
 
@@ -240,6 +247,7 @@ class DockerEnvironment:
         compose: str = "docker compose",
         connections: int = 50,
         request_timeout: int = 15,
+        health_policy: str = CONTAINER_HEALTHCHECK,
     ):
         self.project = "sab-benchmark-" + uuid.uuid4().hex[:12]
         executable = shlex.split(compose)
@@ -255,6 +263,7 @@ class DockerEnvironment:
         self.oha = oha
         self.connections = connections
         self.request_timeout = request_timeout
+        self.health_policy = validate_policy(health_policy)
         self.container = None
         self.identity = None
         self.implementation = None
