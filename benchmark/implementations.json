@@ -17,6 +17,20 @@
       "failure_test": null
     },
     {
+      "id": "go-echo",
+      "language": "Go",
+      "framework": "Echo",
+      "display_name": "Go / Echo",
+      "source_path": "apps/go-echo",
+      "version_fields": [
+        "go",
+        "echo",
+        "pgx"
+      ],
+      "acceptance_test": "tests/test_go_echo_service.py",
+      "failure_test": null
+    },
+    {
       "id": "rust-actix",
       "language": "Rust",
       "framework": "Actix Web",
