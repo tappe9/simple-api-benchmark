@@ -28,6 +28,12 @@ def encoded(*events: dict) -> bytes:
     ).encode()
 
 
+def epoch_ns(value: datetime) -> int:
+    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    delta = value.astimezone(timezone.utc) - epoch
+    return (delta.days * 86400 + delta.seconds) * 1_000_000_000 + delta.microseconds * 1000
+
+
 class EventBoundaryTests(unittest.TestCase):
     def test_overlapping_probe_lifecycles_are_attributed_to_exact_measurement_window(self):
         before = "b" * 64
@@ -81,13 +87,14 @@ class EventBoundaryTests(unittest.TestCase):
             env.container = CID
             env.implementation = "go-gin"
             env.probe_command = PROBE
-            raw = encoded(
-                event("exec_create: /go-gin healthcheck", exec_id="1" * 64, at=11),
-                event("exec_start: /go-gin healthcheck", exec_id="1" * 64, at=12),
-                event("exec_die", exec_id="1" * 64, at=13),
-            ).decode()
             started = datetime(2026, 9, 9, 3, 0, 10, tzinfo=timezone.utc)
             completed = datetime(2026, 9, 9, 3, 0, 20, tzinfo=timezone.utc)
+            base = epoch_ns(started)
+            raw = encoded(
+                event("exec_create: /go-gin healthcheck", exec_id="1" * 64, at=base + 1),
+                event("exec_start: /go-gin healthcheck", exec_id="1" * 64, at=base + 2),
+                event("exec_die", exec_id="1" * 64, at=base + 3),
+            ).decode()
             with patch.object(environment, "execute", return_value=raw) as execute:
                 env.probe_events(started, completed)
 
