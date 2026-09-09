@@ -4,7 +4,6 @@ import copy
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from benchmark import healthcheck_investigation as investigation
 from benchmark import report
@@ -145,10 +144,7 @@ class FakeEnvironment:
 
     def measure(self, endpoint: str, duration: int, index: int):
         probe_execs = 2 if self.health_policy == CONTAINER_HEALTHCHECK else 0
-        if index == 0:
-            run = 1
-        else:
-            run = index
+        run = 1 if index == 0 else index
         policy_bonus = 1.0 if self.health_policy == EXTERNAL_READINESS else 0.0
         endpoint_bonus = {"/json": 0.0, "/db/42": 10.0, "/cpu": 20.0}[endpoint]
         return observed_run(
@@ -207,12 +203,17 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(result["official"], False)
         self.assertEqual(result["publishable"], False)
         self.assertEqual(result["mode"], "healthcheck-investigation")
-        self.assertEqual([row["implementation"] for row in result["implementations"]], active_members())
+        self.assertEqual(
+            [row["implementation"] for row in result["implementations"]],
+            list(active_members()),
+        )
         for implementation in result["implementations"]:
             self.assertEqual(len(implementation["policy_order"]), 2)
             self.assertEqual(len(implementation["policies"]), 2)
             for policy in implementation["policies"]:
-                self.assertEqual([item["endpoint"] for item in policy["endpoints"]], PROFILE["endpoints"])
+                self.assertEqual(
+                    [item["endpoint"] for item in policy["endpoints"]], PROFILE["endpoints"]
+                )
                 self.assertEqual(len(policy["endpoints"][0]["runs"]), 3)
 
     def test_factory_failure_does_not_produce_a_partial_diagnostic(self):
