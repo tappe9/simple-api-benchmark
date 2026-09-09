@@ -60,6 +60,38 @@ class ProvenanceCompatibilityTests(unittest.TestCase):
             resolver(missing)
 
 
+class LocalPolicyTests(unittest.TestCase):
+    def test_local_benchmark_selects_external_readiness_explicitly(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fake_environment = Mock()
+            fake_environment.artifacts = root / ".cache/benchmark/sab-benchmark-test"
+            factory = Mock(return_value=fake_environment)
+            candidate = {"metadata": {}, "implementations": []}
+            with (
+                patch.object(run, "ROOT", root),
+                patch.object(run, "load_config", return_value=copy.deepcopy(run.PROFILE)),
+                patch("benchmark.environment.DockerEnvironment", factory),
+                patch("benchmark.environment.provenance", return_value={}),
+                patch("benchmark.install_oha.ensure_oha", return_value=Path("/fake/oha")),
+                patch.object(run, "run_benchmark", return_value=candidate) as benchmark,
+            ):
+                self.assertEqual(run.main([]), 0)
+
+            factory.assert_called_once_with(
+                Path("/fake/oha"),
+                root / ".cache/benchmark",
+                compose="docker compose",
+                connections=run.PROFILE["connections"],
+                request_timeout=run.PROFILE["request_timeout_seconds"],
+                health_policy=healthcheck.EXTERNAL_READINESS,
+            )
+            self.assertEqual(
+                benchmark.call_args.kwargs["health_policy"],
+                healthcheck.EXTERNAL_READINESS,
+            )
+
+
 class OfficialPolicyTests(unittest.TestCase):
     def test_official_runner_selects_external_readiness_explicitly(self):
         with tempfile.TemporaryDirectory() as directory:
