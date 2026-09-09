@@ -46,7 +46,10 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(
             set(ci["on"]["push"]["paths-ignore"]), {"results/**", "README.md", "README.ja.md"}
         )
-        self.assertEqual(set(ci["jobs"]), {"plan", "shared", "implementation", "smoke", "required"})
+        self.assertEqual(
+            set(ci["jobs"]),
+            {"plan", "shared", "implementation", "smoke", "required", "healthcheck-investigation"},
+        )
         content = (ROOT / ".github/workflows/ci.yml").read_text()
         for forbidden in (
             "secrets.",
@@ -61,6 +64,43 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("actionlint", content)
         self.assertIn("test_workflows.py", content)
         self.assertIn("git diff --exit-code HEAD", content)
+
+    def test_temporary_healthcheck_investigation_is_branch_scoped_and_nonpublishing(self):
+        ci = load("ci.yml")
+        job = ci["jobs"]["healthcheck-investigation"]
+        self.assertEqual(
+            job["if"],
+            "github.event_name == 'pull_request' && github.head_ref == 'investigate/issue-23-healthcheck-interference'",
+        )
+        self.assertLessEqual(int(job["timeout-minutes"]), 90)
+        text = str(job)
+        for expected in (
+            "make healthcheck-investigation",
+            ".cache/healthcheck-investigation/",
+            "git diff --exit-code HEAD",
+        ):
+            self.assertIn(expected, text)
+        for forbidden in (
+            "benchmark.official",
+            "benchmark.publish",
+            "results/latest.json",
+            "results/history",
+            "GH_TOKEN",
+            "contents: write",
+            "deploy-pages",
+        ):
+            self.assertNotIn(forbidden, text)
+        upload = next(
+            step for step in job["steps"] if step.get("uses", "").startswith("actions/upload-artifact@")
+        )
+        self.assertEqual(upload["if"], "always()")
+        self.assertEqual(upload["with"]["path"], ".cache/healthcheck-investigation/")
+        self.assertEqual(upload["with"]["include-hidden-files"], "true")
+        self.assertEqual(upload["with"]["if-no-files-found"], "error")
+        cleanup = next(step for step in job["steps"] if step.get("name") == "Clean investigation-owned Compose projects")
+        self.assertEqual(cleanup["if"], "always()")
+        self.assertIn("sab-benchmark-", cleanup["run"])
+        self.assertIn("docker compose -p", cleanup["run"])
 
     def test_split_ci_matrix_is_registry_driven_and_compose_owned(self):
         ci = load("ci.yml")
