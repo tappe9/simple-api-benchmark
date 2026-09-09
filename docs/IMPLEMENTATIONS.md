@@ -34,6 +34,28 @@ failure gate. The site builder refuses a stale viewer projection before replacin
 the previous artifact. No JavaScript package, YAML code generator, or runtime
 plugin dependency is introduced.
 
+## Shared Compose isolation defaults
+
+`docker-compose.yml` defines `x-api-defaults` as the common runtime envelope for
+every registered API service. Each API inherits PostgreSQL readiness, the
+loopback-only `8080` binding, 1 CPU, 512 MiB, the `benchmark` network, disabled
+restarts, `cap_drop: [ALL]`, and `no-new-privileges:true`. Build contexts,
+framework-specific environment variables, and API healthcheck commands remain
+explicit on each service so implementation differences stay readable.
+
+`make test-compose` validates the **resolved** `docker compose config --format
+json` output for every implementation ID returned by the registry, rather than
+assuming the YAML merge is correct from source text alone. It also verifies that
+PostgreSQL publishes no host port. Per-implementation acceptance tests continue
+to prove non-root runtime users and inspect live containers for resource,
+capability, privilege, restart, and loopback constraints. Adding a registered API
+without the common envelope therefore fails the shared parity gate before its CI
+matrix job can run.
+
+The benchmark-time `external-readiness` policy is separate: it disables only the
+owned API container's recurring healthcheck during measurement. It does not alter
+the shared isolation defaults or PostgreSQL's healthcheck.
+
 ## Frozen historical cohort
 
 `four-stack-v1` is an immutable ordered cohort of:
@@ -106,8 +128,11 @@ methodology links remain pinned to the report's measured source commit.
    approved framework choice alone is not an implemented or measured stack.
 2. Register its identity, source path, required versions and test paths in
    `implementations.json`. Add the explicit version extractor in `environment.py`
-   and matching Compose service/build context. Keep language-specific extraction
-   readable; do not introduce a general plugin mechanism.
+   and matching Compose service/build context. Inherit `x-api-defaults`, then keep
+   language-specific build, environment, and healthcheck settings explicit. Run
+   `make test-compose` so the resolved service proves the common isolation policy.
+   Keep language-specific extraction readable; do not introduce a general plugin
+   mechanism.
 3. Preserve every published cohort. To change the measured member set, add a new
    versioned cohort with its complete ordered membership and the known definition.
    Change `active_cohort` only after the new implementation, compatibility tests,
@@ -118,6 +143,7 @@ methodology links remain pinned to the report's measured source commit.
    ```bash
    python -m benchmark.registry --write
    make test-registry
+   make test-compose
    make test-<ID>
    make test-contract CONTRACT_IMPL=<ID>
    make test-benchmark
@@ -129,9 +155,10 @@ methodology links remain pinned to the report's measured source commit.
    ```
 
    `make test-implementations` runs all registered acceptance targets sequentially.
-   `make test` retains DB acceptance, all implementation gates, shared contracts,
-   tooling/site/workflow checks and non-publishing smoke. Do not run multiple
-   focused API targets concurrently on one host: they share loopback port 8080.
+   `make test` retains Compose parity, DB acceptance, all implementation gates,
+   shared contracts, tooling/site/workflow checks and non-publishing smoke. Do not
+   run multiple focused API targets concurrently on one host: they share loopback
+   port 8080.
 5. Add compatibility tests for the new cohort, historical results, malformed and
    incomplete reports, required version extraction, and generated-file/Compose
    drift. Complete PR CI and review before merge. A new official measurement is
