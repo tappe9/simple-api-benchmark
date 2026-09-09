@@ -4,15 +4,16 @@
 
 **Go・Rust・Node.js・Pythonを、同じAPI・同じ制限・同じ負荷で比較します。**
 
-Simple API Benchmarkは、4つのAPIスタックを同じエンドポイント、同じDockerリソース制限、同じベンチマーク設定で比較するOSSです。普遍的な最速言語を決めることではなく、誰でも理解できて、自分でも再実行できる小さな比較を目指します。
+Simple API Benchmarkには、同じエンドポイント、同じDockerリソース制限、同じ検証ルールを使う5つのAPI実装があります。普遍的な最速言語を決めることではなく、誰でも理解できて、自分でも再実行できる小さな比較を目指します。
 
-> **現在の状態:** v0.1.0をリリース済みです。CI、公式benchmark自動化、GitHub Pagesの結果サイトを利用できます。
+> **現在の状態:** v0.1.0をリリース済みです。CI、公式benchmark自動化、GitHub Pagesの結果サイトを利用できます。Go / Echoは実装済みでCI対象ですが、完全な拡張cohortを有効化するまでは、公開中の公式benchmarkは凍結した`four-stack-v1`のままです。
 
 ## 比較対象
 
 | 言語 | フレームワーク |
 |---|---|
 | Go | Gin |
+| Go | Echo |
 | Rust | Actix Web |
 | Node.js | Fastify |
 | Python | FastAPI |
@@ -26,6 +27,8 @@ Simple API Benchmarkは、4つのAPIスタックを同じエンドポイント�
 | CPU | `GET /cpu` | Fibonacci(30)を計算して返す |
 
 `GET /health`は起動確認だけに使用します。
+
+下の公開結果は引き続き`four-stack-v1`、つまりGo / Gin、Rust / Actix Web、Node.js / Fastify、Python / FastAPIの4実装を表します。Go / Echoを既存のhistorical cohortへ暗黙に追加しません。
 
 ## 結果
 
@@ -97,7 +100,7 @@ PostgreSQLのデータは`tmpfs`上に置かれ、環境を再作成した際に
 
 ## Go / Gin実装
 
-Go実装は`apps/go-gin/`にあり、現在はGo 1.27.1、Gin 1.12.0、pgx/v5 5.10.0を使用します。server processは1つで、PostgreSQLのpool上限は10接続です。Docker ComposeではAPIコンテナを1 CPU・512 MBに制限し、非rootユーザー`65532:65532`で実行します。ポート`8080`はloopback interfaceだけに公開します。
+Go / Gin実装は`apps/go-gin/`にあり、現在はGo 1.27.1、Gin 1.12.0、pgx/v5 5.10.0を使用します。server processは1つで、PostgreSQLのpool上限は10接続です。Docker ComposeではAPIコンテナを1 CPU・512 MBに制限し、非rootユーザー`65532:65532`で実行します。ポート`8080`はloopback interfaceだけに公開します。
 
 ```bash
 docker compose up --detach --build --wait go-gin
@@ -113,6 +116,24 @@ Goのformat、unit test、vet、コンテナ起動、API仕様、リソース制
 ```bash
 make test-go-gin
 ```
+
+## Go / Echo実装
+
+Go / Echo実装は`apps/go-echo/`にあり、Go 1.27.1、Echo v5.3.1、pgx/v5 5.10.0を固定しています。Gin baselineとGo runtime・PostgreSQL driverを揃えたまま比較できるようにし、Gin側を暗黙にupgradeしていません。同じSQLとfixtureを使い、HTTP受付前にPostgreSQLへ接続し、pool上限は10接続です。
+
+1つの`net/http` server processでEcho routerを提供します。比較と無関係なmiddleware、response cache、CPU処理の事前計算は追加せず、`/cpu`はrequestごとに直接再帰でFibonacci(30)を計算します。production imageにはstatic binaryだけを配置し、非rootの`65532:65532`で実行します。Composeから共通の1 CPU・512 MB、capability drop、no-new-privileges、loopback限定port公開、restart policyを継承します。
+
+```bash
+docker compose up --detach --build --wait go-echo
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/json
+curl http://127.0.0.1:8080/db/42
+curl http://127.0.0.1:8080/cpu
+make down
+make test-go-echo
+```
+
+`make test-go-echo`ではformat、unit tests、vet、production image、実PostgreSQL/API acceptance、BIGINT境界、起動失敗、SIGTERMでのgraceful shutdown、resource/process isolation、cleanupを確認します。共通contract suiteも変更せずEchoへ適用します。将来のGin対Echoの結果も、このリポジトリで固定した条件下のframework/routerを含むAPIスタック全体の比較であり、Goフレームワークの普遍的な順位を示すものではありません。
 
 ## Rust / Actix Web実装
 
@@ -172,11 +193,11 @@ make test-python-fastapi PYTHON=python3.14
 
 acceptance targetにはPOSIX環境のPython 3.14.7、Docker Compose v2、Makeが必要です。一時virtual environmentへhash検証付きで開発用依存をinstallし、Ruff、focused pytest tests、実Dockerサービス、DB更新・異常系、資源制限、1 worker、起動失敗、SIGTERM終了、container・network削除を確認します。Dockerを使わないfocused testsは[Contributing](CONTRIBUTING.md)を参照してください。
 
-4つのAPI実装と共通contract suiteを利用できます。
+5つのAPI実装と共通contract suiteを利用できます。
 
 ```bash
-make test-contract                      # 4実装を1つずつ順番に検証
-make test-contract CONTRACT_IMPL=go-gin  # 1実装を同じ契約で検証
+make test-contract                       # 5実装を1つずつ順番に検証
+make test-contract CONTRACT_IMPL=go-echo # 1実装を同じ契約で検証
 ```
 
 HTTP status、JSONの内容・型、規定のerror response、応答の再現性を確認し、
@@ -184,6 +205,8 @@ HTTP status、JSONの内容・型、規定のerror response、応答の再現性
 方法、cleanupの制約は[共通contractの実行ガイド](CONTRIBUTING.md#shared-contract-checks)を
 参照してください。ローカルのbenchmark runnerは利用可能です。PRでは同じ検証と公開しない短縮benchmarkを実行します。
 公式結果はtrusted mainの[週次・手動workflow](docs/AUTOMATION.md)だけから公開します。
+active official cohortは引き続き`four-stack-v1`なので、Echoをimplementation registryへ追加しても
+既存の公式結果を変更したり再公開したりはしません。
 
 ## ローカルでの計測
 
@@ -215,7 +238,7 @@ focused testsは`make test-benchmark`、短縮診断は`make benchmark-smoke`で
 
 ## 重要な注意点
 
-このプロジェクトが比較するのは、プログラミング言語単体ではなくAPIスタック全体です。結果には、フレームワーク、ランタイム、HTTPサーバー、JSONライブラリ、PostgreSQLドライバー、コンテナ設定の違いも含まれます。「今回の測定ではRust / Actix Webが最速だった」という結果は、「Rustは常に最速」という意味ではありません。
+このプロジェクトが比較するのは、プログラミング言語やフレームワーク単体ではなくAPIスタック全体です。結果には、フレームワーク、ランタイム、HTTPサーバー、JSONライブラリ、PostgreSQLドライバー、コンテナ設定の違いも含まれます。「今回の測定ではRust / Actix Webが最速だった」という結果は「Rustは常に最速」という意味ではなく、将来GinとEchoに差が出ても、それだけでGoフレームワークの普遍的な順位は決まりません。
 
 ## ライセンス
 
