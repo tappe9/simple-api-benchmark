@@ -75,8 +75,11 @@ def comparison_compatibility(report: dict) -> tuple:
         benchmark = object_fields(report.get("benchmark"), ("definition", "cohort"), "benchmark")
         benchmark_identity = (benchmark["definition"], benchmark["cohort"])
     condition_identity = tuple(
-        (field, tuple(value) if type(value) is list else value)
-        for field, value in conditions.items()
+        (
+            field,
+            tuple(conditions[field]) if type(conditions[field]) is list else conditions[field],
+        )
+        for field in PROFILE
     )
     return (
         benchmark_identity,
