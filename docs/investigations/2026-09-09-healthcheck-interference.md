@@ -2,9 +2,11 @@
 
 ## Status
 
-Issue #23 produced controlled same-runner evidence that recurring API-container health probes materially affect the measured benchmark. This record is diagnostic only. It does not change the official benchmark policy, reinterpret historical results, or authorize publication under a new policy.
+Issue #23 produced controlled same-runner evidence that recurring API-container health probes materially affect the measured benchmark. The maintainer subsequently approved changing the benchmark measurement policy from `container-healthcheck` to `external-readiness`.
 
-Current official behavior remains `container-healthcheck` until the maintainer explicitly approves a methodology change.
+That approval is explicitly a **measurement-method change to reduce recurring health-check interference**, not an API implementation performance optimization. PR #37 implements the approved policy. Merge, an official benchmark execution, and publication remain separate decisions and are not authorized by this record.
+
+Historical result bytes keep their original meaning and are not rewritten by the policy implementation.
 
 ## Evidence identity
 
@@ -21,7 +23,7 @@ Current official behavior remains `container-healthcheck` until the maintainer e
 - Completed: `2026-09-09T04:09:50.882850+00:00`
 - Diagnostic markers: `status: verified`, `official: false`, `publishable: false`
 
-The PR merge commit and branch head have the same source tree, so the measurement corresponds exactly to the branch content under review.
+The PR merge commit and branch head have the same source tree, so the measurement corresponds exactly to the branch content under review at the time of the investigation.
 
 ## Controlled comparison
 
@@ -47,7 +49,7 @@ Policy order alternated by implementation to reduce simple order bias:
 - Node.js / Fastify: baseline → controlled;
 - Python / FastAPI: controlled → baseline.
 
-`container-healthcheck` is the existing Compose policy. `external-readiness` disables only the selected API healthcheck, retains PostgreSQL health, completes bounded host-side `/health` readiness before warm-up, and performs no readiness polling during measurement.
+`container-healthcheck` is the legacy measurement policy. `external-readiness` disables only the selected API healthcheck, retains PostgreSQL health, completes bounded host-side `/health` readiness before warm-up, and performs no readiness polling during warm-up or measurement.
 
 ## Selected-run differences
 
@@ -91,24 +93,29 @@ All 12 controlled warm-up/measured interval event files per implementation conta
 
 This is descriptive evidence from one same-runner A/B experiment with three runs per endpoint. It does not claim inferential statistical significance or a universal percentage overhead.
 
-However, the effect is too large and too directionally consistent to classify as merely unestablished within this run. In particular:
+However, the effect was sufficiently large and directionally consistent within this run to justify changing the measurement boundary. In particular:
 
 - controlled throughput improved on every endpoint for every implementation;
 - controlled mean latency decreased on every endpoint for every implementation;
 - every throughput/latency paired run position agreed on direction;
 - the largest selected throughput changes were Python `/json` (+23.05%), Python `/db/42` (+20.06%), and Node `/db/42` (+9.48%);
-- recurring in-container health commands therefore are a material part of the currently measured complete-stack workload, and their cost differs by implementation.
+- recurring in-container health commands were therefore a material part of the legacy measured complete-stack workload, and their observed cost differed by implementation.
 
-## Decision boundary
+These values are evidence for the policy decision, not promises about future runs. Do not describe the change as “always 23% faster,” as universal framework speedup, or as uniform memory improvement.
 
-The approved Issue #23 design requires explicit maintainer approval before changing official methodology when a practically relevant effect is established. That threshold has been met by this evidence.
+## Approved policy and compatibility boundary
 
-Until that approval occurs:
+The maintainer approved `external-readiness` for benchmark measurements with these constraints:
 
-- official benchmark behavior remains `container-healthcheck`;
-- historical result bytes keep their original meaning;
-- `results/latest.json`, result history, README generated result blocks, and Pages inputs are not rewritten;
-- no official benchmark is dispatched under `external-readiness`;
-- this diagnostic artifact must never be accepted as publication input.
+- retain PostgreSQL Docker health;
+- disable the recurring healthcheck only for the benchmark-owned measured API container;
+- complete bounded exact `/health` readiness from outside the API container before contract/warm-up/measurement;
+- stop readiness polling before warm-up and measured load;
+- retain contract checks, HTTP error/timeout invalidation, restart/OOM/container identity, process validation, resource/worker/pool constraints, fixed load conditions, memory sampling, deadlines, and scoped cleanup;
+- record the API health policy in schema-v2 result provenance and comparison compatibility;
+- interpret a missing policy only on historical schema-v1 as legacy `container-healthcheck`;
+- never reinterpret or rewrite historical result bytes as `external-readiness` results.
 
-The proposed methodology change, if approved, is to use `external-readiness` consistently for every API stack: retain PostgreSQL Docker health, disable the measured API container's recurring healthcheck, complete bounded exact `/health` readiness before warm-up, then run the existing contracts and measurement profile with all restart/OOM/identity/deadline/cleanup safeguards intact.
+PR #37 implements that policy. The investigation artifact remains diagnostic and non-publishable and must never be promoted into the official result pipeline.
+
+This approval does not authorize merging PR #37, running the official benchmark under the new policy, or publishing new numbers. Those actions require the next explicit decision.
