@@ -1,9 +1,13 @@
 """Boundary cases for interval-scoped Docker health-probe event auditing."""
 
 import json
+import tempfile
 import unittest
+from datetime import datetime, timezone
+from pathlib import Path
+from unittest.mock import patch
 
-from benchmark import healthcheck
+from benchmark import environment, healthcheck
 
 CID = "a" * 64
 PROBE = ["/go-gin", "healthcheck"]
@@ -68,6 +72,31 @@ class EventBoundaryTests(unittest.TestCase):
         )
         self.assertEqual(summary["total_execs"], 1)
         self.assertEqual(summary["non_probe_execs"], 1)
+
+    def test_environment_looks_back_five_seconds_and_persists_raw_event_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env = environment.DockerEnvironment(
+                Path("/fake/oha"), Path(directory), audit_health_events=True
+            )
+            env.container = CID
+            env.implementation = "go-gin"
+            env.probe_command = PROBE
+            raw = encoded(
+                event("exec_create: /go-gin healthcheck", exec_id="1" * 64, at=11),
+                event("exec_start: /go-gin healthcheck", exec_id="1" * 64, at=12),
+                event("exec_die", exec_id="1" * 64, at=13),
+            ).decode()
+            started = datetime(2026, 9, 9, 3, 0, 10, tzinfo=timezone.utc)
+            completed = datetime(2026, 9, 9, 3, 0, 20, tzinfo=timezone.utc)
+            with patch.object(environment, "execute", return_value=raw) as execute:
+                env.probe_events(started, completed)
+
+            command = execute.call_args.args[0]
+            self.assertEqual(command[command.index("--since") + 1], "2026-09-09T03:00:05Z")
+            self.assertEqual(command[command.index("--until") + 1], "2026-09-09T03:00:20Z")
+            logs = list(env.artifacts.glob("*-events-*.jsonl"))
+            self.assertEqual(len(logs), 1)
+            self.assertEqual(logs[0].read_text(encoding="utf-8"), raw)
 
 
 if __name__ == "__main__":
