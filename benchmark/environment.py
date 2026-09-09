@@ -304,8 +304,7 @@ class DockerEnvironment:
             override.write_text(override_text(implementation), encoding="utf-8")
             runtime_prefix = self.prefix[:-2] + ["-f", str(override), *self.prefix[-2:]]
             execute(
-                runtime_prefix
-                + ["up", "--detach", "--wait", "--wait-timeout", "60", "postgres"],
+                runtime_prefix + ["up", "--detach", "--wait", "--wait-timeout", "60", "postgres"],
                 timeout=120,
             )
             execute(runtime_prefix + ["up", "--detach", implementation], timeout=120)
@@ -409,10 +408,7 @@ class DockerEnvironment:
             utc = value.astimezone(timezone.utc)
             epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
             delta = utc - epoch
-            return (
-                (delta.days * 86400 + delta.seconds) * 1_000_000_000
-                + delta.microseconds * 1000
-            )
+            return (delta.days * 86400 + delta.seconds) * 1_000_000_000 + delta.microseconds * 1000
 
         exact_started_ns = epoch_ns(started_at)
         exact_completed_ns = epoch_ns(completed_at)
