@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from .environment import DockerEnvironment, provenance
+from .healthcheck import EXTERNAL_READINESS
 from .install_oha import ensure_oha
 from .process import execute
 from .report import REPOSITORY, audit_raw, text, validate_context, validate_report
@@ -77,10 +78,18 @@ def main() -> int:
             ).strip(),
             docker_compose=execute(["docker", "compose", "version", "--short"], timeout=15).strip(),
         )
-        environment = DockerEnvironment(oha, ROOT / ".cache/official/raw")
+        environment = DockerEnvironment(
+            oha,
+            ROOT / ".cache/official/raw",
+            health_policy=EXTERNAL_READINESS,
+        )
         metadata["artifact_directory"] = str(environment.artifacts.relative_to(ROOT))
         report = run_benchmark(
-            environment, load_config(), selected.with_name("candidate.json"), metadata=metadata
+            environment,
+            load_config(),
+            selected.with_name("candidate.json"),
+            metadata=metadata,
+            health_policy=EXTERNAL_READINESS,
         )
         report.update(mode="official", official=True)
         validate_report(report, expected_context=context)
