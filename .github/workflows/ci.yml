@@ -167,6 +167,53 @@ jobs:
         if: always()
         run: timeout 90 docker compose -p "$COMPOSE_PROJECT_NAME" down --remove-orphans --volumes --timeout 10
 
+  healthcheck-investigation:
+    if: github.event_name == 'pull_request' && github.head_ref == 'investigate/issue-23-healthcheck-interference'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version-file: apps/python-fastapi/.python-version
+      - name: Run non-publishing full-profile healthcheck investigation
+        run: |
+          make healthcheck-investigation
+          git diff --exit-code HEAD
+          test -z "$(git ls-files --others --exclude-standard)"
+      - name: Clean investigation-owned Compose projects
+        if: always()
+        run: |
+          set -eu
+          root=.cache/healthcheck-investigation
+          if [ -d "$root" ]; then
+            find "$root" -type d -name 'sab-benchmark-*' -printf '%f\n' | sort -u | while read -r project; do
+              [ -n "$project" ] || continue
+              [[ "$project" =~ ^sab-benchmark-[0-9a-f]{12}$ ]] || {
+                echo "Refusing unexpected project: $project" >&2
+                exit 1
+              }
+              timeout 90 docker compose -p "$project" down --remove-orphans --volumes --timeout 10
+            done
+          fi
+      - name: Upload non-publishable investigation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: healthcheck-investigation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .cache/healthcheck-investigation/
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: error
+
   required:
     needs: [plan, shared, implementation, smoke]
     if: always()
