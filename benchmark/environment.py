@@ -298,6 +298,7 @@ class DockerEnvironment:
     def start(self, implementation: str) -> dict:
         self.implementation = implementation
         runtime_prefix = self.prefix
+        baseline_readiness_started = None
         if self.health_policy == EXTERNAL_READINESS:
             override = self.artifacts / f"{implementation}-external-readiness.compose.yml"
             override.write_text(override_text(implementation), encoding="utf-8")
@@ -309,6 +310,8 @@ class DockerEnvironment:
             )
             execute(runtime_prefix + ["up", "--detach", implementation], timeout=120)
         else:
+            if self.audit_health_events:
+                baseline_readiness_started = datetime.now(timezone.utc)
             execute(
                 runtime_prefix
                 + ["up", "--detach", "--wait", "--wait-timeout", "60", implementation],
@@ -340,6 +343,19 @@ class DockerEnvironment:
             probe = state["Config"]["Healthcheck"]["Test"]
             require(probe[0] == "CMD" and len(probe) > 1, "API health probe command unavailable")
             self.probe_command = probe[1:]
+            if self.audit_health_events:
+                readiness_completed = datetime.now(timezone.utc)
+                readiness_events = self.probe_events(
+                    baseline_readiness_started,
+                    readiness_completed,
+                )
+                self.readiness = {
+                    "attempts": readiness_events["probe_execs"],
+                    "duration_seconds": max(
+                        0.0,
+                        (readiness_completed - baseline_readiness_started).total_seconds(),
+                    ),
+                }
         validate_processes(
             state,
             execute(["docker", "top", self.container, "-eo", "pid,args"], timeout=10),
