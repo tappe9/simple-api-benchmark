@@ -59,6 +59,19 @@ class ProvenanceCompatibilityTests(unittest.TestCase):
         with self.assertRaises(BenchmarkFailure):
             resolver(missing)
 
+    def test_comparison_compatibility_is_independent_of_json_key_order(self):
+        with tempfile.TemporaryDirectory() as directory:
+            current = synthetic_report(Path(directory))
+        current["schema_version"] = 2
+        current["benchmark"] = active_benchmark()
+        current["metadata"]["api_health_policy"] = healthcheck.EXTERNAL_READINESS
+        reordered = copy.deepcopy(current)
+        reordered["conditions"] = dict(reversed(list(current["conditions"].items())))
+        self.assertEqual(
+            report.comparison_compatibility(current),
+            report.comparison_compatibility(reordered),
+        )
+
 
 class LocalPolicyTests(unittest.TestCase):
     def test_local_benchmark_selects_external_readiness_explicitly(self):
