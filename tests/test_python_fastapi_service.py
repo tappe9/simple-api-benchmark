@@ -103,8 +103,10 @@ def check_static_contract() -> None:
     compose = (ROOT / "docker-compose.yml").read_text()
     match = re.search(r"(?ms)^  python-fastapi:\n.*?(?=^  [\w-]+:|^\S|\Z)", compose)
     require(match is not None, "Python Compose service is missing")
-    for expected in ("<<: *database-environment", "condition: service_healthy", "cpus: 1.0",
-                     "mem_limit: 512m", '"127.0.0.1:8080:8080"', 'restart: "no"'):
+    for expected in (
+        "<<: *api-defaults", "context: ./apps/python-fastapi",
+        "<<: *database-environment", "benchmark_api.healthcheck",
+    ):
         require(expected in match.group(), f"missing Compose constraint: {expected}")
     makefile = (ROOT / "Makefile").read_text()
     require("include benchmark/implementations.mk" in makefile,

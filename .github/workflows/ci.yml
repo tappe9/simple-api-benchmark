@@ -30,6 +30,8 @@ jobs:
           python-version: '3.10'
       - name: Validate implementation registry
         run: make test-registry
+      - name: Validate Compose parity
+        run: make test-compose
       - name: Build implementation matrix
         id: matrix
         run: python -m benchmark.ci matrix >> "$GITHUB_OUTPUT"
@@ -75,8 +77,8 @@ jobs:
           actionlint -color
           python -m unittest discover -s tests -p test_workflows.py -v
           mkdir -p .cache/ci
-          python -m ruff format --diff --target-version py310 --config apps/python-fastapi/pyproject.toml benchmark tests/test_benchmark_*.py tests/test_contract_*.py tests/test_workflows.py tests/test_pages.py tests/test_site.py tests/registry_fixtures.py > .cache/ci/format.patch
-          python -m ruff check --target-version py310 --config apps/python-fastapi/pyproject.toml benchmark tests/test_benchmark_*.py tests/test_contract_*.py tests/test_workflows.py tests/test_pages.py tests/test_site.py tests/registry_fixtures.py
+          python -m ruff format --diff --target-version py310 --config apps/python-fastapi/pyproject.toml benchmark tests/test_benchmark_*.py tests/test_compose_parity.py tests/test_contract_*.py tests/test_workflows.py tests/test_pages.py tests/test_site.py tests/registry_fixtures.py > .cache/ci/format.patch
+          python -m ruff check --target-version py310 --config apps/python-fastapi/pyproject.toml benchmark tests/test_benchmark_*.py tests/test_compose_parity.py tests/test_contract_*.py tests/test_workflows.py tests/test_pages.py tests/test_site.py tests/registry_fixtures.py
           python -m benchmark.generate_readme --check
           git diff --check origin/main...HEAD
       - name: make test-registry

@@ -73,10 +73,8 @@ def check_static_contract() -> None:
     require(match is not None, "node-fastify Compose service is missing")
     service = match.group()
     for expected in (
-        "context: ./apps/node-fastify", "<<: *database-environment", "NODE_ENV: production",
-        "postgres:", "condition: service_healthy", '"127.0.0.1:8080:8080"',
-        "cpus: 1.0", "mem_limit: 512m", "- benchmark", 'restart: "no"',
-        "src/healthcheck.js", "- node", "no-new-privileges:true", "- ALL",
+        "<<: *api-defaults", "context: ./apps/node-fastify", "<<: *database-environment",
+        "NODE_ENV: production", "src/healthcheck.js", "- node",
     ):
         require(expected in service, f"missing Node Compose constraint: {expected}")
     dockerfile = (APP / "Dockerfile").read_text()

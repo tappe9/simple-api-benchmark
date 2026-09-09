@@ -5,6 +5,22 @@ x-database-environment: &database-environment
   DATABASE_USER: benchmark
   DATABASE_PASSWORD: benchmark
 
+x-api-defaults: &api-defaults
+  depends_on:
+    postgres:
+      condition: service_healthy
+  ports:
+    - "127.0.0.1:8080:8080"
+  cpus: 1.0
+  mem_limit: 512m
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  networks:
+    - benchmark
+  restart: "no"
+
 services:
   postgres:
     image: postgres:18.6-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
@@ -29,16 +45,12 @@ services:
     restart: "no"
 
   go-gin:
+    <<: *api-defaults
     build:
       context: ./apps/go-gin
     environment:
       <<: *database-environment
       GIN_MODE: release
-    depends_on:
-      postgres:
-        condition: service_healthy
-    ports:
-      - "127.0.0.1:8080:8080"
     healthcheck:
       test:
         - CMD
@@ -48,23 +60,14 @@ services:
       timeout: 3s
       retries: 30
       start_period: 5s
-    cpus: 1.0
-    mem_limit: 512m
-    networks:
-      - benchmark
-    restart: "no"
 
   node-fastify:
+    <<: *api-defaults
     build:
       context: ./apps/node-fastify
     environment:
       <<: *database-environment
       NODE_ENV: production
-    depends_on:
-      postgres:
-        condition: service_healthy
-    ports:
-      - "127.0.0.1:8080:8080"
     healthcheck:
       test:
         - CMD
@@ -74,26 +77,13 @@ services:
       timeout: 3s
       retries: 30
       start_period: 5s
-    cpus: 1.0
-    mem_limit: 512m
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      - benchmark
-    restart: "no"
 
   python-fastapi:
+    <<: *api-defaults
     build:
       context: ./apps/python-fastapi
     environment:
       <<: *database-environment
-    depends_on:
-      postgres:
-        condition: service_healthy
-    ports:
-      - "127.0.0.1:8080:8080"
     healthcheck:
       test:
         - CMD
@@ -104,26 +94,13 @@ services:
       timeout: 3s
       retries: 30
       start_period: 5s
-    cpus: 1.0
-    mem_limit: 512m
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      - benchmark
-    restart: "no"
 
   rust-actix:
+    <<: *api-defaults
     build:
       context: ./apps/rust-actix
     environment:
       <<: *database-environment
-    depends_on:
-      postgres:
-        condition: service_healthy
-    ports:
-      - "127.0.0.1:8080:8080"
     healthcheck:
       test:
         - CMD
@@ -133,15 +110,6 @@ services:
       timeout: 3s
       retries: 30
       start_period: 5s
-    cpus: 1.0
-    mem_limit: 512m
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      - benchmark
-    restart: "no"
 
 networks:
   benchmark:

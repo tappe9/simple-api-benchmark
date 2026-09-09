@@ -8,7 +8,7 @@ DB_USER := benchmark
 DB_WAIT_TIMEOUT ?= 60
 PSQL := $(COMPOSE) exec -T $(DB_SERVICE) psql -X --username $(DB_USER) --dbname $(DB_NAME) --set ON_ERROR_STOP=1 --tuples-only --no-align
 
-.PHONY: db-up db-check db-reset test-db test-implementations test-registry test-contract down
+.PHONY: db-up db-check db-reset test-db test-implementations test-registry test-compose test-contract down
 
 db-up:
 	@echo "Starting PostgreSQL $(DB_SERVICE) service..."
@@ -59,6 +59,9 @@ test-implementations: test-registry
 test-registry:
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.registry --check
 
+test-compose:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p 'test_compose_parity.py' -v
+
 test-contract:
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p 'test_contract_*.py'
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.contract_runner --implementation "$(CONTRACT_IMPL)" --compose "$(COMPOSE)"
@@ -89,6 +92,7 @@ healthcheck-investigation:
 # Recursive invocations deliberately serialize services sharing loopback port 8080.
 test:
 	@$(MAKE) --no-print-directory test-registry
+	@$(MAKE) --no-print-directory test-compose
 	@$(MAKE) --no-print-directory test-db
 	@$(MAKE) --no-print-directory test-implementations
 	@$(MAKE) --no-print-directory test-contract

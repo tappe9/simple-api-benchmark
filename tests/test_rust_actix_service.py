@@ -123,11 +123,9 @@ def check_static_contract() -> None:
             "Rust toolchain differs from the production compiler")
     compose = COMPOSE_FILE.read_text(encoding="utf-8")
     service = compose_service_block(compose, "rust-actix")
+    require("<<: *api-defaults" in service, "rust-actix does not inherit shared API defaults")
     require("context: ./apps/rust-actix" in service, "rust-actix build context is incorrect")
-    require("condition: service_healthy" in service, "rust-actix does not wait for PostgreSQL health")
-    require('127.0.0.1:8080:8080' in service, "rust-actix host port is not loopback-only")
-    require(re.search(r"(?m)^    cpus: 1(?:\.0)?\s*$", service) is not None, "rust-actix CPU limit is not 1")
-    require(re.search(r"(?m)^    mem_limit: 512m\s*$", service) is not None, "rust-actix memory limit is not 512 MB")
+    require("<<: *database-environment" in service, "rust-actix database environment is missing")
     require("/usr/local/bin/rust-actix" in service, "rust-actix health check is missing")
 
     dockerfile = (RUST_APP / "Dockerfile").read_text(encoding="utf-8")
