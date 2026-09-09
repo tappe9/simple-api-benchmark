@@ -145,6 +145,7 @@ def pinned_versions() -> dict:
         return found[0]
 
     go = read("go-gin/go.mod")
+    go_echo = read("go-echo/go.mod")
     rust = read("rust-actix/Cargo.toml")
     node = strict_json(read("node-fastify/package.json").encode())
     python = dict(
@@ -155,6 +156,11 @@ def pinned_versions() -> dict:
             "go": match(r"^toolchain go([0-9.]+)$", go),
             "gin": match(r"github.com/gin-gonic/gin v([0-9.]+)", go),
             "pgx": match(r"github.com/jackc/pgx/v5 v([0-9.]+)", go),
+        },
+        "go-echo": {
+            "go": match(r"^toolchain go([0-9.]+)$", go_echo),
+            "echo": match(r"github.com/labstack/echo/v5 v([0-9.]+)", go_echo),
+            "pgx": match(r"github.com/jackc/pgx/v5 v([0-9.]+)", go_echo),
         },
         "rust-actix": {
             "rust": match(r'^channel = "([0-9.]+)"$', read("rust-actix/rust-toolchain.toml")),
