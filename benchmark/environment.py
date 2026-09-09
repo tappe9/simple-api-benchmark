@@ -326,6 +326,11 @@ class DockerEnvironment:
         state = self.inspect()
         self.identity = validate_state(state, self.project, implementation)
         if self.health_policy == EXTERNAL_READINESS:
+            healthcheck = state["Config"].get("Healthcheck")
+            require(
+                type(healthcheck) is dict and healthcheck.get("Test") == ["NONE"],
+                "measured API healthcheck must be disabled",
+            )
             self.probe_command = None
             self.readiness = wait_external_readiness(
                 "http://127.0.0.1:8080",
