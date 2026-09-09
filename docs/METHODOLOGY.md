@@ -79,6 +79,7 @@ The initial v0.1 settings are:
 | Warm-up | 5 seconds |
 | Runs per test | 3 |
 | Load generator | `oha` |
+| Measured API health policy | `external-readiness` |
 
 All implementations run with the same settings and on the same GitHub Actions job. A framework may use its normal event loop or runtime threads, but it must expose only one server process or worker and remain within the 1 CPU limit.
 
@@ -87,16 +88,25 @@ All implementations run with the same settings and on the same GitHub Actions jo
 For each backend:
 
 1. build its pinned Docker image;
-2. start PostgreSQL and the API;
-3. wait until `GET /health` succeeds;
-4. run all contract tests;
-5. warm up the selected endpoint for 5 seconds;
-6. run `oha` for 30 seconds;
-7. perform exactly three measured runs;
-8. collect the API container's peak memory for each run;
-9. stop and remove the API container.
+2. start PostgreSQL and wait for its existing Docker healthcheck to report healthy;
+3. start the API with the recurring Docker healthcheck disabled **for this benchmark-owned API container only**;
+4. from outside the API container, poll the documented `GET /health` endpoint with a finite absolute deadline until the exact expected healthy response is observed;
+5. stop readiness polling before contract execution, warm-up, and measured load;
+6. run all contract tests;
+7. warm up the selected endpoint for 5 seconds;
+8. run `oha` for 30 seconds and perform exactly three measured runs;
+9. collect the API container's peak memory for each run;
+10. stop and remove the API container and its benchmark-owned Compose project.
 
-The complete sequence is run for JSON, PostgreSQL, and CPU tests.
+The complete sequence is run for JSON, PostgreSQL, and CPU tests. Readiness failure, an unexpected `/health` response, or deadline expiry aborts the backend before warm-up and still runs scoped cleanup. The API container is checked after startup to prove that its recurring healthcheck is actually disabled. PostgreSQL keeps its Docker healthcheck.
+
+This `external-readiness` policy applies to benchmark measurement (`make benchmark`, the non-publishing benchmark smoke path, and the trusted official runner). It does **not** globally remove healthchecks from the normal Compose definition, focused implementation acceptance tests, or standalone contract validation.
+
+### Why the API health policy changed
+
+Issue #23 investigated whether recurring API-container health probes were part of the workload being measured. In one controlled same-runner GitHub Actions A/B investigation, disabling those recurring probes after bounded external readiness produced higher throughput and lower mean latency in all three paired run positions for all four implementations and all three endpoints. Selected throughput differences in that investigation ranged from about +2.3% to +23.1%. The detailed evidence and its limitations are recorded in [the 2026-09-09 investigation record](investigations/2026-09-09-healthcheck-interference.md).
+
+That observation motivated a **measurement-method change**, not an API implementation optimization. It does not mean an implementation became intrinsically faster, that a particular percentage improvement will repeat on every runner, or that every memory metric improves. The historical results remain valid records of the methodology that produced them.
 
 ## Displayed values
 
@@ -130,11 +140,16 @@ Displayed run: 10,100 requests/s
 
 A test result is invalid when any of its three measured runs has one of the following problems:
 
+- readiness fails, returns an unexpected health response, or exceeds its deadline before warm-up;
+- the measured API container still has a recurring Docker healthcheck enabled under `external-readiness`;
 - a contract test fails;
 - an HTTP response has an unexpected status;
 - `oha` reports connection errors or timeouts;
 - the API container exits or restarts;
-- memory collection fails.
+- the API is OOM-killed or its container identity/start time changes;
+- resource/process validation fails;
+- memory collection fails;
+- bounded cleanup fails.
 
 An invalid or incomplete scheduled benchmark must not replace the latest verified result. Failed runs are not retried until a preferred number appears.
 
@@ -143,12 +158,12 @@ An invalid or incomplete scheduled benchmark must not replace the latest verifie
 GitHub-hosted runners are not dedicated benchmark machines. Hardware and background load may differ between runs. To reduce confusion:
 
 - every backend is measured in the same job;
-- versions and runner information are recorded;
+- versions, health policy, and runner information are recorded;
 - each test is run three times;
 - results are presented as reference values, not universal facts;
 - large changes should be reproduced locally or in another scheduled run.
 
-Comparisons within one run are more meaningful than small changes between different dates.
+Comparisons within one run are more meaningful than small changes between different dates. Results produced under different API health policies are also different methodologies and must not be treated as directly compatible simply because their endpoint/profile values match.
 
 ## Reproducibility
 
@@ -217,11 +232,20 @@ The result file records:
 - Docker version;
 - language and framework versions;
 - PostgreSQL version;
+- API health policy;
 - resource limits;
 - duration and connection count;
 - the three raw summaries and selected run.
 
-Anyone may rerun the same commit and compare the generated JSON.
+Anyone may rerun the same commit and compare the generated JSON, but methodology compatibility includes the recorded API health policy.
+
+## Result compatibility across the policy change
+
+Schema-v2 benchmark reports record the explicit `metadata.api_health_policy` value. New measurements use `external-readiness`; a schema-v2 report without a policy is rejected rather than guessed.
+
+Historical schema-v1 reports predate this field. A missing policy on schema-v1 is defined narrowly as the legacy `container-healthcheck` methodology because that is how those stored results were produced. Schema-v1 is never allowed to claim the post-change policy. This preserves read compatibility without reinterpreting historical measurements.
+
+Comparison compatibility includes benchmark definition/cohort, implementation order, fixed conditions, and API health policy. Therefore a legacy `container-healthcheck` result and a new `external-readiness` result are different methodology groups. This does **not** make historical results invalid; it prevents them from being mislabeled as measurements made under the new policy. Existing result files are not rewritten by this change.
 
 ## Runner implementation details
 
