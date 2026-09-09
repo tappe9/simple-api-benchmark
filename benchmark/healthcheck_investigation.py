@@ -42,7 +42,9 @@ def split_observation(summary: dict) -> dict:
     events = object_fields(summary["health_probe_events"], _EVENT_FIELDS, "health probe events")
     for field in ("total_execs", "probe_execs", "non_probe_execs"):
         require(
-            type(events[field]) is int and not isinstance(events[field], bool) and events[field] >= 0,
+            type(events[field]) is int
+            and not isinstance(events[field], bool)
+            and events[field] >= 0,
             "invalid health probe event count",
         )
     require(
@@ -79,7 +81,10 @@ def metric_comparison(
         "comparison values must be numeric",
     )
     require(
-        all((math.isfinite(value) if type(value) is float else True) and value >= 0 for value in all_values),
+        all(
+            (math.isfinite(value) if type(value) is float else True) and value >= 0
+            for value in all_values
+        ),
         "comparison values must be finite and nonnegative",
     )
     delta = controlled_selected - baseline_selected
@@ -95,7 +100,9 @@ def metric_comparison(
         "baseline_selected": baseline_selected,
         "controlled_selected": controlled_selected,
         "selected_absolute_delta": delta,
-        "selected_percent_delta": None if baseline_selected == 0 else delta / baseline_selected * 100,
+        "selected_percent_delta": None
+        if baseline_selected == 0
+        else delta / baseline_selected * 100,
         "baseline_range": [min(baseline_values), max(baseline_values)],
         "controlled_range": [min(controlled_values), max(controlled_values)],
         "paired_direction": directions,
@@ -103,7 +110,10 @@ def metric_comparison(
 
 
 def _policy_endpoints(value: dict, expected_policy: str) -> list[dict]:
-    require(type(value) is dict and value.get("policy") == expected_policy, "unexpected policy observation")
+    require(
+        type(value) is dict and value.get("policy") == expected_policy,
+        "unexpected policy observation",
+    )
     endpoints = value.get("endpoints")
     require(type(endpoints) is list and bool(endpoints), "policy endpoints are required")
     return endpoints
@@ -121,8 +131,7 @@ def analyze_pair(baseline: dict, controlled: dict) -> dict:
     for baseline_endpoint, controlled_endpoint in zip(baseline_endpoints, controlled_endpoints):
         endpoint = baseline_endpoint.get("endpoint")
         require(
-            type(endpoint) is str
-            and controlled_endpoint.get("endpoint") == endpoint,
+            type(endpoint) is str and controlled_endpoint.get("endpoint") == endpoint,
             "policy endpoint identities differ",
         )
         baseline_runs = baseline_endpoint.get("runs")
@@ -179,7 +188,9 @@ def _readiness(policy: str, value) -> dict:
     }
 
 
-def _collect_policy(implementation_id: str, policy: str, config: dict, environment, contract) -> dict:
+def _collect_policy(
+    implementation_id: str, policy: str, config: dict, environment, contract
+) -> dict:
     environment.build(implementation_id)
     container = environment.start(implementation_id)
     checks = contract("http://127.0.0.1:8080", implementation=implementation_id)
@@ -214,7 +225,9 @@ def _collect_policy(implementation_id: str, policy: str, config: dict, environme
     }
 
 
-def collect_investigation(*, config: dict, metadata: dict, environment_factory, contract=run_contract, now) -> dict:
+def collect_investigation(
+    *, config: dict, metadata: dict, environment_factory, contract=run_contract, now
+) -> dict:
     """Collect both policies sequentially; callers write only after complete success."""
     object_fields(config, PROFILE, "investigation config")
     for field, expected in PROFILE.items():
@@ -241,7 +254,9 @@ def collect_investigation(*, config: dict, metadata: dict, environment_factory, 
         for policy in policy_order:
             environment = environment_factory(implementation_id, policy)
             try:
-                policies.append(_collect_policy(implementation_id, policy, config, environment, contract))
+                policies.append(
+                    _collect_policy(implementation_id, policy, config, environment, contract)
+                )
             finally:
                 environment.cleanup()
         by_policy = {value["policy"]: value for value in policies}
@@ -290,7 +305,9 @@ def validate_output_path(path: Path, *, cache_root: Path = CACHE_ROOT) -> Path:
     )
     root = cache_root.resolve(strict=False)
     candidate = path.resolve(strict=False)
-    require(candidate.is_relative_to(root), "diagnostic output must stay below healthcheck cache root")
+    require(
+        candidate.is_relative_to(root), "diagnostic output must stay below healthcheck cache root"
+    )
     current = path
     while current != cache_root.parent:
         if current.exists() or current.is_symlink():
