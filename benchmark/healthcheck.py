@@ -206,13 +206,9 @@ def parse_exec_events(
         if bounded:
             if start is None:
                 if die is not None and die >= window_started_ns:
-                    raise BenchmarkFailure(
-                        "cannot attribute exec overlapping left audit boundary"
-                    )
+                    raise BenchmarkFailure("cannot attribute exec overlapping left audit boundary")
                 continue
-            overlaps = start <= window_completed_ns and (
-                die is None or die >= window_started_ns
-            )
+            overlaps = start <= window_completed_ns and (die is None or die >= window_started_ns)
             if not overlaps:
                 continue
         require(record["command"] is not None, "Docker exec lifecycle has no command")
