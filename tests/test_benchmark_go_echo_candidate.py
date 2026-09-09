@@ -2,7 +2,6 @@
 
 import json
 import subprocess
-import sys
 import unittest
 from pathlib import Path
 
@@ -10,19 +9,25 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class GoEchoCandidateTests(unittest.TestCase):
-    def test_go_echo_unit_contract_exists_before_registry_activation(self):
-        completed = subprocess.run(
-            ["go", "test", "./..."],
-            cwd=ROOT / "apps" / "go-echo",
+    def test_go_echo_module_and_unit_contract_are_clean(self):
+        module = ROOT / "apps" / "go-echo"
+        tidy = subprocess.run(
+            ["go", "mod", "tidy", "-diff"],
+            cwd=module,
             capture_output=True,
             text=True,
             check=False,
         )
-        self.assertEqual(
-            completed.returncode,
-            0,
-            completed.stdout + completed.stderr,
+        self.assertEqual(tidy.returncode, 0, tidy.stdout + tidy.stderr)
+
+        completed = subprocess.run(
+            ["go", "test", "./..."],
+            cwd=module,
+            capture_output=True,
+            text=True,
+            check=False,
         )
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
 
     def test_go_echo_is_registered_without_expanding_four_stack_v1(self):
         registry = json.loads((ROOT / "benchmark" / "implementations.json").read_text())
