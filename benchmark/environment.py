@@ -7,7 +7,7 @@ import platform
 import re
 import shlex
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import ROUND_CEILING, Decimal
 from pathlib import Path
 
@@ -405,11 +405,23 @@ class DockerEnvironment:
         def timestamp(value: datetime) -> str:
             return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
+        def epoch_ns(value: datetime) -> int:
+            utc = value.astimezone(timezone.utc)
+            epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+            delta = utc - epoch
+            return (
+                (delta.days * 86400 + delta.seconds) * 1_000_000_000
+                + delta.microseconds * 1000
+            )
+
+        exact_started_ns = epoch_ns(started_at)
+        exact_completed_ns = epoch_ns(completed_at)
+        query_started = started_at - timedelta(seconds=5)
         command = [
             "docker",
             "events",
             "--since",
-            timestamp(started_at),
+            timestamp(query_started),
             "--until",
             timestamp(completed_at),
             "--filter",
@@ -426,12 +438,19 @@ class DockerEnvironment:
             "{{json .}}",
         ]
         raw = execute(command, timeout=10)
-        require(len(raw.encode()) <= 512 * 1024, "Docker event window is oversized")
+        encoded = raw.encode()
+        require(len(encoded) <= 512 * 1024, "Docker event window is oversized")
+        evidence = self.artifacts / (
+            f"{self.implementation}-events-{exact_started_ns}-{exact_completed_ns}.jsonl"
+        )
+        evidence.write_bytes(encoded)
         summary = parse_exec_events(
-            raw.encode(),
+            encoded,
             container_id=self.container,
             probe_command=self.probe_command,
             max_events=128,
+            window_started_ns=exact_started_ns,
+            window_completed_ns=exact_completed_ns,
         )
         if self.health_policy == CONTAINER_HEALTHCHECK:
             require_probe_only_activity(summary)
