@@ -30,6 +30,12 @@ def encoded(*events: dict) -> bytes:
     return ("\n".join(json.dumps(value, separators=(",", ":")) for value in events) + "\n").encode()
 
 
+def epoch_ns(value) -> int:
+    epoch = environment.datetime(1970, 1, 1, tzinfo=environment.timezone.utc)
+    delta = value.astimezone(environment.timezone.utc) - epoch
+    return (delta.days * 86400 + delta.seconds) * 1_000_000_000 + delta.microseconds * 1000
+
+
 class EventParserTests(unittest.TestCase):
     def test_matching_probe_lifecycle_is_counted_once_by_exec_id(self):
         summary = healthcheck.parse_exec_events(
@@ -85,7 +91,12 @@ class EventParserTests(unittest.TestCase):
                 event("exec_create: /go-gin healthcheck", at=2),
                 event("exec_start: /different command", at=3),
             ),
-            encoded(*[event("exec_create: /go-gin healthcheck", exec_id=f"{i:064x}") for i in range(129)]),
+            encoded(
+                *[
+                    event("exec_create: /go-gin healthcheck", exec_id=f"{i:064x}")
+                    for i in range(129)
+                ]
+            ),
         )
         for raw in bad_inputs:
             with self.subTest(raw=raw[:40]), self.assertRaises(BenchmarkFailure):
@@ -158,17 +169,22 @@ class EnvironmentAuditTests(unittest.TestCase):
                 Path("/fake/oha"), Path(directory), audit_health_events=True
             )
             env.container = CID
+            env.implementation = "go-gin"
             env.probe_command = PROBE
+            started = environment.datetime(
+                2026, 9, 9, 2, 0, 0, tzinfo=environment.timezone.utc
+            )
+            completed = environment.datetime(
+                2026, 9, 9, 2, 0, 30, tzinfo=environment.timezone.utc
+            )
+            base = epoch_ns(started)
             raw = encoded(
-                event("exec_create: /go-gin healthcheck", at=10),
-                event("exec_start: /go-gin healthcheck", at=11),
-                event("exec_die", at=12),
+                event("exec_create: /go-gin healthcheck", at=base + 10),
+                event("exec_start: /go-gin healthcheck", at=base + 11),
+                event("exec_die", at=base + 12),
             ).decode()
             with patch.object(environment, "execute", return_value=raw) as execute:
-                summary = env.probe_events(
-                    environment.datetime(2026, 9, 9, 2, 0, 0, tzinfo=environment.timezone.utc),
-                    environment.datetime(2026, 9, 9, 2, 0, 30, tzinfo=environment.timezone.utc),
-                )
+                summary = env.probe_events(started, completed)
             command = execute.call_args.args[0]
             self.assertEqual(command[:2], ["docker", "events"])
             self.assertIn("container=" + CID, command)
