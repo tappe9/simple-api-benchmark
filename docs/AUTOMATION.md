@@ -23,7 +23,8 @@ Correctness CI is split into five logical jobs:
    acceptance/failure-path target plus the same real-container contract suite
    focused on that implementation.
 4. `smoke` runs the existing non-publishing smoke benchmark on one runner. It
-   remains sequential across the active cohort and requires both tracked and
+   remains sequential across the active cohort, uses the same `external-readiness`
+   measurement startup policy as the full benchmark, and requires both tracked and
    untracked source state to remain clean.
 5. `required` is the stable aggregate result. It uses `if: always()` and succeeds
    only when `plan`, `shared`, the complete `implementation` matrix, and `smoke`
@@ -41,7 +42,9 @@ job removes another job's container, network, or volume.
 
 Local execution intentionally stays different: `make test-implementations` and
 `make test` remain sequential because local API services share port 8080. Focused
-commands remain available while developing:
+implementation and standalone contract checks keep the normal Compose
+healthchecks; the benchmark-specific API health override is not applied globally.
+Focused commands remain available while developing:
 
 ```bash
 make test-workflows
@@ -76,15 +79,31 @@ The `measure` job has read-only repository access. It checks out the immutable
 `github.sha`, verifies a clean source tree and calls `benchmark.official`.
 This wrapper calls the existing `run_benchmark()` once; it does not reimplement
 its measurement loop. All active stacks run sequentially on the same
-GitHub-hosted runner with the unchanged fixed profile. The shared contract,
-measured runs, state checks, memory sampling, and environment teardowns must all
-succeed. There are no performance-based retries.
+GitHub-hosted runner with the unchanged load/resource profile. The shared
+contract, measured runs, state checks, memory sampling, and environment teardowns
+must all succeed. There are no performance-based retries.
+
+The official wrapper explicitly selects the approved `external-readiness` API
+health policy. For each implementation it keeps the PostgreSQL Docker healthcheck,
+waits for PostgreSQL to become healthy, disables only the benchmark-owned API
+container's recurring healthcheck, proves through Docker inspect that the API
+healthcheck is disabled, then performs bounded exact `/health` readiness from the
+host. Readiness polling finishes before shared-contract execution, warm-up, and
+measured load. Wrong health responses, deadline expiry, startup failure, resource
+or process drift, restart/OOM, container identity change, HTTP errors/timeouts,
+memory failure, and cleanup failure remain fatal.
+
+The generic `DockerEnvironment` default is deliberately not changed globally.
+Focused implementation acceptance and standalone contract workflows continue to
+use their ordinary Compose health behavior. This isolates Issue #23 to benchmark
+measurement rather than turning it into an API implementation change.
 
 The wrapper adds runner name/type/OS/architecture, runner image OS/version, CPU
-model, Docker client/Compose versions, and GitHub run identity to existing source,
-Docker server, PostgreSQL, and pinned language/framework/driver provenance. Source
-manifests provide declared exact stack versions; API image IDs and the actual
-PostgreSQL server version identify the built environment.
+model, Docker client/Compose versions, GitHub run identity, and the explicit API
+health policy to existing source, Docker server, PostgreSQL, and pinned
+language/framework/driver provenance. Source manifests provide declared exact
+stack versions; API image IDs and the actual PostgreSQL server version identify
+the built environment.
 
 Raw oha JSON, memory sample logs, build logs, and the full local-shaped
 `candidate.json` are retained under `.cache/official/`. Only after a separate
@@ -92,7 +111,9 @@ raw-data audit does the workflow create `selected.json`, with `mode: official`
 and `official: true`. The immutable
 `official-benchmark-<run_id>-<run_attempt>` artifact is retained for 90 days.
 Failed attempts retain available diagnostics but have no publishable selected
-result. Artifact existence alone is not evidence of success.
+result. Artifact existence alone is not evidence of success. The Issue #23 A/B
+investigation artifact is diagnostic (`official: false`, `publishable: false`) and
+is never an accepted publication input.
 
 ## Atomic publication
 
@@ -103,10 +124,11 @@ no caller-supplied artifact ID, repository, branch, or cross-run credential. The
 GitHub token is exposed only to the final publishing command. No API, Docker
 build, package install, or benchmark runs in this write-enabled job.
 
-The publisher revalidates complete schema and provenance, normalized records
-against raw oha and API-only memory samples, selected whole runs, and the exact
-source commit/tree. Symlinked, missing, oversized, and escaping artifact paths are
-rejected. It prepares these four publication paths from the same report:
+The publisher revalidates complete schema and provenance, including the API health
+policy, normalized records against raw oha and API-only memory samples, selected
+whole runs, and the exact source commit/tree. Symlinked, missing, oversized, and
+escaping artifact paths are rejected. It prepares these four publication paths
+from the same report:
 
 - `results/latest.json`;
 - `results/history/<UTC-completion>-<run_id>-<attempt>.json`;
@@ -129,6 +151,11 @@ persisted in `.git/config`, embedded in remote URLs, or printed in diagnostics.
 Repository rules may reject the automated push; the workflow fails safely rather
 than bypassing those rules.
 
+Issue #23 changes the measurement policy only. It does not itself rewrite existing
+`results/latest.json`, history files, generated README result blocks, or Pages
+output. A future official run under the new policy and any resulting publication
+remain separate actions.
+
 ## Loop prevention and interpretation
 
 Official measurement has only schedule/manual triggers, never `push`. Result
@@ -140,8 +167,15 @@ with a PAT to work around publication failures.
 A successful manual trusted-main run validates the same path used by the weekly
 schedule; the configured cron is not evidence that a future scheduled run has
 already executed. GitHub may delay scheduled jobs, and shared hosted hardware can
-vary. Always read the run date, conditions, and versions together. Local, fixture,
-and PR smoke reports are not official measurements.
+vary. Always read the run date, conditions, versions, and API health policy
+together. Local, fixture, PR smoke, and Issue #23 investigation reports are not
+official measurements.
+
+The controlled Issue #23 run observed selected throughput differences of roughly
++2.3% to +23.1% after recurring API probes were removed from the measured window.
+Those numbers describe that same-runner investigation only. They are not universal
+speedups, do not mean the API implementations were optimized, and do not imply
+that every memory metric improves.
 
 ## GitHub Pages and v0.1.0 release
 
@@ -160,7 +194,7 @@ receives `contents: write` only for release creation. Manual Pages runs and
 official benchmark result refreshes cannot create the release. If `v0.1.0`
 already exists, the job leaves it unchanged.
 
-## Registry compatibility and aggregate policy
+## Registry and methodology compatibility
 
 The implementation list comes from `benchmark/implementations.json`, not a
 CI-specific list. The `plan` job derives the matrix from that registry, and
@@ -173,9 +207,19 @@ issue does not modify branch protection or repository rules. The repository's
 policy can therefore adopt that check independently without tying protection to
 changing matrix job display names.
 
-New reports continue to use explicit schema-v2 definition/cohort identity.
-Historical schema-v1 four-stack reports remain accepted without rewriting stored
-results. See [implementation and cohort compatibility](IMPLEMENTATIONS.md).
+Schema-v2 reports have explicit definition/cohort identity and now require
+`metadata.api_health_policy`. Historical schema-v1 four-stack reports remain
+accepted without rewriting stored results; a missing schema-v1 policy resolves
+specifically to the legacy `container-healthcheck` method. Schema-v1 cannot claim
+`external-readiness`.
+
+Comparison compatibility includes definition/cohort, ordered implementations,
+fixed benchmark conditions, and API health policy. Historical
+`container-healthcheck` results and new `external-readiness` results are therefore
+separate methodology groups. Historical results are not invalidated; this rule
+prevents them from being mistaken for new-policy measurements. See
+[BENCHMARK.md](BENCHMARK.md) and
+[the Issue #23 investigation record](investigations/2026-09-09-healthcheck-interference.md).
 
 ## Runtime evidence and timeouts
 
