@@ -141,7 +141,15 @@ class WorkflowTests(unittest.TestCase):
 
         self.assertEqual(
             ci_support.matrix_payload(),
-            {"implementation": ["go-gin", "rust-actix", "node-fastify", "python-fastapi"]},
+            {
+                "implementation": [
+                    "go-gin",
+                    "go-echo",
+                    "rust-actix",
+                    "node-fastify",
+                    "python-fastapi",
+                ]
+            },
         )
         with patch.object(registry, "REGISTRY", extended_registry()):
             self.assertEqual(len(ci_support.matrix_payload()["implementation"]), 8)
