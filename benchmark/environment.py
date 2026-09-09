@@ -15,6 +15,9 @@ from .healthcheck import (
     CONTAINER_HEALTHCHECK,
     EXTERNAL_READINESS,
     override_text,
+    parse_exec_events,
+    require_no_exec_activity,
+    require_probe_only_activity,
     validate_policy,
     wait_external_readiness,
 )
@@ -254,6 +257,7 @@ class DockerEnvironment:
         connections: int = 50,
         request_timeout: int = 15,
         health_policy: str = CONTAINER_HEALTHCHECK,
+        audit_health_events: bool = False,
     ):
         self.project = "sab-benchmark-" + uuid.uuid4().hex[:12]
         executable = shlex.split(compose)
@@ -263,6 +267,7 @@ class DockerEnvironment:
             and executable[1] == "compose",
             "use docker compose without context or project overrides",
         )
+        require(type(audit_health_events) is bool, "health event audit flag must be boolean")
         self.prefix = executable + ["-f", str(ROOT / "docker-compose.yml"), "-p", self.project]
         self.artifacts = artifacts / self.project
         self.artifacts.mkdir(parents=True)
@@ -270,10 +275,12 @@ class DockerEnvironment:
         self.connections = connections
         self.request_timeout = request_timeout
         self.health_policy = validate_policy(health_policy)
+        self.audit_health_events = audit_health_events
         self.container = None
         self.identity = None
         self.implementation = None
         self.readiness = None
+        self.probe_command = None
         print(
             f"Owned Compose project: {self.project}; raw diagnostics: {self.artifacts}", flush=True
         )
@@ -317,6 +324,7 @@ class DockerEnvironment:
         state = self.inspect()
         self.identity = validate_state(state, self.project, implementation)
         if self.health_policy == EXTERNAL_READINESS:
+            self.probe_command = None
             self.readiness = wait_external_readiness(
                 "http://127.0.0.1:8080",
                 implementation,
@@ -329,6 +337,9 @@ class DockerEnvironment:
                 state["State"].get("Health", {}).get("Status") == "healthy",
                 "API readiness was not healthy",
             )
+            probe = state["Config"]["Healthcheck"]["Test"]
+            require(probe[0] == "CMD" and len(probe) > 1, "API health probe command unavailable")
+            self.probe_command = probe[1:]
         validate_processes(
             state,
             execute(["docker", "top", self.container, "-eo", "pid,args"], timeout=10),
@@ -363,6 +374,55 @@ class DockerEnvironment:
     def check(self) -> None:
         validate_state(self.inspect(), self.project, self.implementation, self.identity)
 
+    def probe_events(self, started_at: datetime, completed_at: datetime) -> dict:
+        require(
+            self.audit_health_events and self.container is not None,
+            "health event audit is not enabled for an owned API container",
+        )
+        require(
+            started_at.tzinfo is not None
+            and completed_at.tzinfo is not None
+            and completed_at >= started_at,
+            "invalid health event audit interval",
+        )
+
+        def timestamp(value: datetime) -> str:
+            return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+        command = [
+            "docker",
+            "events",
+            "--since",
+            timestamp(started_at),
+            "--until",
+            timestamp(completed_at),
+            "--filter",
+            "type=container",
+            "--filter",
+            "container=" + self.container,
+            "--filter",
+            "event=exec_create",
+            "--filter",
+            "event=exec_start",
+            "--filter",
+            "event=exec_die",
+            "--format",
+            "{{json .}}",
+        ]
+        raw = execute(command, timeout=10)
+        require(len(raw.encode()) <= 512 * 1024, "Docker event window is oversized")
+        summary = parse_exec_events(
+            raw.encode(),
+            container_id=self.container,
+            probe_command=self.probe_command,
+            max_events=128,
+        )
+        if self.health_policy == CONTAINER_HEALTHCHECK:
+            require_probe_only_activity(summary)
+        else:
+            require_no_exec_activity(summary)
+        return summary
+
     def measure(self, endpoint: str, duration: int, index: int) -> dict:
         from .results import parse_oha
 
@@ -376,6 +436,7 @@ class DockerEnvironment:
             f"[{self.implementation}] {endpoint} {'warmup' if index == 0 else f'run {index}/3'}: {duration}s, {self.connections} connections",
             flush=True,
         )
+        interval_started = datetime.now(timezone.utc) if self.audit_health_events else None
         with path.with_suffix(".memory.jsonl").open("w", encoding="utf-8") as log:
 
             def sample():
@@ -433,6 +494,10 @@ class DockerEnvironment:
                 timeout=duration + self.request_timeout + 15,
                 tick=sample,
             )
+        interval_completed = datetime.now(timezone.utc) if self.audit_health_events else None
+        event_summary = None
+        if self.audit_health_events:
+            event_summary = self.probe_events(interval_started, interval_completed)
         self.check()
         require(bool(samples), "memory collection produced no samples")
         require(
@@ -444,6 +509,8 @@ class DockerEnvironment:
         result.update(
             run=max(index, 1), peak_memory_bytes=max(samples), memory_samples=len(samples)
         )
+        if event_summary is not None:
+            result["health_probe_events"] = event_summary
         print(
             f"[{self.implementation}] {label}: {result['requests_per_second']:.3f} requests/s; {len(samples)} API memory samples",
             flush=True,
@@ -471,3 +538,4 @@ class DockerEnvironment:
         self.identity = None
         self.implementation = None
         self.readiness = None
+        self.probe_command = None
