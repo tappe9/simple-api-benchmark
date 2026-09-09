@@ -161,7 +161,10 @@ def _readiness(policy: str, value) -> dict:
     require(type(value) is dict, "readiness evidence is required")
     attempts = value.get("attempts")
     duration = value.get("duration_seconds")
-    require(type(attempts) is int and not isinstance(attempts, bool) and attempts > 0, "readiness attempts are required")
+    require(
+        type(attempts) is int and not isinstance(attempts, bool) and attempts > 0,
+        "readiness attempts are required",
+    )
     require(
         type(duration) in (int, float)
         and not isinstance(duration, bool)
@@ -242,7 +245,10 @@ def collect_investigation(*, config: dict, metadata: dict, environment_factory, 
             finally:
                 environment.cleanup()
         by_policy = {value["policy"]: value for value in policies}
-        require(set(by_policy) == {CONTAINER_HEALTHCHECK, EXTERNAL_READINESS}, "both policies are required")
+        require(
+            set(by_policy) == {CONTAINER_HEALTHCHECK, EXTERNAL_READINESS},
+            "both policies are required",
+        )
         analysis = analyze_pair(
             by_policy[CONTAINER_HEALTHCHECK],
             by_policy[EXTERNAL_READINESS],
@@ -278,7 +284,10 @@ def collect_investigation(*, config: dict, metadata: dict, environment_factory, 
 
 def validate_output_path(path: Path, *, cache_root: Path = CACHE_ROOT) -> Path:
     """Restrict diagnostics to the dedicated cache tree and reject symlink traversal."""
-    require(type(path) is Path and type(cache_root) is Path, "diagnostic output paths must be Path values")
+    require(
+        isinstance(path, Path) and isinstance(cache_root, Path),
+        "diagnostic output paths must be Path values",
+    )
     root = cache_root.resolve(strict=False)
     candidate = path.resolve(strict=False)
     require(candidate.is_relative_to(root), "diagnostic output must stay below healthcheck cache root")
