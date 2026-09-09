@@ -139,20 +139,17 @@ class WorkflowTests(unittest.TestCase):
         from benchmark import ci as ci_support
         from benchmark import registry
 
+        current = json.loads((ROOT / "benchmark/implementations.json").read_text())
         self.assertEqual(
             ci_support.matrix_payload(),
-            {
-                "implementation": [
-                    "go-gin",
-                    "go-echo",
-                    "rust-actix",
-                    "node-fastify",
-                    "python-fastapi",
-                ]
-            },
+            {"implementation": [spec["id"] for spec in current["implementations"]]},
         )
-        with patch.object(registry, "REGISTRY", extended_registry()):
-            self.assertEqual(len(ci_support.matrix_payload()["implementation"]), 8)
+        extended = extended_registry()
+        with patch.object(registry, "REGISTRY", extended):
+            self.assertEqual(
+                ci_support.matrix_payload(),
+                {"implementation": [spec["id"] for spec in extended["implementations"]]},
+            )
         valid = {
             "plan": "success",
             "shared": "success",
