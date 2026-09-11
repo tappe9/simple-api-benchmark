@@ -21,7 +21,9 @@ Correctness CI is split into five logical jobs:
 3. `implementation` expands the registry-derived matrix. Each implementation runs
    on a separate `ubuntu-24.04` runner and executes its existing focused
    acceptance/failure-path target plus the same real-container contract suite
-   focused on that implementation.
+   focused on that implementation. The `rust-axum` entry then runs
+   `make axum-diagnostic` and verifies that tracked and untracked source files
+   remain unchanged. This is a normal required step, not `continue-on-error`.
 4. `smoke` runs the existing non-publishing smoke benchmark on one runner. It
    remains sequential across the active cohort, uses the same `external-readiness`
    measurement startup policy as the full benchmark, and requires both tracked and
@@ -54,8 +56,18 @@ make benchmark-smoke
 make test
 ```
 
-Only the failure-only Ruff formatting patch may be uploaded by CI. Smoke output is
-not uploaded, committed, or promoted to an official result.
+CI may upload the failure-only Ruff formatting patch and the Axum-only diagnostic
+cache. The Axum artifact is named `axum-diagnostic-<run>-<attempt>`, retained for
+seven days, and includes hidden cache files on success or failure when available.
+It contains diagnostic JSON, source/version metadata, build logs, raw load data,
+and memory samples, never an official publication. Axum's diagnostic owns and
+cleans a separate random `sab-benchmark-*` project on its runner. See
+[the Axum guide](AXUM.md) for output and failure guarantees.
+
+Smoke output is not uploaded, committed, or promoted to an official result.
+The temporary `axum-development.yml` workflow is removed; the repository retains
+only `ci.yml`, `benchmark.yml`, and `pages.yml`. Neither diagnostic evidence nor
+its upload grants publication permissions or changes official cohort membership.
 
 ## Official benchmark trust boundary
 

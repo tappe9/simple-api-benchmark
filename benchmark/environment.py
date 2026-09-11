@@ -132,7 +132,9 @@ def validate_processes(state: dict, output: str, *, allow_health_probe: bool = T
     )
 
 
-def pinned_versions() -> dict:
+def registered_pinned_versions() -> dict:
+    """Extract every implemented stack without changing official cohort membership."""
+
     def read(path):
         identifier, _, filename = path.partition("/")
         return (ROOT / implementation(identifier)["source_path"] / filename).read_text(
@@ -147,6 +149,7 @@ def pinned_versions() -> dict:
     go = read("go-gin/go.mod")
     go_echo = read("go-echo/go.mod")
     rust = read("rust-actix/Cargo.toml")
+    axum = read("rust-axum/Cargo.toml")
     node = strict_json(read("node-fastify/package.json").encode())
     python = dict(
         re.findall(r"^([a-z]+)==([0-9.]+)$", read("python-fastapi/requirements.in"), re.MULTILINE)
@@ -170,6 +173,14 @@ def pinned_versions() -> dict:
             },
             "serde_json": match(r'^serde_json = "=([0-9.]+)"$', rust),
         },
+        "rust-axum": {
+            "rust": match(r'^channel = "([0-9.]+)"$', read("rust-axum/rust-toolchain.toml")),
+            **{
+                name: match(r"^" + name + r' = .*version = "=([0-9.]+)"', axum)
+                for name in ("axum", "tokio", "sqlx", "serde")
+            },
+            "serde_json": match(r'^serde_json = "=([0-9.]+)"$', axum),
+        },
         "node-fastify": {"node": node["engines"]["node"], **node["dependencies"]},
         "python-fastapi": {"python": read("python-fastapi/.python-version").strip(), **python},
     }
@@ -189,6 +200,12 @@ def pinned_versions() -> dict:
             ),
             f"unrecognized pinned versions for {identifier}",
         )
+    return versions
+
+
+def pinned_versions() -> dict:
+    """Keep official report metadata limited to the complete active cohort."""
+    versions = registered_pinned_versions()
     return {identifier: versions[identifier] for identifier in active_members()}
 
 

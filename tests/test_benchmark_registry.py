@@ -28,7 +28,7 @@ class RegistryBoundaryTests(unittest.TestCase):
         self.assertEqual(registry["schema_version"], 1)
         self.assertEqual(
             [entry["id"] for entry in registry["implementations"]],
-            ["go-gin", "go-echo", "rust-actix", "node-fastify", "python-fastapi"],
+            ["go-gin", "go-echo", "rust-actix", "rust-axum", "node-fastify", "python-fastapi"],
         )
 
     def test_report_validation_does_not_import_measurement_orchestration(self):
@@ -205,6 +205,7 @@ class CohortTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(BenchmarkFailure):
                 self.registry.check_generated(self.root)
             path.write_bytes(original)
+        self.registry.check_generated(self.root)
         self.registry.check_sources()
 
     def test_generated_projection_cannot_be_read_through_a_symlinked_directory(self):

@@ -4,9 +4,9 @@
 
 **Go vs Rust vs Node.js vs Python — same API, same limits, simple results.**
 
-Simple API Benchmark contains five API implementations with the same endpoints, Docker resource limits, and validation rules. The goal is not to declare a universal winner. The goal is to make a small, repeatable comparison that anyone can understand.
+Simple API Benchmark contains six API implementations with the same endpoints, Docker resource limits, and validation rules. The goal is not to declare a universal winner. The goal is to make a small, repeatable comparison that anyone can understand.
 
-> **Project status:** v0.1.0 is released. CI, official benchmark automation, and the GitHub Pages results site are available. Go / Echo is implemented and CI-covered, while the published official benchmark remains on the frozen `four-stack-v1` cohort until a complete expanded cohort is enabled.
+> **Project status:** v0.1.0 is released. CI, official benchmark automation, and the GitHub Pages results site are available. Go / Echo and Rust / Axum are implemented and CI-covered, while the published official benchmark remains on the frozen `four-stack-v1` cohort until a complete expanded cohort is enabled.
 
 ## What is compared?
 
@@ -15,6 +15,7 @@ Simple API Benchmark contains five API implementations with the same endpoints, 
 | Go | Gin |
 | Go | Echo |
 | Rust | Actix Web |
+| Rust | Axum |
 | Node.js | Fastify |
 | Python | FastAPI |
 
@@ -28,7 +29,7 @@ Each implementation provides the same three benchmark endpoints:
 
 A separate `GET /health` endpoint is used only to check readiness.
 
-The published result below still represents `four-stack-v1`: Go / Gin, Rust / Actix Web, Node.js / Fastify, and Python / FastAPI. Go / Echo is not silently added to that historical cohort.
+The published result below still represents `four-stack-v1`: Go / Gin, Rust / Actix Web, Node.js / Fastify, and Python / FastAPI. Neither Go / Echo nor Rust / Axum is silently added to that historical cohort.
 
 ## Results
 
@@ -153,6 +154,20 @@ make test-rust-actix
 
 The acceptance target requires Rustup, Python 3, Docker Compose v2, and Make. It runs formatting, locked Rust tests, Clippy with warnings denied, real DB and API checks, BIGINT boundaries, startup failure, SIGTERM shutdown, and container/network cleanup. Run API services sequentially because they share host port `8080`.
 
+## Rust / Axum implementation
+
+`apps/rust-axum/` adds Axum 0.8.9 and Tokio 1.53.1 without changing the Actix implementation. Rust 1.98.1, SQLx 0.9.0, Serde 1.0.228, serde_json 1.0.145, and the digest-pinned builder/runtime bases match that baseline. The committed lockfile fixes transitive dependencies.
+
+One direct server process uses an explicit Tokio `current_thread` executor. Native Serde responses, the shared parameterized SQL and pool maximum of 10, and per-request direct recursive Fibonacci(30) are preserved. There is no CPU offload, response cache, or additional async worker. SIGINT/SIGTERM drain accepted requests before closing the pool. The non-root release image inherits the shared 1 CPU / 512 MiB isolation envelope.
+
+```bash
+make test-rust-axum                       # Rust gates and real PostgreSQL/container acceptance
+make test-contract CONTRACT_IMPL=rust-axum # unchanged shared contract
+make axum-diagnostic                      # clean committed source; never publishes results
+```
+
+Run these commands sequentially with port 8080 free. The Axum-only diagnostic uses the existing pinned load generator and external readiness, records provenance, versions and raw evidence under `.cache/axum-diagnostic/`, and fails on request errors or cleanup failure. Its short profile is not an official performance result. It is a required step in Axum's normal CI job; no temporary development workflow is needed. See [Axum implementation and diagnostic](docs/AXUM.md) for runtime details, test coverage, and output guarantees.
+
 ## Node.js / Fastify implementation
 
 The Node implementation lives in `apps/node-fastify/` and uses Node.js 24.20.0 LTS, Fastify 5.12.3, and pg 8.23.0. Direct dependencies and `package-lock.json` are pinned; the official `node:24.20.0-bookworm-slim` image is also pinned by digest. The LTS runtime and stable Fastify 5 release line keep this baseline reproducible and maintainable.
@@ -193,10 +208,10 @@ make test-python-fastapi PYTHON=python3.14
 
 The complete acceptance target requires Python 3.14.7 on a POSIX host, Docker Compose v2, and Make. It installs the hash-locked development dependencies in a temporary virtual environment, runs Ruff and focused pytest tests, and verifies the real Docker service, DB errors and updates, resources, one worker, startup failure, SIGTERM shutdown, and container/network cleanup. See [Contributing](CONTRIBUTING.md) for focused tests without Docker.
 
-All five API implementations and the shared contract suite are available:
+All six API implementations and the shared contract suite are available:
 
 ```bash
-make test-contract                       # all five APIs, one at a time
+make test-contract                       # all six APIs, one at a time
 make test-contract CONTRACT_IMPL=go-echo # one API with the same contract
 ```
 
@@ -206,7 +221,7 @@ See [the shared contract guide](CONTRIBUTING.md#shared-contract-checks) for
 requirements, standalone base-URL checks, and cleanup limits. The local benchmark runner
 is available, and pull requests run the same checks plus a non-publishing smoke benchmark.
 Official results come only from the trusted-main [weekly/manual workflow](docs/AUTOMATION.md).
-The active official cohort remains `four-stack-v1`, so adding Echo to the implementation
+The active official cohort remains `four-stack-v1`, so adding Echo and Axum to the implementation
 registry does not alter or republish the existing official result set.
 
 ## Run the local benchmark
@@ -231,6 +246,7 @@ for requirements, exact units, result schema, deadlines and memory-sampling limi
 
 - [Results site](https://tappe9.github.io/simple-api-benchmark/)
 - [Architecture](ARCHITECTURE.md)
+- [Axum implementation and diagnostic](docs/AXUM.md)
 - [API contract](docs/API-CONTRACT.md)
 - [Benchmark methodology](docs/METHODOLOGY.md)
 - [Running benchmarks and result format](docs/BENCHMARK.md)

@@ -4,9 +4,9 @@
 
 **Go・Rust・Node.js・Pythonを、同じAPI・同じ制限・同じ負荷で比較します。**
 
-Simple API Benchmarkには、同じエンドポイント、同じDockerリソース制限、同じ検証ルールを使う5つのAPI実装があります。普遍的な最速言語を決めることではなく、誰でも理解できて、自分でも再実行できる小さな比較を目指します。
+Simple API Benchmarkには、同じエンドポイント、同じDockerリソース制限、同じ検証ルールを使う6つのAPI実装があります。普遍的な最速言語を決めることではなく、誰でも理解できて、自分でも再実行できる小さな比較を目指します。
 
-> **現在の状態:** v0.1.0をリリース済みです。CI、公式benchmark自動化、GitHub Pagesの結果サイトを利用できます。Go / Echoは実装済みでCI対象ですが、完全な拡張cohortを有効化するまでは、公開中の公式benchmarkは凍結した`four-stack-v1`のままです。
+> **現在の状態:** v0.1.0をリリース済みです。CI、公式benchmark自動化、GitHub Pagesの結果サイトを利用できます。Go / EchoとRust / Axumは実装済みでCI対象ですが、完全な拡張cohortを有効化するまでは、公開中の公式benchmarkは凍結した`four-stack-v1`のままです。
 
 ## 比較対象
 
@@ -15,6 +15,7 @@ Simple API Benchmarkには、同じエンドポイント、同じDockerリソー
 | Go | Gin |
 | Go | Echo |
 | Rust | Actix Web |
+| Rust | Axum |
 | Node.js | Fastify |
 | Python | FastAPI |
 
@@ -28,7 +29,7 @@ Simple API Benchmarkには、同じエンドポイント、同じDockerリソー
 
 `GET /health`は起動確認だけに使用します。
 
-下の公開結果は引き続き`four-stack-v1`、つまりGo / Gin、Rust / Actix Web、Node.js / Fastify、Python / FastAPIの4実装を表します。Go / Echoを既存のhistorical cohortへ暗黙に追加しません。
+下の公開結果は引き続き`four-stack-v1`、つまりGo / Gin、Rust / Actix Web、Node.js / Fastify、Python / FastAPIの4実装を表します。Go / EchoやRust / Axumを既存のhistorical cohortへ暗黙に追加しません。
 
 ## 結果
 
@@ -153,6 +154,20 @@ make test-rust-actix
 
 acceptance targetにはRustup、Python 3、Docker Compose v2、Makeが必要です。format、locked Rust tests、警告をエラーにするClippy、実DB・API、BIGINT境界、起動失敗、SIGTERM終了、container・network削除を検証します。各APIは同じホストポート`8080`を使うため、1つずつ起動してください。
 
+## Rust / Axum実装
+
+`apps/rust-axum/`はAxum 0.8.9とTokio 1.53.1を使います。既存のActix実装は変更せず、Rust 1.98.1、SQLx 0.9.0、Serde 1.0.228、serde_json 1.0.145、digest固定のbuilder・runtimeイメージを揃えています。推移的依存はcommitした`Cargo.lock`で固定します。
+
+1つのserver processが明示的なTokio `current_thread` executorを使います。native Serde応答、共通のparameterized SQL、最大10接続のpool、requestごとの直接再帰によるFibonacci(30)を維持し、CPU offload、response cache、追加async workerは使いません。SIGINT/SIGTERMでは処理中のrequest完了を待ってからpoolを閉じます。非rootのrelease imageは共通の1 CPU・512 MiB制限を継承します。
+
+```bash
+make test-rust-axum                       # Rust検証と実PostgreSQL・container acceptance
+make test-contract CONTRACT_IMPL=rust-axum # 変更しない共通contract
+make axum-diagnostic                      # commit済みの作業ツリーで実行。結果は公開しない
+```
+
+port 8080を空け、各commandを順番に実行してください。Axum専用diagnosticは既存の固定済み負荷ツールとexternal readinessを使い、source・version情報と生データを`.cache/axum-diagnostic/`へ保存します。request errorやcleanup失敗を成功扱いせず、短縮profileの数値を公式結果として公開しません。通常CIのAxum jobで必須実行するため、一時的な開発workflowは不要です。実行方式、検証範囲、保存先の制約は[Axum実装・diagnosticガイド](docs/AXUM.md)を参照してください。
+
 ## Node.js / Fastify実装
 
 Node実装は`apps/node-fastify/`にあり、Node.js 24.20.0 LTS、Fastify 5.12.3、pg 8.23.0を使用します。直接依存と`package-lock.json`を固定し、公式の`node:24.20.0-bookworm-slim`イメージもdigestで固定します。再現性と保守性のため、LTSランタイムと安定版のFastify 5系を採用しています。
@@ -193,10 +208,10 @@ make test-python-fastapi PYTHON=python3.14
 
 acceptance targetにはPOSIX環境のPython 3.14.7、Docker Compose v2、Makeが必要です。一時virtual environmentへhash検証付きで開発用依存をinstallし、Ruff、focused pytest tests、実Dockerサービス、DB更新・異常系、資源制限、1 worker、起動失敗、SIGTERM終了、container・network削除を確認します。Dockerを使わないfocused testsは[Contributing](CONTRIBUTING.md)を参照してください。
 
-5つのAPI実装と共通contract suiteを利用できます。
+6つのAPI実装と共通contract suiteを利用できます。
 
 ```bash
-make test-contract                       # 5実装を1つずつ順番に検証
+make test-contract                       # 6実装を1つずつ順番に検証
 make test-contract CONTRACT_IMPL=go-echo # 1実装を同じ契約で検証
 ```
 
@@ -205,7 +220,7 @@ HTTP status、JSONの内容・型、規定のerror response、応答の再現性
 方法、cleanupの制約は[共通contractの実行ガイド](CONTRIBUTING.md#shared-contract-checks)を
 参照してください。ローカルのbenchmark runnerは利用可能です。PRでは同じ検証と公開しない短縮benchmarkを実行します。
 公式結果はtrusted mainの[週次・手動workflow](docs/AUTOMATION.md)だけから公開します。
-active official cohortは引き続き`four-stack-v1`なので、Echoをimplementation registryへ追加しても
+active official cohortは引き続き`four-stack-v1`なので、EchoとAxumをimplementation registryへ追加しても
 既存の公式結果を変更したり再公開したりはしません。
 
 ## ローカルでの計測
@@ -229,6 +244,7 @@ focused testsは`make test-benchmark`、短縮診断は`make benchmark-smoke`で
 
 - [結果サイト](https://tappe9.github.io/simple-api-benchmark/)
 - [アーキテクチャ](ARCHITECTURE.md)
+- [Axum実装・diagnostic](docs/AXUM.md)
 - [API仕様](docs/API-CONTRACT.md)
 - [測定方法](docs/METHODOLOGY.md)
 - [実行・結果形式](docs/BENCHMARK.md)

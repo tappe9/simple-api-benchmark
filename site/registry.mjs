@@ -72,6 +72,21 @@ export const REGISTRY = {
       ]
     },
     {
+      "display_name": "Rust / Axum",
+      "framework": "Axum",
+      "id": "rust-axum",
+      "language": "Rust",
+      "source_path": "apps/rust-axum",
+      "version_fields": [
+        "rust",
+        "axum",
+        "tokio",
+        "sqlx",
+        "serde",
+        "serde_json"
+      ]
+    },
+    {
       "display_name": "Node.js / Fastify",
       "framework": "Fastify",
       "id": "node-fastify",

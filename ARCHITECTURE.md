@@ -77,6 +77,12 @@ The production Dockerfile uses the published `rust:1.98.0-bookworm` builder pinn
 
 Rust tests use in-memory configuration lookups rather than mutating process-global environment variables. Docker acceptance verifies real row updates, exact BIGINT values, SQL errors, the direct non-root server process, startup failure, normal SIGTERM exit, and zero remaining application DB connections after shutdown.
 
+#### Rust / Axum
+
+The independent `apps/rust-axum/` application uses Axum 0.8.9 and Tokio 1.53.1 with the same Rust compiler, SQLx/Serde versions, fixture, SQL and Docker base pins as Actix. `src/api.rs` owns native response DTOs and direct recursive CPU work; `src/item.rs` owns bound BIGINT queries; `src/database.rs` validates configuration and caps the pool at 10. The main process explicitly selects Tokio's `current_thread` executor, installs SIGINT/SIGTERM handlers before accepting connections, drains in-flight requests with Axum's graceful server shutdown, and then closes the pool. CPU work is not offloaded to a thread pool.
+
+Axum is registered for acceptance and shared contracts but is not a member of the active official cohort. `benchmark/axum_diagnostic.py` reuses the load generator, container lifecycle, external-readiness checks, measurement parser and whole-run selection for an Axum-only short diagnostic. It writes only below its dedicated cache after successful cleanup, never to published results. See [Axum implementation and diagnostic](docs/AXUM.md) for the runtime distinction from Actix, commands and evidence format.
+
 #### Node.js / Fastify
 
 The Node implementation lives in `apps/node-fastify/`. Node.js 24.20.0 LTS, Fastify 5.12.3, and pg 8.23.0 are explicitly pinned, including the transitive dependency lock. `src/app.js` owns routes and native JSON responses, `src/database.js` creates the PostgreSQL pool from all five required `DATABASE_*` settings, and `src/server.js` owns startup and shutdown. `src/healthcheck.js` verifies the readiness response with a two-second timeout.
@@ -108,6 +114,9 @@ required version fields and acceptance entry points. Python reads it directly;
 `benchmark/registry.py` generates and checks the Make and JavaScript projections.
 CI invokes registry-backed sequential acceptance targets and verifies Compose
 build-context agreement. Version extraction remains language-specific.
+`registered_pinned_versions()` covers all six registered stacks; `pinned_versions()`
+filters that metadata to the active official cohort. Diagnostic metadata records
+only the selected Axum stack, without expanding official reports.
 
 `benchmark/definition.py` holds the unchanged measurement profile independently
 of orchestration. `benchmark/report.py` resolves complete ordered membership from
@@ -172,7 +181,9 @@ simple-api-benchmark/
 │   └── pages.yml
 ├── apps/
 │   ├── go-gin/
+│   ├── go-echo/
 │   ├── rust-actix/
+│   ├── rust-axum/
 │   ├── node-fastify/
 │   └── python-fastapi/
 ├── benchmark/
@@ -183,6 +194,7 @@ simple-api-benchmark/
 │   ├── registry.py
 │   ├── contract_test.py
 │   ├── contract_runner.py
+│   ├── axum_diagnostic.py
 │   ├── generate_readme.py
 │   ├── pages.py
 │   ├── site.py
@@ -225,7 +237,7 @@ Cleanup must run even when a build, contract test, or benchmark fails.
 
 ### Pull requests
 
-`ci.yml` builds and checks all four applications, runs the shared contract and focused tests, validates workflow syntax/security and generated README sections, validates the static Pages contracts, and executes a short non-publishing smoke benchmark. Repository permissions are read-only and checkout credentials are not persisted.
+`ci.yml` builds and checks all six registered applications, runs the shared contract and focused tests, validates workflow syntax/security and generated README sections, validates the static Pages contracts, and executes a short non-publishing smoke benchmark. Repository permissions are read-only and checkout credentials are not persisted. The Axum matrix entry additionally runs its non-publishing diagnostic and uploads diagnostic evidence; failure blocks the existing required aggregate. The active-cohort smoke remains four-stack and sequential. The component diagram above depicts that official result path, not every registered candidate.
 
 ### Scheduled and manual benchmarks
 

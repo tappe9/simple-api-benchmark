@@ -100,6 +100,26 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(cleanup["if"], "always()")
         self.assertIn('docker compose -p "$COMPOSE_PROJECT_NAME" down', cleanup["run"])
 
+    def test_axum_diagnostic_is_required_in_its_read_only_implementation_job(self):
+        job = load("ci.yml")["jobs"]["implementation"]
+        diagnostic = [
+            step for step in job["steps"] if "make axum-diagnostic" in step.get("run", "")
+        ]
+        self.assertEqual(len(diagnostic), 1)
+        step = diagnostic[0]
+        self.assertEqual(step["if"], "matrix.implementation == 'rust-axum'")
+        self.assertNotIn("continue-on-error", step)
+        self.assertIn("git diff --exit-code HEAD", step["run"])
+        self.assertIn("git ls-files --others --exclude-standard", step["run"])
+        artifacts = [
+            step
+            for step in job["steps"]
+            if step.get("uses", "").startswith("actions/upload-artifact@")
+        ]
+        self.assertEqual(len(artifacts), 1)
+        self.assertEqual(artifacts[0]["with"]["path"], ".cache/axum-diagnostic/")
+        self.assertEqual(artifacts[0]["if"], "always() && matrix.implementation == 'rust-axum'")
+
     def test_split_ci_preserves_shared_smoke_and_fail_closed_aggregate(self):
         ci = load("ci.yml")
         shared = str(ci["jobs"]["shared"])
