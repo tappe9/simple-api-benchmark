@@ -76,6 +76,23 @@ The toolchain file selects Rust 1.98.1. Do not regenerate `Cargo.lock`, format f
 
 The Rust acceptance target also checks native JSON types, real database updates, signed BIGINT boundaries, sanitized query errors, a single non-root server, resource and network settings, startup failure, SIGTERM exit, and connection/container/network cleanup. It does not run a benchmark or replace the shared contract suite.
 
+For the independent Rust / Axum implementation, use the same focused Rust commands
+from `apps/rust-axum/`. Its full acceptance and diagnostic commands are:
+
+```bash
+COMPOSE_PROJECT_NAME=sab-local-axum make test-rust-axum
+make test-contract CONTRACT_IMPL=rust-axum
+# Commit source changes, and ensure no manually started API occupies port 8080.
+make axum-diagnostic
+```
+
+Run these sequentially. Acceptance checks Rust formatting, locked tests, Clippy,
+real PostgreSQL/HTTP behavior and container shutdown. The diagnostic separately
+exercises all three endpoints with short load, preserves source/version evidence
+under `.cache/axum-diagnostic/`, and cannot publish an official result. See the
+[Axum guide](docs/AXUM.md) for profile, cleanup and runtime details. Do not regenerate
+locks or auto-fix source as part of validation.
+
 The complete Node / Fastify validation requires Node.js 24.20.0 (also recorded in `apps/node-fastify/.node-version`), npm, Python 3, Docker Compose v2, and Make:
 
 ```bash
@@ -126,11 +143,11 @@ The common suite needs Python 3.10+ on a POSIX host, Docker Compose v2 with
 toolchains are not needed on the host for this target.
 
 ```bash
-make test-contract                         # all four implementations, sequentially
+make test-contract                         # all six registered implementations, sequentially
 make test-contract CONTRACT_IMPL=go-gin     # one implementation, same assertions
 ```
 
-`CONTRACT_IMPL` also accepts `rust-actix`, `node-fastify`, and `python-fastapi`.
+`CONTRACT_IMPL` also accepts `go-echo`, `rust-actix`, `rust-axum`, `node-fastify`, and `python-fastapi`.
 The target first runs the suite's focused tests, then builds and starts the selected
 production services. All expected statuses and JSON objects are read from the
 paired HTTP/JSON examples in `docs/API-CONTRACT.md`; that document remains the
@@ -204,7 +221,7 @@ python -m ruff format --target-version py310 --check --config apps/python-fastap
 
 Run all existing DB/API acceptance targets and `make test-contract` after changes
 to shared execution. `make test` runs the project-wide gates sequentially, including
-workflow checks and smoke. Install the pinned workflow tools as described in
+workflow checks, active-cohort smoke, and the separate Axum-only diagnostic. Install the pinned workflow tools as described in
 [automation](docs/AUTOMATION.md). PR CI runs all gates with read-only permissions.
 Official publication is reserved for complete trusted-main Actions runs.
 

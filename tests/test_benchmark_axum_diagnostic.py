@@ -93,7 +93,16 @@ class AxumDiagnosticTests(unittest.TestCase):
             validate_report(result)
 
     def test_every_failure_cleans_and_preserves_previous_diagnostic_and_official_result(self):
-        for stage in ("build", "startup", "contract", "state", "warmup", "measurement", "metric", "cleanup"):
+        for stage in (
+            "build",
+            "startup",
+            "contract",
+            "state",
+            "warmup",
+            "measurement",
+            "metric",
+            "cleanup",
+        ):
             environment = self.environment(stage)
             with self.subTest(stage=stage), self.assertRaisesRegex(BenchmarkFailure, stage):
                 self.run_diagnostic(environment)
@@ -119,7 +128,11 @@ class AxumDiagnosticTests(unittest.TestCase):
         self.assertEqual(environment.events[-1], "cleanup")
 
     def test_wrong_policy_or_profile_prevents_startup(self):
-        for field, value in (("health_policy", "container-healthcheck"), ("connections", 50), ("request_timeout", 1)):
+        for field, value in (
+            ("health_policy", "container-healthcheck"),
+            ("connections", 50),
+            ("request_timeout", 1),
+        ):
             environment = self.environment()
             setattr(environment, field, value)
             with self.subTest(field=field), self.assertRaises(BenchmarkFailure):

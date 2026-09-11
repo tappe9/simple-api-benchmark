@@ -34,6 +34,20 @@ failure gate. The site builder refuses a stale viewer projection before replacin
 the previous artifact. No JavaScript package, YAML code generator, or runtime
 plugin dependency is introduced.
 
+## Registered and measured implementations
+
+The six registered implementations are Go / Gin, Go / Echo, Rust / Actix Web,
+Rust / Axum, Node.js / Fastify, and Python / FastAPI. Registration enables their
+source checks, real-container acceptance and unchanged shared contracts. It does
+not activate a benchmark cohort: Echo and Axum are implemented candidates outside
+`four-stack-v1`, not missing or zero-valued rows in the published result.
+
+`registered_pinned_versions()` in `benchmark/environment.py` extracts all six
+stacks, while `pinned_versions()` retains only active-cohort metadata for complete
+benchmark reports. Axum additionally records its explicit Tokio version. The
+[Axum-only diagnostic](AXUM.md) consumes the registered Axum metadata separately
+and does not introduce partial official reports.
+
 ## Shared Compose isolation defaults
 
 `docker-compose.yml` defines `x-api-defaults` as the common runtime envelope for
@@ -156,7 +170,8 @@ methodology links remain pinned to the report's measured source commit.
 
    `make test-implementations` runs all registered acceptance targets sequentially.
    `make test` retains Compose parity, DB acceptance, all implementation gates,
-   shared contracts, tooling/site/workflow checks and non-publishing smoke. Do not
+   shared contracts, tooling/site/workflow checks, non-publishing smoke and the
+   separate Axum-only diagnostic. Do not
    run multiple focused API targets concurrently on one host: they share loopback
    port 8080.
 5. Add compatibility tests for the new cohort, historical results, malformed and

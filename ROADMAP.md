@@ -21,10 +21,13 @@ The completed work and acceptance criteria are recorded in the `v0.1.0` GitHub m
 
 ## After v0.1
 
-Possible additions are evaluated one at a time:
+Go / Echo and Rust / Axum are implemented, registered and covered by normal CI.
+Axum also has a required, non-publishing load diagnostic. The official benchmark
+still uses the frozen `four-stack-v1` cohort; activation of a complete expanded
+cohort and new official measurements remain separate work.
 
-- Go / Echo;
-- Rust / Axum;
+Remaining possible additions are evaluated one at a time:
+
 - Node.js / Express;
 - Python / Flask;
 - Java / Spring Boot;

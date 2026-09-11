@@ -39,7 +39,9 @@ class AxumRegistrationTests(unittest.TestCase):
         self.assertEqual(tuple(registry["cohorts"]["four-stack-v1"]["members"]), OFFICIAL)
         report = json.loads((ROOT / "results/latest.json").read_text())
         self.assertEqual(report["benchmark"]["cohort"], "four-stack-v1")
-        self.assertEqual(tuple(row["implementation"] for row in report["implementations"]), OFFICIAL)
+        self.assertEqual(
+            tuple(row["implementation"] for row in report["implementations"]), OFFICIAL
+        )
 
 
 if __name__ == "__main__":
