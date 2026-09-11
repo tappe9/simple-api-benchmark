@@ -46,13 +46,16 @@ fn invalid_cli_is_rejected_before_database_startup() {
 
 #[test]
 fn unreachable_database_fails_without_leaking_credentials() {
-    let result = invoke(&[], &[
-        ("DATABASE_HOST", "127.0.0.1"),
-        ("DATABASE_PORT", "1"),
-        ("DATABASE_NAME", "private-test-database"),
-        ("DATABASE_USER", "private-test-user"),
-        ("DATABASE_PASSWORD", "private-test-password"),
-    ]);
+    let result = invoke(
+        &[],
+        &[
+            ("DATABASE_HOST", "127.0.0.1"),
+            ("DATABASE_PORT", "1"),
+            ("DATABASE_NAME", "private-test-database"),
+            ("DATABASE_USER", "private-test-user"),
+            ("DATABASE_PASSWORD", "private-test-password"),
+        ],
+    );
     assert!(!result.status.success());
     let error = String::from_utf8_lossy(&result.stderr);
     assert!(error.contains("database connection failed"));

@@ -139,6 +139,21 @@ jobs:
         run: make "test-$IMPLEMENTATION_ID"
       - name: Run focused shared contract against implementation
         run: make test-contract CONTRACT_IMPL="$IMPLEMENTATION_ID"
+      - name: Axum-only load diagnostic (never publish)
+        if: matrix.implementation == 'rust-axum'
+        run: |
+          make axum-diagnostic
+          git diff --exit-code HEAD
+          test -z "$(git ls-files --others --exclude-standard)"
+      - name: Axum diagnostic evidence
+        if: always() && matrix.implementation == 'rust-axum'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: axum-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .cache/axum-diagnostic/
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Clean only this implementation's Compose project
         if: always()
         run: timeout 90 docker compose -p "$COMPOSE_PROJECT_NAME" down --remove-orphans --volumes --timeout 10

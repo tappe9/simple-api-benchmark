@@ -47,6 +47,23 @@
       "failure_test": "tests/test_rust_actix_acceptance.py"
     },
     {
+      "id": "rust-axum",
+      "language": "Rust",
+      "framework": "Axum",
+      "display_name": "Rust / Axum",
+      "source_path": "apps/rust-axum",
+      "version_fields": [
+        "rust",
+        "axum",
+        "tokio",
+        "sqlx",
+        "serde",
+        "serde_json"
+      ],
+      "acceptance_test": "tests/test_rust_axum_service.py",
+      "failure_test": "tests/test_rust_axum_acceptance.py"
+    },
+    {
       "id": "node-fastify",
       "language": "Node.js",
       "framework": "Fastify",

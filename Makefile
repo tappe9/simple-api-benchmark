@@ -70,7 +70,7 @@ down:
 	@echo "Removing benchmark containers and project network..."
 	@$(COMPOSE) down --remove-orphans --volumes
 
-.PHONY: benchmark test-benchmark benchmark-smoke healthcheck-investigation install-oha
+.PHONY: benchmark test-benchmark benchmark-smoke healthcheck-investigation axum-diagnostic install-oha
 
 install-oha:
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.run --install-only
@@ -83,6 +83,9 @@ benchmark:
 
 benchmark-smoke:
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.run --compose "$(COMPOSE)" --smoke
+
+axum-diagnostic:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.axum_diagnostic --compose "$(COMPOSE)"
 
 healthcheck-investigation:
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.healthcheck_investigation
@@ -100,6 +103,7 @@ test:
 	@$(MAKE) --no-print-directory test-workflows
 	@$(MAKE) --no-print-directory test-site
 	@$(MAKE) --no-print-directory benchmark-smoke
+	@$(MAKE) --no-print-directory axum-diagnostic
 
 test-workflows:
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p test_workflows.py -v
