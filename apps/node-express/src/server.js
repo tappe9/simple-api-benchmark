@@ -28,8 +28,11 @@ export async function startServer({ env = process.env, host = '0.0.0.0', port = 
     server = createServer(buildApp(pool));
     await listen(server, host, port);
   } catch (error) {
-    if (server?.listening) await closeHttp(server);
-    await pool.end();
+    try {
+      if (server?.listening) await closeHttp(server);
+    } finally {
+      await pool.end();
+    }
     throw error;
   }
   let closed = false;
@@ -39,8 +42,11 @@ export async function startServer({ env = process.env, host = '0.0.0.0', port = 
     async close() {
       if (closed) return;
       closed = true;
-      await closeHttp(server);
-      await pool.end();
+      try {
+        await closeHttp(server);
+      } finally {
+        await pool.end();
+      }
     },
   };
 }
