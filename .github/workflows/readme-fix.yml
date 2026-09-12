@@ -1,0 +1,60 @@
+name: Temporary README fix
+
+on:
+  push:
+    branches:
+      - issue-32-python-flask
+    paths:
+      - .github/workflows/readme-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: issue-32-python-flask
+      - name: Fix implementation-count wording
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          replacements = {
+              'README.md': {
+                  '# all six APIs, one at a time': '# all eight APIs, one at a time',
+                  'The active official cohort remains `four-stack-v1`, so adding Echo and Axum to the implementation\nregistry does not alter or republish the existing official result set.':
+                  'The active official cohort remains `four-stack-v1`, so registering Echo, Axum, Express, and Flask\ndoes not alter or republish the existing official result set.',
+                  'Neither Go / Echo nor Rust / Axum is silently added to that historical cohort.':
+                  'Go / Echo, Rust / Axum, Node.js / Express, and Python / Flask are not silently added to that historical cohort.',
+              },
+              'README.ja.md': {
+                  '# 6実装を1つずつ順番に検証': '# 8実装を1つずつ順番に検証',
+                  '現行の公式cohortは`four-stack-v1`のままなので、EchoとAxumを実装registryへ追加しても、既存の公式結果は変更・再公開されません。':
+                  '現行の公式cohortは`four-stack-v1`のままなので、Echo、Axum、Express、Flaskを実装registryへ追加しても、既存の公式結果は変更・再公開されません。',
+                  'Go / EchoとRust / Axumは、この過去cohortへ暗黙には追加されません。':
+                  'Go / Echo、Rust / Axum、Node.js / Express、Python / Flaskは、この過去cohortへ暗黙には追加されません。',
+              },
+          }
+          for filename, mapping in replacements.items():
+              path = Path(filename)
+              text = path.read_text()
+              for old, new in mapping.items():
+                  if old not in text:
+                      raise SystemExit(f'missing expected README text: {filename}: {old}')
+                  text = text.replace(old, new, 1)
+              path.write_text(text)
+          PY
+          git diff --check
+      - name: Commit README fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md README.ja.md
+          git commit -m 'docs: finish eight implementation wording'
+          git push origin HEAD:issue-32-python-flask
