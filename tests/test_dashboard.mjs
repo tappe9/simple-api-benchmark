@@ -70,6 +70,7 @@ test('rendered results expose accessible dashboard controls while keeping the fu
   assert.match(html, /role="tablist"/);
   assert.equal((html.match(/data-endpoint=/g) || []).length, 3);
   assert.equal((html.match(/data-metric=/g) || []).length, 3);
+  assert.equal((html.match(/data-language-filter=/g) || []).length, 4);
   assert.equal((html.match(/data-implementation-filter=/g) || []).length, 4);
   assert.match(html, /Requests\/s/);
   assert.match(html, /Mean response/);
