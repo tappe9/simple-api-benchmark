@@ -82,6 +82,5 @@ def render_charts(report: dict) -> dict[str, str]:
     """Return all README chart paths and bytes-as-text from one verified report."""
     validate_report(report)
     return {
-        path: _render_svg(report, endpoint, title)
-        for endpoint, (path, title) in CHARTS.items()
+        path: _render_svg(report, endpoint, title) for endpoint, (path, title) in CHARTS.items()
     }
