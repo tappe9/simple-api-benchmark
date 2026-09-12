@@ -11,14 +11,7 @@ from .report import validate_report
 from .results import BenchmarkFailure, require, strict_json
 
 ROOT = Path(__file__).resolve().parents[1]
-ASSETS = (
-    "index.html",
-    "style.css",
-    "app.mjs",
-    "dashboard.mjs",
-    "interactions.mjs",
-    "registry.mjs",
-)
+ASSETS = ("index.html", "style.css", "app.mjs", "registry.mjs")
 
 
 def regular_file(path: Path, root: Path) -> bytes:
