@@ -27,7 +27,9 @@ from .registry import active_members, implementation, implementation_ids
 from .results import BenchmarkFailure, require, strict_json
 
 
-def validate_state(value: dict, project: str, service: str, identity=None) -> tuple[str, str]:
+def validate_state(
+    value: dict, project: str, service: str, identity=None
+) -> tuple[str, str]:
     try:
         require(type(value) is dict, "container inspect must be an object")
         state = value["State"]
@@ -52,7 +54,9 @@ def validate_state(value: dict, project: str, service: str, identity=None) -> tu
             type(limits["Memory"]) is int and limits["Memory"] == 536870912,
             "API must have exactly 512 MiB",
         )
-        require(limits["RestartPolicy"]["Name"] == "no", "API restart policy must be no")
+        require(
+            limits["RestartPolicy"]["Name"] == "no", "API restart policy must be no"
+        )
         labels = value["Config"]["Labels"]
         require(
             labels["com.docker.compose.project"] == project
@@ -60,7 +64,8 @@ def validate_state(value: dict, project: str, service: str, identity=None) -> tu
             "container does not belong to this project's API service",
         )
         require(
-            type(value["Id"]) is str and re.fullmatch(r"[0-9a-f]{64}", value["Id"]) is not None,
+            type(value["Id"]) is str
+            and re.fullmatch(r"[0-9a-f]{64}", value["Id"]) is not None,
             "missing full container ID",
         )
         started = state["StartedAt"]
@@ -92,17 +97,25 @@ def memory_bytes(raw: str, container: str) -> int:
     text = data.get("MemUsage")
     require(type(text) is str, "memory sample has no MemUsage string")
     match = re.fullmatch(
-        r"([0-9]+(?:\.[0-9]+)?)(B|KiB|MiB|GiB) / ([0-9]+(?:\.[0-9]+)?)(B|KiB|MiB|GiB)", text
+        r"([0-9]+(?:\.[0-9]+)?)(B|KiB|MiB|GiB) / ([0-9]+(?:\.[0-9]+)?)(B|KiB|MiB|GiB)",
+        text,
     )
     require(match is not None, f"unrecognized Docker memory value/unit: {text!r}")
     units = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}
-    usage = int((Decimal(match[1]) * units[match[2]]).to_integral_value(rounding=ROUND_CEILING))
+    usage = int(
+        (Decimal(match[1]) * units[match[2]]).to_integral_value(rounding=ROUND_CEILING)
+    )
     limit = Decimal(match[3]) * units[match[4]]
-    require(limit == 536870912 and 0 < usage <= limit, "invalid memory sample or API memory limit")
+    require(
+        limit == 536870912 and 0 < usage <= limit,
+        "invalid memory sample or API memory limit",
+    )
     return usage
 
 
-def validate_processes(state: dict, output: str, *, allow_health_probe: bool = True) -> None:
+def validate_processes(
+    state: dict, output: str, *, allow_health_probe: bool = True
+) -> None:
     """Count OS processes, not framework threads, using the same rule for all APIs."""
 
     def normalized(arguments):
@@ -113,7 +126,9 @@ def validate_processes(state: dict, output: str, *, allow_health_probe: bool = T
     allowed = (server,)
     if allow_health_probe:
         probe = state["Config"]["Healthcheck"]["Test"]
-        require(probe[0] == "CMD", "expected a direct, separately identifiable health probe")
+        require(
+            probe[0] == "CMD", "expected a direct, separately identifiable health probe"
+        )
         allowed = (server, normalized(probe[1:]))
     rows = output.strip().splitlines()
     require(bool(rows) and "PID" in rows[0], "container process list unavailable")
@@ -153,7 +168,18 @@ def registered_pinned_versions() -> dict:
     node = strict_json(read("node-fastify/package.json").encode())
     node_express = strict_json(read("node-express/package.json").encode())
     python = dict(
-        re.findall(r"^([a-z]+)==([0-9.]+)$", read("python-fastapi/requirements.in"), re.MULTILINE)
+        re.findall(
+            r"^([a-z]+)==([0-9.]+)$",
+            read("python-fastapi/requirements.in"),
+            re.MULTILINE,
+        )
+    )
+    python_flask = dict(
+        re.findall(
+            r"^([a-z][a-z0-9-]*)==([0-9.]+)$",
+            read("python-flask/requirements.in"),
+            re.MULTILINE,
+        )
     )
     versions = {
         "go-gin": {
@@ -167,7 +193,9 @@ def registered_pinned_versions() -> dict:
             "pgx": match(r"github.com/jackc/pgx/v5 v([0-9.]+)", go_echo),
         },
         "rust-actix": {
-            "rust": match(r'^channel = "([0-9.]+)"$', read("rust-actix/rust-toolchain.toml")),
+            "rust": match(
+                r'^channel = "([0-9.]+)"$', read("rust-actix/rust-toolchain.toml")
+            ),
             **{
                 name: match(r"^" + name + r' = .*version = "=([0-9.]+)"', rust)
                 for name in ("actix-web", "sqlx", "serde")
@@ -175,7 +203,9 @@ def registered_pinned_versions() -> dict:
             "serde_json": match(r'^serde_json = "=([0-9.]+)"$', rust),
         },
         "rust-axum": {
-            "rust": match(r'^channel = "([0-9.]+)"$', read("rust-axum/rust-toolchain.toml")),
+            "rust": match(
+                r'^channel = "([0-9.]+)"$', read("rust-axum/rust-toolchain.toml")
+            ),
             **{
                 name: match(r"^" + name + r' = .*version = "=([0-9.]+)"', axum)
                 for name in ("axum", "tokio", "sqlx", "serde")
@@ -183,8 +213,18 @@ def registered_pinned_versions() -> dict:
             "serde_json": match(r'^serde_json = "=([0-9.]+)"$', axum),
         },
         "node-fastify": {"node": node["engines"]["node"], **node["dependencies"]},
-        "node-express": {"node": node_express["engines"]["node"], **node_express["dependencies"]},
-        "python-fastapi": {"python": read("python-fastapi/.python-version").strip(), **python},
+        "node-express": {
+            "node": node_express["engines"]["node"],
+            **node_express["dependencies"],
+        },
+        "python-fastapi": {
+            "python": read("python-fastapi/.python-version").strip(),
+            **python,
+        },
+        "python-flask": {
+            "python": read("python-flask/.python-version").strip(),
+            **python_flask,
+        },
     }
     require(
         set(versions) == set(implementation_ids()),
@@ -226,17 +266,25 @@ def provenance(oha: Path) -> dict:
     )
     require(not dirty.strip(), f"commit source changes before benchmarking:\n{dirty}")
     commit = execute(["git", "rev-parse", "HEAD"], timeout=10).strip()
-    require(re.fullmatch(r"[0-9a-f]{40}", commit) is not None, "source commit unavailable")
+    require(
+        re.fullmatch(r"[0-9a-f]{40}", commit) is not None, "source commit unavailable"
+    )
     endpoint = os.environ.get("DOCKER_HOST")
     if os.environ.get("DOCKER_CONTEXT") or not endpoint:
-        context = strict_json(execute(["docker", "context", "inspect"], timeout=10).encode())
-        require(type(context) is list and len(context) == 1, "Docker context unavailable")
+        context = strict_json(
+            execute(["docker", "context", "inspect"], timeout=10).encode()
+        )
+        require(
+            type(context) is list and len(context) == 1, "Docker context unavailable"
+        )
         endpoint = context[0]["Endpoints"]["docker"]["Host"]
     require(
         endpoint.startswith("unix://"),
         "benchmark requires a local Unix-socket Docker daemon, not a remote context",
     )
-    info = strict_json(execute(["docker", "info", "--format", "{{json .}}"], timeout=15).encode())
+    info = strict_json(
+        execute(["docker", "info", "--format", "{{json .}}"], timeout=15).encode()
+    )
     require(info.get("OSType") == "linux", "Linux API containers are required")
     return {
         "source_commit": commit,
@@ -255,7 +303,11 @@ def provenance(oha: Path) -> dict:
                 "KernelVersion",
             )
         },
-        "oha": {"version": VERSION, "asset": platform_asset(), "sha256": SHA256[platform_asset()]},
+        "oha": {
+            "version": VERSION,
+            "asset": platform_asset(),
+            "sha256": SHA256[platform_asset()],
+        },
         "versions": pinned_versions(),
         "lock_sha256": {
             str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
@@ -292,8 +344,15 @@ class DockerEnvironment:
             and executable[1] == "compose",
             "use docker compose without context or project overrides",
         )
-        require(type(audit_health_events) is bool, "health event audit flag must be boolean")
-        self.prefix = executable + ["-f", str(ROOT / "docker-compose.yml"), "-p", self.project]
+        require(
+            type(audit_health_events) is bool, "health event audit flag must be boolean"
+        )
+        self.prefix = executable + [
+            "-f",
+            str(ROOT / "docker-compose.yml"),
+            "-p",
+            self.project,
+        ]
         self.artifacts = artifacts / self.project
         self.artifacts.mkdir(parents=True)
         self.oha = oha
@@ -307,7 +366,8 @@ class DockerEnvironment:
         self.readiness = None
         self.probe_command = None
         print(
-            f"Owned Compose project: {self.project}; raw diagnostics: {self.artifacts}", flush=True
+            f"Owned Compose project: {self.project}; raw diagnostics: {self.artifacts}",
+            flush=True,
         )
 
     def build(self, implementation: str) -> None:
@@ -316,7 +376,9 @@ class DockerEnvironment:
         (self.artifacts / f"{implementation}-build.log").write_text(output)
 
     def inspect(self) -> dict:
-        data = strict_json(execute(["docker", "inspect", self.container], timeout=10).encode())
+        data = strict_json(
+            execute(["docker", "inspect", self.container], timeout=10).encode()
+        )
         require(type(data) is list and len(data) == 1, "API container inspect missing")
         return data[0]
 
@@ -325,11 +387,14 @@ class DockerEnvironment:
         runtime_prefix = self.prefix
         baseline_readiness_started = None
         if self.health_policy == EXTERNAL_READINESS:
-            override = self.artifacts / f"{implementation}-external-readiness.compose.yml"
+            override = (
+                self.artifacts / f"{implementation}-external-readiness.compose.yml"
+            )
             override.write_text(override_text(implementation), encoding="utf-8")
             runtime_prefix = self.prefix[:-2] + ["-f", str(override), *self.prefix[-2:]]
             execute(
-                runtime_prefix + ["up", "--detach", "--wait", "--wait-timeout", "60", "postgres"],
+                runtime_prefix
+                + ["up", "--detach", "--wait", "--wait-timeout", "60", "postgres"],
                 timeout=120,
             )
             execute(runtime_prefix + ["up", "--detach", implementation], timeout=120)
@@ -370,7 +435,10 @@ class DockerEnvironment:
                 "API readiness was not healthy",
             )
             probe = state["Config"]["Healthcheck"]["Test"]
-            require(probe[0] == "CMD" and len(probe) > 1, "API health probe command unavailable")
+            require(
+                probe[0] == "CMD" and len(probe) > 1,
+                "API health probe command unavailable",
+            )
             self.probe_command = probe[1:]
             if self.audit_health_events:
                 readiness_completed = datetime.now(timezone.utc)
@@ -382,7 +450,9 @@ class DockerEnvironment:
                     "attempts": readiness_events["probe_execs"],
                     "duration_seconds": max(
                         0.0,
-                        (readiness_completed - baseline_readiness_started).total_seconds(),
+                        (
+                            readiness_completed - baseline_readiness_started
+                        ).total_seconds(),
                     ),
                 }
         validate_processes(
@@ -408,7 +478,9 @@ class DockerEnvironment:
             ],
             timeout=15,
         ).strip()
-        require(pg_version.startswith("PostgreSQL "), "PostgreSQL version collection failed")
+        require(
+            pg_version.startswith("PostgreSQL "), "PostgreSQL version collection failed"
+        )
         return {
             "id": self.container,
             "image_id": state["Image"],
@@ -438,7 +510,9 @@ class DockerEnvironment:
             utc = value.astimezone(timezone.utc)
             epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
             delta = utc - epoch
-            return (delta.days * 86400 + delta.seconds) * 1_000_000_000 + delta.microseconds * 1000
+            return (
+                delta.days * 86400 + delta.seconds
+            ) * 1_000_000_000 + delta.microseconds * 1000
 
         exact_started_ns = epoch_ns(started_at)
         exact_completed_ns = epoch_ns(completed_at)
@@ -497,7 +571,9 @@ class DockerEnvironment:
             f"[{self.implementation}] {endpoint} {'warmup' if index == 0 else f'run {index}/3'}: {duration}s, {self.connections} connections",
             flush=True,
         )
-        interval_started = datetime.now(timezone.utc) if self.audit_health_events else None
+        interval_started = (
+            datetime.now(timezone.utc) if self.audit_health_events else None
+        )
         with path.with_suffix(".memory.jsonl").open("w", encoding="utf-8") as log:
 
             def sample():
@@ -555,20 +631,25 @@ class DockerEnvironment:
                 timeout=duration + self.request_timeout + 15,
                 tick=sample,
             )
-        interval_completed = datetime.now(timezone.utc) if self.audit_health_events else None
+        interval_completed = (
+            datetime.now(timezone.utc) if self.audit_health_events else None
+        )
         event_summary = None
         if self.audit_health_events:
             event_summary = self.probe_events(interval_started, interval_completed)
         self.check()
         require(bool(samples), "memory collection produced no samples")
         require(
-            path.is_file() and path.stat().st_size <= 1024 * 1024, "oha result missing or oversized"
+            path.is_file() and path.stat().st_size <= 1024 * 1024,
+            "oha result missing or oversized",
         )
         result = parse_oha(
             path.read_bytes(), duration=duration, request_timeout=self.request_timeout
         )
         result.update(
-            run=max(index, 1), peak_memory_bytes=max(samples), memory_samples=len(samples)
+            run=max(index, 1),
+            peak_memory_bytes=max(samples),
+            memory_samples=len(samples),
         )
         if event_summary is not None:
             result["health_probe_events"] = event_summary
@@ -580,9 +661,14 @@ class DockerEnvironment:
 
     def cleanup(self) -> None:
         execute(
-            self.prefix + ["down", "--remove-orphans", "--volumes", "--timeout", "10"], timeout=60
+            self.prefix + ["down", "--remove-orphans", "--volumes", "--timeout", "10"],
+            timeout=60,
         )
-        for arguments in (["ps", "-aq"], ["network", "ls", "-q"], ["volume", "ls", "-q"]):
+        for arguments in (
+            ["ps", "-aq"],
+            ["network", "ls", "-q"],
+            ["volume", "ls", "-q"],
+        ):
             remaining = execute(
                 [
                     "docker",
@@ -593,7 +679,8 @@ class DockerEnvironment:
                 timeout=10,
             )
             require(
-                not remaining.strip(), f"cleanup left resources for {self.project}: {remaining}"
+                not remaining.strip(),
+                f"cleanup left resources for {self.project}: {remaining}",
             )
         self.container = None
         self.identity = None

@@ -122,6 +122,21 @@ export const REGISTRY = {
         "uvicorn",
         "asyncpg"
       ]
+    },
+    {
+      "display_name": "Python / Flask",
+      "framework": "Flask",
+      "id": "python-flask",
+      "language": "Python",
+      "source_path": "apps/python-flask",
+      "version_fields": [
+        "python",
+        "flask",
+        "waitress",
+        "psycopg",
+        "psycopg-binary",
+        "psycopg-pool"
+      ]
     }
   ],
   "legacy_cohort": "four-stack-v1"

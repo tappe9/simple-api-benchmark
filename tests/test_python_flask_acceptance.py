@@ -33,8 +33,12 @@ class PythonFlaskAcceptanceTests(unittest.TestCase):
     def test_registration_does_not_change_official_cohort(self):
         registry = json.loads((ROOT / "benchmark" / "implementations.json").read_text())
         self.assertEqual(registry["active_cohort"], "four-stack-v1")
-        self.assertNotIn("python-flask", registry["cohorts"]["four-stack-v1"]["members"])
-        flask = next(item for item in registry["implementations"] if item["id"] == "python-flask")
+        self.assertNotIn(
+            "python-flask", registry["cohorts"]["four-stack-v1"]["members"]
+        )
+        flask = next(
+            item for item in registry["implementations"] if item["id"] == "python-flask"
+        )
         self.assertEqual(flask["display_name"], "Python / Flask")
 
 

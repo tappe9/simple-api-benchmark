@@ -28,7 +28,9 @@ class PythonFlaskCandidateTests(unittest.TestCase):
         self.assertEqual(flask["display_name"], "Python / Flask")
         self.assertEqual(flask["source_path"], "apps/python-flask")
         self.assertEqual(registry["active_cohort"], "four-stack-v1")
-        self.assertNotIn("python-flask", registry["cohorts"]["four-stack-v1"]["members"])
+        self.assertNotIn(
+            "python-flask", registry["cohorts"]["four-stack-v1"]["members"]
+        )
 
 
 if __name__ == "__main__":
