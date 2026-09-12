@@ -123,7 +123,13 @@ function validateReport(report) {
       const memoryBytes = finite(selected.peak_memory_bytes, "peak memory", { positive: true });
       integer(selected.memory_samples, "memory samples");
       assert(selected.memory_samples > 0, "memory samples required");
-      assert(JSON.stringify(entry.runs[selected.run - 1]) === JSON.stringify(selected), "selected run must match a measured whole run");
+      const selectedSource = entry.runs[selected.run - 1];
+      const selectedKeys = Object.keys(selected);
+      assert(
+        selectedKeys.length === Object.keys(selectedSource).length
+          && selectedKeys.every((key) => Object.hasOwn(selectedSource, key) && selectedSource[key] === selected[key]),
+        "selected run must match a measured whole run",
+      );
       const observations = runs.map((run) => ({ ...run, selected: run.run === selected.run }));
       rows.push({
         id,
