@@ -29,7 +29,7 @@ jobs:
           text = test.read_text()
           old = '''        self.assertEqual(
               set(changed), {"README.md", "README.ja.md", "results/latest.json", *history}
-          )'''
+          )'''.replace('              ', '            ')
           new = '''        charts = {
               "results/charts/json-throughput.svg",
               "results/charts/postgresql-throughput.svg",
@@ -37,7 +37,7 @@ jobs:
           }
           self.assertEqual(
               set(changed), {"README.md", "README.ja.md", "results/latest.json", *history, *charts}
-          )'''
+          )'''.replace('              ', '            ')
           if text.count(old) != 1:
               raise SystemExit('publication expectation pattern did not match exactly once')
           test.write_text(text.replace(old, new))
