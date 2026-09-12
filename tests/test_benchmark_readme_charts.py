@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from test_benchmark_publication import START, END, context, synthetic_report
+from test_benchmark_publication import END, START, context, synthetic_report
 
 
 class ReadmeChartTests(unittest.TestCase):
