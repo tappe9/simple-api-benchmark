@@ -1,14 +1,11 @@
 import { REGISTRY } from "./registry.mjs";
+import { METRICS, dashboardRows } from "./dashboard.mjs";
+import { wireDashboard, wireTheme } from "./interactions.mjs";
 
 const STACKS = Object.fromEntries(REGISTRY.implementations.map((spec) => [spec.id, spec]));
 const ENDPOINTS = REGISTRY.definition.conditions.endpoints;
 const NAMES = Object.fromEntries(REGISTRY.implementations.map((spec) => [spec.id, spec.display_name]));
 const TESTS = { "/json": "JSON", "/db/42": "PostgreSQL", "/cpu": "CPU" };
-const METRICS = {
-  rps: { label: "Requests/s", guidance: "Higher is better", better: "higher" },
-  mean: { label: "Mean response", guidance: "Lower is better", better: "lower" },
-  memory: { label: "Observed peak memory", guidance: "Lower is better", better: "lower" },
-};
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -144,32 +141,7 @@ export function chartRows(model, endpoint, metric) {
   }));
 }
 
-export function dashboardRows(model, { endpoint, metric, visibleIds }) {
-  assert(ENDPOINTS.includes(endpoint), "unsupported endpoint");
-  assert(Object.hasOwn(METRICS, metric), "unsupported metric");
-  assert(Array.isArray(visibleIds), "visible implementations must be an array");
-  assert(new Set(visibleIds).size === visibleIds.length, "duplicate visible implementation");
-  assert(visibleIds.every((id) => model.implementations.includes(id)), "unknown visible implementation");
-  const order = new Map(model.implementations.map((id, index) => [id, index]));
-  const visible = new Set(visibleIds);
-  const rows = model.rows.filter((row) => row.endpoint === endpoint && visible.has(row.id));
-  const values = rows.map((row) => finite(row[metric], metric, { positive: metric !== "mean" }));
-  if (rows.length === 0) return [];
-  const maximum = Math.max(...values);
-  const bestValue = METRICS[metric].better === "higher" ? maximum : Math.min(...values);
-  return rows
-    .map((row) => ({
-      ...row,
-      best: row[metric] === bestValue,
-      percent: maximum === 0 ? 0 : (row[metric] / maximum) * 100,
-    }))
-    .sort((left, right) => {
-      const difference = METRICS[metric].better === "higher"
-        ? right[metric] - left[metric]
-        : left[metric] - right[metric];
-      return difference || order.get(left.id) - order.get(right.id);
-    });
-}
+export { dashboardRows };
 
 function number(value) {
   return value.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -191,7 +163,9 @@ function chart(model, endpoint, metric) {
   const items = rows
     .map((row) => {
       const value = metric === "rps" ? `${number(row.rps)} req/s` : metric === "mean" ? `${number(row.mean)} ms` : `${number(row.memory)} MiB`;
-      const winner = row.best ? ` — best ${spec.label.toLowerCase()} in this run` : "";
+      const winner = row.best
+        ? metric === "rps" ? " — fastest in this run" : " — lowest in this run"
+        : "";
       return `<li data-chart-implementation="${escapeHtml(row.id)}"><div class="bar-label"><span>${escapeHtml(NAMES[row.id])}${winner}</span><strong>${value}</strong></div><meter min="0" max="100" value="${row.percent.toFixed(6)}">${row.percent.toFixed(1)}%</meter></li>`;
     })
     .join("");
@@ -200,10 +174,12 @@ function chart(model, endpoint, metric) {
 }
 
 function dashboardControls(model) {
-  const endpointButtons = ENDPOINTS.map((endpoint, index) => `<button type="button" role="tab" data-endpoint="${escapeHtml(endpoint)}" aria-selected="${index === 0 ? "true" : "false"}">${escapeHtml(TESTS[endpoint])}</button>`).join("");
+  const endpointButtons = ENDPOINTS.map((endpoint, index) => `<button type="button" role="tab" data-endpoint="${escapeHtml(endpoint)}" aria-selected="${index === 0 ? "true" : "false"}" tabindex="${index === 0 ? "0" : "-1"}">${escapeHtml(TESTS[endpoint])}</button>`).join("");
   const metricButtons = Object.entries(METRICS).map(([metric, spec], index) => `<button type="button" data-metric="${metric}" aria-pressed="${index === 0 ? "true" : "false"}">${escapeHtml(spec.label)}</button>`).join("");
-  const filters = model.implementations.map((id) => `<label><input type="checkbox" data-implementation-filter="${escapeHtml(id)}" checked> ${escapeHtml(NAMES[id])}</label>`).join("");
-  return `<div class="dashboard-controls"><div><span class="control-label">Endpoint</span><div class="segmented" role="tablist" aria-label="Benchmark endpoint">${endpointButtons}</div></div><div><span class="control-label">Metric</span><div class="segmented" aria-label="Comparison metric">${metricButtons}</div></div><fieldset><legend>Frameworks</legend><div class="filter-grid">${filters}</div></fieldset></div>`;
+  const languages = [...new Set(model.implementations.map((id) => STACKS[id].language))];
+  const languageFilters = languages.map((language) => `<label><input type="checkbox" data-language-filter="${escapeHtml(language)}" checked> ${escapeHtml(language)}</label>`).join("");
+  const frameworkFilters = model.implementations.map((id) => `<label><input type="checkbox" data-implementation-filter="${escapeHtml(id)}" checked> ${escapeHtml(NAMES[id])}</label>`).join("");
+  return `<div class="dashboard-controls"><div><span class="control-label">Endpoint</span><div class="segmented" role="tablist" aria-label="Benchmark endpoint">${endpointButtons}</div></div><div><span class="control-label">Metric</span><div class="segmented" aria-label="Comparison metric">${metricButtons}</div></div><fieldset><legend>Languages</legend><div class="filter-grid">${languageFilters}</div></fieldset><fieldset><legend>Frameworks</legend><div class="filter-grid">${frameworkFilters}</div></fieldset></div>`;
 }
 
 function versions(model) {
@@ -224,7 +200,7 @@ export function renderReport(report) {
   const model = viewModel(report);
   const charts = ENDPOINTS.flatMap((endpoint) => Object.keys(METRICS).map((metric) => chart(model, endpoint, metric))).join("");
   const conditions = model.conditions;
-  return `<article class="results"><header><p class="eyebrow">Verified official benchmark</p><h2>Results</h2><p>Cohort: <code>${escapeHtml(model.cohort)}</code> · Definition: <code>${escapeHtml(REGISTRY.definition.id)}</code>.</p><p>Measured <time datetime="${escapeHtml(model.completedAt)}">${escapeHtml(model.completedAt)}</time> on shared GitHub-hosted hardware. <a href="${escapeHtml(model.runUrl)}">Actions run</a>.</p><p>${conditions.api_cpus} CPU · ${(conditions.api_memory_bytes / 1048576).toFixed(0)} MiB · ${conditions.workers} worker · DB pool ${conditions.pool_max} · HTTP/${escapeHtml(conditions.http_version)} · ${conditions.connections} connections · ${conditions.warmup_seconds}s warm-up · ${conditions.runs} × ${conditions.duration_seconds}s.</p>${environment(model)}</header><section class="dashboard" data-dashboard><h2>Compare this run</h2><p class="dashboard-help">Switch endpoint and metric, or hide frameworks. Every value comes from this verified run; missing values are never shown as zero.</p>${dashboardControls(model)}<div class="charts" data-dashboard-charts>${charts}</div><p class="sr-only" aria-live="polite" data-dashboard-status>Showing ${escapeHtml(TESTS[ENDPOINTS[0]])} ${escapeHtml(METRICS.rps.label)}.</p></section><section><h2>Complete results table</h2>${table(model)}</section><section><h2>Versions in this run</h2><div class="version-grid">${versions(model)}</div></section><section class="limitation"><h2>What this result means</h2><p>This compares complete API stacks on shared hosted hardware, including runtime, framework, HTTP server, database driver, and container configuration. It is a reference for this run, not universal proof that one language or framework is always faster.</p><p><a href="https://github.com/tappe9/simple-api-benchmark/blob/${model.source}/docs/METHODOLOGY.md">Read the methodology</a> · <a href="./results/latest.json">Inspect the result JSON</a></p></section></article>`;
+  return `<article class="results"><header><p class="eyebrow">Verified official benchmark</p><h2>Results</h2><p>Cohort: <code>${escapeHtml(model.cohort)}</code> · Definition: <code>${escapeHtml(REGISTRY.definition.id)}</code>.</p><p>Measured <time datetime="${escapeHtml(model.completedAt)}">${escapeHtml(model.completedAt)}</time> on shared GitHub-hosted hardware. <a href="${escapeHtml(model.runUrl)}">Actions run</a>.</p><p>${conditions.api_cpus} CPU · ${(conditions.api_memory_bytes / 1048576).toFixed(0)} MiB · ${conditions.workers} worker · DB pool ${conditions.pool_max} · HTTP/${escapeHtml(conditions.http_version)} · ${conditions.connections} connections · ${conditions.warmup_seconds}s warm-up · ${conditions.runs} × ${conditions.duration_seconds}s.</p>${environment(model)}</header><section class="dashboard" data-dashboard><h2>Compare this run</h2><p class="dashboard-help">Switch endpoint and metric, or filter by language and framework. Every value comes from this verified run; missing values are never shown as zero.</p>${dashboardControls(model)}<div class="charts" data-dashboard-charts>${charts}</div><p class="sr-only" aria-live="polite" data-dashboard-status>Showing ${escapeHtml(TESTS[ENDPOINTS[0]])} ${escapeHtml(METRICS.rps.label)}.</p></section><section><h2>Complete results table</h2>${table(model)}</section><section><h2>Versions in this run</h2><div class="version-grid">${versions(model)}</div></section><section class="limitation"><h2>What this result means</h2><p>This compares complete API stacks on shared hosted hardware, including runtime, framework, HTTP server, database driver, and container configuration. It is a reference for this run, not universal proof that one language or framework is always faster.</p><p><a href="https://github.com/tappe9/simple-api-benchmark/blob/${model.source}/docs/METHODOLOGY.md">Read the methodology</a> · <a href="./results/latest.json">Inspect the result JSON</a></p></section></article>`;
 }
 
 export async function loadReport(fetcher = fetch) {
@@ -241,68 +217,15 @@ export async function loadReport(fetcher = fetch) {
   }
 }
 
-function wireDashboard(root, model) {
-  const dashboard = root.querySelector("[data-dashboard]");
-  if (!dashboard) return;
-  let endpoint = ENDPOINTS[0];
-  let metric = "rps";
-  const visible = new Set(model.implementations);
-  const refresh = () => {
-    dashboard.querySelectorAll("[data-endpoint]").forEach((button) => button.setAttribute("aria-selected", String(button.dataset.endpoint === endpoint)));
-    dashboard.querySelectorAll("[data-metric]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.metric === metric)));
-    dashboard.querySelectorAll("[data-chart]").forEach((section) => {
-      section.hidden = section.dataset.chartEndpoint !== endpoint || section.dataset.chartMetric !== metric;
-      section.querySelectorAll("[data-chart-implementation]").forEach((item) => { item.hidden = !visible.has(item.dataset.chartImplementation); });
-    });
-    root.querySelectorAll("[data-result-row]").forEach((row) => { row.hidden = row.dataset.rowEndpoint !== endpoint || !visible.has(row.dataset.implementation); });
-    const status = dashboard.querySelector("[data-dashboard-status]");
-    if (status) status.textContent = `Showing ${TESTS[endpoint]} ${METRICS[metric].label} for ${visible.size} framework${visible.size === 1 ? "" : "s"}.`;
-  };
-  dashboard.addEventListener("click", (event) => {
-    const endpointButton = event.target.closest("[data-endpoint]");
-    if (endpointButton) endpoint = endpointButton.dataset.endpoint;
-    const metricButton = event.target.closest("[data-metric]");
-    if (metricButton) metric = metricButton.dataset.metric;
-    refresh();
-  });
-  dashboard.addEventListener("change", (event) => {
-    const filter = event.target.closest("[data-implementation-filter]");
-    if (!filter) return;
-    if (filter.checked) visible.add(filter.dataset.implementationFilter);
-    else visible.delete(filter.dataset.implementationFilter);
-    refresh();
-  });
-  refresh();
-}
-
-function wireTheme() {
-  const button = document.getElementById("theme-toggle");
-  if (!button) return;
-  const root = document.documentElement;
-  const stored = localStorage.getItem("sab-theme");
-  const initial = stored === "dark" ? "dark" : "light";
-  const apply = (theme) => {
-    root.dataset.theme = theme;
-    button.setAttribute("aria-pressed", String(theme === "dark"));
-    button.textContent = theme === "dark" ? "Use light theme" : "Use dark theme";
-  };
-  apply(initial);
-  button.addEventListener("click", () => {
-    const next = root.dataset.theme === "dark" ? "light" : "dark";
-    localStorage.setItem("sab-theme", next);
-    apply(next);
-  });
-}
-
 async function boot() {
-  wireTheme();
+  wireTheme(document);
   const target = document.getElementById("results");
   if (!target) return;
   const state = await loadReport();
   if (state.state === "ready") {
     target.removeAttribute("role");
     target.innerHTML = state.html;
-    wireDashboard(target, state.model);
+    wireDashboard(target, state.model, { tests: TESTS, metrics: METRICS, stacks: STACKS });
   } else {
     target.setAttribute("role", "status");
     target.textContent = state.message;
