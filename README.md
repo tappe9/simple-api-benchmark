@@ -4,9 +4,9 @@
 
 **Go vs Rust vs Node.js vs Python — same API, same limits, simple results.**
 
-Simple API Benchmark contains six API implementations with the same endpoints, Docker resource limits, and validation rules. The goal is not to declare a universal winner. The goal is to make a small, repeatable comparison that anyone can understand.
+Simple API Benchmark contains eight API implementations with the same endpoints, Docker resource limits, and validation rules. The goal is not to declare a universal winner. The goal is to make a small, repeatable comparison that anyone can understand.
 
-> **Project status:** v0.1.0 is released. CI, official benchmark automation, and the GitHub Pages results site are available. Go / Echo and Rust / Axum are implemented and CI-covered, while the published official benchmark remains on the frozen `four-stack-v1` cohort until a complete expanded cohort is enabled.
+> **Project status:** v0.1.0 is released. CI, official benchmark automation, and the GitHub Pages results site are available. Go / Echo, Rust / Axum, Node.js / Express, and Python / Flask are implemented and CI-covered, while the published official benchmark remains on the frozen `four-stack-v1` cohort until a complete expanded cohort is enabled.
 
 ## What is compared?
 
@@ -17,7 +17,9 @@ Simple API Benchmark contains six API implementations with the same endpoints, D
 | Rust | Actix Web |
 | Rust | Axum |
 | Node.js | Fastify |
+| Node.js | Express |
 | Python | FastAPI |
+| Python | Flask |
 
 Each implementation provides the same three benchmark endpoints:
 
@@ -208,7 +210,7 @@ make test-python-fastapi PYTHON=python3.14
 
 The complete acceptance target requires Python 3.14.7 on a POSIX host, Docker Compose v2, and Make. It installs the hash-locked development dependencies in a temporary virtual environment, runs Ruff and focused pytest tests, and verifies the real Docker service, DB errors and updates, resources, one worker, startup failure, SIGTERM shutdown, and container/network cleanup. See [Contributing](CONTRIBUTING.md) for focused tests without Docker.
 
-All six API implementations and the shared contract suite are available:
+All eight API implementations and the shared contract suite are available:
 
 ```bash
 make test-contract                       # all six APIs, one at a time
