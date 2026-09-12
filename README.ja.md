@@ -8,6 +8,49 @@ Simple API Benchmarkには、同じエンドポイント、同じDockerリソー
 
 > **現在の状態:** v0.1.0をリリース済みです。CI、公式benchmark自動化、GitHub Pagesの結果サイトを利用できます。Go / Echo、Rust / Axum、Node.js / Express、Python / Flaskは実装済みでCI対象ですが、完全な拡張cohortを有効化するまでは、公開中の公式benchmarkは凍結した`four-stack-v1`のままです。
 
+## 結果
+
+<!-- benchmark-results:start -->
+
+計測完了（UTC）: `2026-09-09T07:25:22.908825+00:00`
+Source: `94500edc982a0cfb09be73262266e46eea1cde45` · [Actions run](https://github.com/tappe9/simple-api-benchmark/actions/runs/34321830470)
+
+1 CPU・512 MiB・1 worker・DB pool 10・HTTP/1.1・50接続・warm-up 5秒・各endpointを30秒×3回。処理件数/秒が中央の1回から全指標を採用します。
+
+### スループット比較
+
+![JSONの処理件数/秒の比較](results/charts/json-throughput.svg)
+
+![PostgreSQLの処理件数/秒の比較](results/charts/postgresql-throughput.svg)
+
+![CPUの処理件数/秒の比較](results/charts/cpu-throughput.svg)
+
+<details>
+<summary>選択されたrunの全数値</summary>
+
+| バックエンド | テスト | 処理件数/秒 ↑ | 平均応答 ms ↓ | 観測最大メモリ MiB ↓ |
+| --- | --- | ---: | ---: | ---: |
+| Go / Gin | JSON | 62,360.983 | 0.800 | 13.080 |
+| Go / Gin | PostgreSQL | 27,337.810 | 1.827 | 16.130 |
+| Go / Gin | CPU | 306.113 | 162.939 | 15.940 |
+| Rust / Actix Web | JSON | 110,917.004 | 0.450 | 2.828 |
+| Rust / Actix Web | PostgreSQL | 22,723.975 | 2.198 | 4.547 |
+| Rust / Actix Web | CPU | 424.353 | 117.597 | 4.352 |
+| Node.js / Fastify | JSON | 46,833.611 | 1.066 | 42.500 |
+| Node.js / Fastify | PostgreSQL | 16,157.800 | 3.092 | 53.240 |
+| Node.js / Fastify | CPU | 158.943 | 312.997 | 51.280 |
+| Python / FastAPI | JSON | 6,307.000 | 7.925 | 40.530 |
+| Python / FastAPI | PostgreSQL | 3,127.435 | 15.982 | 42.080 |
+| Python / FastAPI | CPU | 16.840 | 2,840.372 | 42.020 |
+
+</details>
+
+↑ 多いほど高速、↓ 少ないほど良好です。各グラフはゼロ基準で、同一endpoint内の処理件数/秒だけを比較します。メモリはAPIコンテナだけの観測値で、PostgreSQLは含まず、短いピークを見逃す場合があります。共有GitHub-hosted環境でのAPIスタック全体の参考値であり、言語の普遍的な順位ではありません。
+
+[Result JSON](results/latest.json) · [History](results/history/) · [Detailed results site](https://tappe9.github.io/simple-api-benchmark/) · [Methodology](docs/METHODOLOGY.md) · [Versions and conditions](results/latest.json)
+
+<!-- benchmark-results:end -->
+
 ## 比較対象
 
 | 言語 | フレームワーク |
@@ -32,36 +75,6 @@ Simple API Benchmarkには、同じエンドポイント、同じDockerリソー
 `GET /health`は起動確認だけに使用します。
 
 下の公開結果は引き続き`four-stack-v1`、つまりGo / Gin、Rust / Actix Web、Node.js / Fastify、Python / FastAPIの4実装を表します。Go / Echo、Rust / Axum、Node.js / Express、Python / Flaskを既存のhistorical cohortへ暗黙に追加しません。
-
-## 結果
-
-<!-- benchmark-results:start -->
-
-計測完了（UTC）: `2026-09-09T07:25:22.908825+00:00`
-Source: `94500edc982a0cfb09be73262266e46eea1cde45` · [Actions run](https://github.com/tappe9/simple-api-benchmark/actions/runs/34321830470)
-
-1 CPU・512 MiB・1 worker・DB pool 10・HTTP/1.1・50接続・warm-up 5秒・各endpointを30秒×3回。処理件数/秒が中央の1回から全指標を採用します。
-
-| バックエンド | テスト | 処理件数/秒 ↑ | 平均応答 ms ↓ | 観測最大メモリ MiB ↓ |
-| --- | --- | ---: | ---: | ---: |
-| Go / Gin | JSON | 62,360.983 | 0.800 | 13.080 |
-| Go / Gin | PostgreSQL | 27,337.810 | 1.827 | 16.130 |
-| Go / Gin | CPU | 306.113 | 162.939 | 15.940 |
-| Rust / Actix Web | JSON | 110,917.004 | 0.450 | 2.828 |
-| Rust / Actix Web | PostgreSQL | 22,723.975 | 2.198 | 4.547 |
-| Rust / Actix Web | CPU | 424.353 | 117.597 | 4.352 |
-| Node.js / Fastify | JSON | 46,833.611 | 1.066 | 42.500 |
-| Node.js / Fastify | PostgreSQL | 16,157.800 | 3.092 | 53.240 |
-| Node.js / Fastify | CPU | 158.943 | 312.997 | 51.280 |
-| Python / FastAPI | JSON | 6,307.000 | 7.925 | 40.530 |
-| Python / FastAPI | PostgreSQL | 3,127.435 | 15.982 | 42.080 |
-| Python / FastAPI | CPU | 16.840 | 2,840.372 | 42.020 |
-
-↑ 多いほど高速、↓ 少ないほど良好です。メモリはAPIコンテナだけの観測値で、PostgreSQLは含まず、短いピークを見逃す場合があります。共有GitHub-hosted環境でのAPIスタック全体の参考値であり、言語の普遍的な順位ではありません。
-
-[Result JSON](results/latest.json) · [History](results/history/) · [Methodology](docs/METHODOLOGY.md) · [Versions and conditions](results/latest.json)
-
-<!-- benchmark-results:end -->
 
 ## 同じ条件
 

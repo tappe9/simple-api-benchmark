@@ -331,8 +331,13 @@ class GitPublicationTests(ModuleTest):
         changed = self.git("diff-tree", "--no-commit-id", "--name-only", "-r", commit).splitlines()
         history = [p for p in changed if p.startswith("results/history/")]
         self.assertEqual(len(history), 1)
+        charts = {
+    "results/charts/json-throughput.svg",
+    "results/charts/postgresql-throughput.svg",
+    "results/charts/cpu-throughput.svg",
+}
         self.assertEqual(
-            set(changed), {"README.md", "README.ja.md", "results/latest.json", *history}
+            set(changed), {"README.md", "README.ja.md", "results/latest.json", *history, *charts}
         )
         self.assertEqual(
             self.git("show", commit + ":results/latest.json"),
