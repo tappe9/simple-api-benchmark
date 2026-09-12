@@ -8,6 +8,49 @@ Simple API Benchmark contains eight API implementations with the same endpoints,
 
 > **Project status:** v0.1.0 is released. CI, official benchmark automation, and the GitHub Pages results site are available. Go / Echo, Rust / Axum, Node.js / Express, and Python / Flask are implemented and CI-covered, while the published official benchmark remains on the frozen `four-stack-v1` cohort until a complete expanded cohort is enabled.
 
+## Results
+
+<!-- benchmark-results:start -->
+
+Measured (UTC): `2026-09-09T07:25:22.908825+00:00`
+Source: `94500edc982a0cfb09be73262266e46eea1cde45` · [Actions run](https://github.com/tappe9/simple-api-benchmark/actions/runs/34321830470)
+
+1 CPU · 512 MiB · 1 worker · DB pool 10 · HTTP/1.1 · 50 connections · 5 s warm-up · 3 × 30 s per endpoint. Middle-throughput whole run selected.
+
+### Throughput at a glance
+
+![JSON throughput comparison in requests per second](results/charts/json-throughput.svg)
+
+![PostgreSQL throughput comparison in requests per second](results/charts/postgresql-throughput.svg)
+
+![CPU throughput comparison in requests per second](results/charts/cpu-throughput.svg)
+
+<details>
+<summary>Full selected-run values</summary>
+
+| Backend | Test | Requests/s ↑ | Mean response ms ↓ | Observed peak MiB ↓ |
+| --- | --- | ---: | ---: | ---: |
+| Go / Gin | JSON | 62,360.983 | 0.800 | 13.080 |
+| Go / Gin | PostgreSQL | 27,337.810 | 1.827 | 16.130 |
+| Go / Gin | CPU | 306.113 | 162.939 | 15.940 |
+| Rust / Actix Web | JSON | 110,917.004 | 0.450 | 2.828 |
+| Rust / Actix Web | PostgreSQL | 22,723.975 | 2.198 | 4.547 |
+| Rust / Actix Web | CPU | 424.353 | 117.597 | 4.352 |
+| Node.js / Fastify | JSON | 46,833.611 | 1.066 | 42.500 |
+| Node.js / Fastify | PostgreSQL | 16,157.800 | 3.092 | 53.240 |
+| Node.js / Fastify | CPU | 158.943 | 312.997 | 51.280 |
+| Python / FastAPI | JSON | 6,307.000 | 7.925 | 40.530 |
+| Python / FastAPI | PostgreSQL | 3,127.435 | 15.982 | 42.080 |
+| Python / FastAPI | CPU | 16.840 | 2,840.372 | 42.020 |
+
+</details>
+
+↑ Higher is better; ↓ lower is better. Every chart starts at zero and compares only throughput within one endpoint. Memory samples cover only the API container, not PostgreSQL, and can miss brief peaks. These are complete-stack reference results on shared GitHub-hosted hardware, not universal language rankings.
+
+[Result JSON](results/latest.json) · [History](results/history/) · [Detailed results site](https://tappe9.github.io/simple-api-benchmark/) · [Methodology](docs/METHODOLOGY.md) · [Versions and conditions](results/latest.json)
+
+<!-- benchmark-results:end -->
+
 ## What is compared?
 
 | Language | Framework |
@@ -32,36 +75,6 @@ Each implementation provides the same three benchmark endpoints:
 A separate `GET /health` endpoint is used only to check readiness.
 
 The published result below still represents `four-stack-v1`: Go / Gin, Rust / Actix Web, Node.js / Fastify, and Python / FastAPI. Go / Echo, Rust / Axum, Node.js / Express, and Python / Flask are not silently added to that historical cohort.
-
-## Results
-
-<!-- benchmark-results:start -->
-
-Measured (UTC): `2026-09-09T07:25:22.908825+00:00`
-Source: `94500edc982a0cfb09be73262266e46eea1cde45` · [Actions run](https://github.com/tappe9/simple-api-benchmark/actions/runs/34321830470)
-
-1 CPU · 512 MiB · 1 worker · DB pool 10 · HTTP/1.1 · 50 connections · 5 s warm-up · 3 × 30 s per endpoint. Middle-throughput whole run selected.
-
-| Backend | Test | Requests/s ↑ | Mean response ms ↓ | Observed peak MiB ↓ |
-| --- | --- | ---: | ---: | ---: |
-| Go / Gin | JSON | 62,360.983 | 0.800 | 13.080 |
-| Go / Gin | PostgreSQL | 27,337.810 | 1.827 | 16.130 |
-| Go / Gin | CPU | 306.113 | 162.939 | 15.940 |
-| Rust / Actix Web | JSON | 110,917.004 | 0.450 | 2.828 |
-| Rust / Actix Web | PostgreSQL | 22,723.975 | 2.198 | 4.547 |
-| Rust / Actix Web | CPU | 424.353 | 117.597 | 4.352 |
-| Node.js / Fastify | JSON | 46,833.611 | 1.066 | 42.500 |
-| Node.js / Fastify | PostgreSQL | 16,157.800 | 3.092 | 53.240 |
-| Node.js / Fastify | CPU | 158.943 | 312.997 | 51.280 |
-| Python / FastAPI | JSON | 6,307.000 | 7.925 | 40.530 |
-| Python / FastAPI | PostgreSQL | 3,127.435 | 15.982 | 42.080 |
-| Python / FastAPI | CPU | 16.840 | 2,840.372 | 42.020 |
-
-↑ Higher is better; ↓ lower is better. Memory samples cover only the API container, not PostgreSQL, and can miss brief peaks. These are complete-stack reference results on shared GitHub-hosted hardware, not universal language rankings.
-
-[Result JSON](results/latest.json) · [History](results/history/) · [Methodology](docs/METHODOLOGY.md) · [Versions and conditions](results/latest.json)
-
-<!-- benchmark-results:end -->
 
 ## Same conditions
 

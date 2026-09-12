@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" role="img">
+<title>PostgreSQL throughput comparison</title>
+<desc>Zero-based requests per second comparison for PostgreSQL. Measured 2026-09-09T07:25:22.908825+00:00; source 94500edc982a; Actions run 34321830470.</desc>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<g font-family="system-ui,-apple-system,Segoe UI,sans-serif" fill="#1f2328">
+<text x="24" y="34" font-size="22" font-weight="700">PostgreSQL throughput</text>
+<text x="24" y="58" font-size="13" fill="#57606a">requests/s · zero-based · measured 2026-09-09T07:25:22.908825+00:00</text>
+<line x1="230" y1="76" x2="230" y2="292" stroke="#8c959f" stroke-width="1"/>
+<text x="230" y="88" font-size="11" text-anchor="middle" fill="#57606a">0</text>
+<text x="24" y="113" font-size="14">Go / Gin</text>
+<rect x="230" y="96" width="500.000" height="22" rx="4" fill="#0969da"/>
+<text x="748" y="113" font-size="13" font-variant-numeric="tabular-nums">27,337.810</text>
+<text x="24" y="165" font-size="14">Rust / Actix Web</text>
+<rect x="230" y="148" width="415.614" height="22" rx="4" fill="#0969da"/>
+<text x="748" y="165" font-size="13" font-variant-numeric="tabular-nums">22,723.975</text>
+<text x="24" y="217" font-size="14">Node.js / Fastify</text>
+<rect x="230" y="200" width="295.521" height="22" rx="4" fill="#0969da"/>
+<text x="748" y="217" font-size="13" font-variant-numeric="tabular-nums">16,157.800</text>
+<text x="24" y="269" font-size="14">Python / FastAPI</text>
+<rect x="230" y="252" width="57.200" height="22" rx="4" fill="#0969da"/>
+<text x="748" y="269" font-size="13" font-variant-numeric="tabular-nums">3,127.435</text>
+<text x="730" y="340" font-size="11" text-anchor="end" fill="#57606a">Higher is better ↑</text>
+</g>
+</svg>
