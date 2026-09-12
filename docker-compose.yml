@@ -13,12 +13,9 @@ x-api-defaults: &api-defaults
     - "127.0.0.1:8080:8080"
   cpus: 1.0
   mem_limit: 512m
-  cap_drop:
-    - ALL
-  security_opt:
-    - no-new-privileges:true
-  networks:
-    - benchmark
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  networks: [benchmark]
   restart: "no"
 
 services:
@@ -29,119 +26,50 @@ services:
       POSTGRES_USER: benchmark
       POSTGRES_PASSWORD: benchmark
     healthcheck:
-      test:
-        - CMD-SHELL
-        - pg_isready --host 127.0.0.1 --username "$${POSTGRES_USER}" --dbname "$${POSTGRES_DB}"
+      test: [CMD-SHELL, 'pg_isready --host 127.0.0.1 --username "$${POSTGRES_USER}" --dbname "$${POSTGRES_DB}"']
       interval: 1s
       timeout: 5s
       retries: 30
       start_period: 5s
-    tmpfs:
-      - /var/lib/postgresql:rw,size=512m,mode=1777
-    volumes:
-      - ./database/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
-    networks:
-      - benchmark
+    tmpfs: [/var/lib/postgresql:rw,size=512m,mode=1777]
+    volumes: [./database/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro]
+    networks: [benchmark]
     restart: "no"
-
   go-gin:
     <<: *api-defaults
-    build:
-      context: ./apps/go-gin
-    environment:
-      <<: *database-environment
-      GIN_MODE: release
-    healthcheck:
-      test:
-        - CMD
-        - /go-gin
-        - healthcheck
-      interval: 2s
-      timeout: 3s
-      retries: 30
-      start_period: 5s
-
+    build: {context: ./apps/go-gin}
+    environment: {<<: *database-environment, GIN_MODE: release}
+    healthcheck: {test: [CMD, /go-gin, healthcheck], interval: 2s, timeout: 3s, retries: 30, start_period: 5s}
   go-echo:
     <<: *api-defaults
-    build:
-      context: ./apps/go-echo
-    environment:
-      <<: *database-environment
-    healthcheck:
-      test:
-        - CMD
-        - /go-echo
-        - healthcheck
-      interval: 2s
-      timeout: 3s
-      retries: 30
-      start_period: 5s
-
+    build: {context: ./apps/go-echo}
+    environment: {<<: *database-environment}
+    healthcheck: {test: [CMD, /go-echo, healthcheck], interval: 2s, timeout: 3s, retries: 30, start_period: 5s}
   node-fastify:
     <<: *api-defaults
-    build:
-      context: ./apps/node-fastify
-    environment:
-      <<: *database-environment
-      NODE_ENV: production
-    healthcheck:
-      test:
-        - CMD
-        - node
-        - src/healthcheck.js
-      interval: 2s
-      timeout: 3s
-      retries: 30
-      start_period: 5s
-
+    build: {context: ./apps/node-fastify}
+    environment: {<<: *database-environment, NODE_ENV: production}
+    healthcheck: {test: [CMD, node, src/healthcheck.js], interval: 2s, timeout: 3s, retries: 30, start_period: 5s}
+  node-express:
+    <<: *api-defaults
+    build: {context: ./apps/node-express}
+    environment: {<<: *database-environment, NODE_ENV: production}
+    healthcheck: {test: [CMD, node, src/healthcheck.js], interval: 2s, timeout: 3s, retries: 30, start_period: 5s}
   python-fastapi:
     <<: *api-defaults
-    build:
-      context: ./apps/python-fastapi
-    environment:
-      <<: *database-environment
-    healthcheck:
-      test:
-        - CMD
-        - python
-        - -m
-        - benchmark_api.healthcheck
-      interval: 2s
-      timeout: 3s
-      retries: 30
-      start_period: 5s
-
+    build: {context: ./apps/python-fastapi}
+    environment: {<<: *database-environment}
+    healthcheck: {test: [CMD, python, -m, benchmark_api.healthcheck], interval: 2s, timeout: 3s, retries: 30, start_period: 5s}
   rust-actix:
     <<: *api-defaults
-    build:
-      context: ./apps/rust-actix
-    environment:
-      <<: *database-environment
-    healthcheck:
-      test:
-        - CMD
-        - /usr/local/bin/rust-actix
-        - healthcheck
-      interval: 2s
-      timeout: 3s
-      retries: 30
-      start_period: 5s
-
+    build: {context: ./apps/rust-actix}
+    environment: {<<: *database-environment}
+    healthcheck: {test: [CMD, /usr/local/bin/rust-actix, healthcheck], interval: 2s, timeout: 3s, retries: 30, start_period: 5s}
   rust-axum:
     <<: *api-defaults
-    build:
-      context: ./apps/rust-axum
-    environment:
-      <<: *database-environment
-    healthcheck:
-      test:
-        - CMD
-        - /usr/local/bin/rust-axum
-        - healthcheck
-      interval: 2s
-      timeout: 3s
-      retries: 30
-      start_period: 5s
+    build: {context: ./apps/rust-axum}
+    environment: {<<: *database-environment}
+    healthcheck: {test: [CMD, /usr/local/bin/rust-axum, healthcheck], interval: 2s, timeout: 3s, retries: 30, start_period: 5s}
 
 networks:
   benchmark:
