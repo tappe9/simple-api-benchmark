@@ -1,19 +1,19 @@
-name: Flask development lock helper
+name: Flask development integration helper
 
 on:
   push:
     branches:
       - issue-32-python-flask
     paths:
+      - benchmark/implementations.json
       - apps/python-flask/requirements.in
-      - apps/python-flask/requirements-dev.in
       - .github/workflows/flask-development.yml
 
 permissions:
   contents: write
 
 jobs:
-  lock:
+  generate:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -23,41 +23,39 @@ jobs:
         with:
           python-version: '3.14.7'
           check-latest: false
-      - name: Generate hash-locked dependencies
+      - name: Patch Flask version extraction and generate projections
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check 'pip==24.3.1' 'pip-tools==7.5.1'
-          python -m piptools compile \
-            --quiet \
-            --generate-hashes \
-            --strip-extras \
-            --output-file apps/python-flask/requirements.lock \
-            apps/python-flask/requirements.in
-          printf 'pytest==9.1.1\nruff==0.16.5\n' > /tmp/flask-dev.in
-          python -m piptools compile \
-            --quiet \
-            --generate-hashes \
-            --strip-extras \
-            --output-file /tmp/flask-dev.lock \
-            /tmp/flask-dev.in
-          {
-            echo '# Development tools, in addition to the exact runtime dependency graph.'
-            echo '-r requirements.lock'
-            grep -v '^#' /tmp/flask-dev.lock | sed '/^[[:space:]]*$/d'
-          } > apps/python-flask/requirements-dev.lock
-          python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r apps/python-flask/requirements.lock
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('benchmark/environment.py')
+          text = path.read_text()
+          old = '''    python = dict(\n        re.findall(r"^([a-z]+)==([0-9.]+)$", read("python-fastapi/requirements.in"), re.MULTILINE)\n    )\n'''
+          new = '''    python = dict(\n        re.findall(r"^([a-z]+)==([0-9.]+)$", read("python-fastapi/requirements.in"), re.MULTILINE)\n    )\n    python_flask = dict(\n        re.findall(\n            r"^([a-z][a-z0-9-]*)==([0-9.]+)$",\n            read("python-flask/requirements.in"),\n            re.MULTILINE,\n        )\n    )\n'''
+          if old not in text:
+              raise SystemExit('FastAPI version extractor marker missing')
+          text = text.replace(old, new, 1)
+          old_entry = '        "python-fastapi": {"python": read("python-fastapi/.python-version").strip(), **python},\n'
+          new_entry = old_entry + '        "python-flask": {\n            "python": read("python-flask/.python-version").strip(),\n            **python_flask,\n        },\n'
+          if old_entry not in text:
+              raise SystemExit('FastAPI version entry marker missing')
+          path.write_text(text.replace(old_entry, new_entry, 1))
+          PY
+          python -m benchmark.registry --write
+          python -m benchmark.registry --check
           python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r apps/python-flask/requirements-dev.lock
-          python -m pip check
-      - name: Commit generated locks
+          python -m ruff format benchmark/environment.py tests/test_benchmark_python_flask_candidate.py tests/test_python_flask_acceptance.py tests/test_python_flask_service.py
+          python -m ruff check benchmark/environment.py tests/test_benchmark_python_flask_candidate.py tests/test_python_flask_acceptance.py tests/test_python_flask_service.py
+      - name: Commit generated integration
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add apps/python-flask/requirements.lock apps/python-flask/requirements-dev.lock
+          git add benchmark/environment.py benchmark/implementations.mk site/registry.mjs tests/test_benchmark_python_flask_candidate.py tests/test_python_flask_acceptance.py tests/test_python_flask_service.py
           if git diff --cached --quiet; then
             exit 0
           fi
-          git commit -m 'build: generate Flask dependency locks'
+          git commit -m 'build: generate Flask registry integration'
           git push origin HEAD:issue-32-python-flask
