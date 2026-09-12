@@ -57,16 +57,21 @@ class ReadmeChartTests(unittest.TestCase):
         self.assertIn("&lt;unsafe &amp; label&gt;", svg)
         self.assertNotIn("<unsafe", svg)
 
-    def test_readme_render_embeds_all_three_charts_with_accessible_fallback_table(self):
+    def test_both_readmes_embed_three_charts_with_accessible_fallback_table(self):
         from benchmark import generate_readme
 
-        text = generate_readme.render(self.report, "en")
-        self.assertIn("results/charts/json-throughput.svg", text)
-        self.assertIn("results/charts/postgresql-throughput.svg", text)
-        self.assertIn("results/charts/cpu-throughput.svg", text)
-        self.assertIn("<details>", text)
-        self.assertIn("| Backend | Test | Requests/s", text)
-        self.assertIn("Result JSON", text)
+        for locale, table_header in (
+            ("en", "| Backend | Test | Requests/s"),
+            ("ja", "| バックエンド | テスト | 処理件数/秒"),
+        ):
+            with self.subTest(locale=locale):
+                text = generate_readme.render(self.report, locale)
+                self.assertIn("results/charts/json-throughput.svg", text)
+                self.assertIn("results/charts/postgresql-throughput.svg", text)
+                self.assertIn("results/charts/cpu-throughput.svg", text)
+                self.assertIn("<details>", text)
+                self.assertIn(table_header, text)
+                self.assertIn("Result JSON", text)
 
 
 class PublicationChartTests(unittest.TestCase):
