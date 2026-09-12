@@ -8,7 +8,8 @@
     {"id":"rust-axum","language":"Rust","framework":"Axum","display_name":"Rust / Axum","source_path":"apps/rust-axum","version_fields":["rust","axum","tokio","sqlx","serde","serde_json"],"acceptance_test":"tests/test_rust_axum_service.py","failure_test":"tests/test_rust_axum_acceptance.py"},
     {"id":"node-fastify","language":"Node.js","framework":"Fastify","display_name":"Node.js / Fastify","source_path":"apps/node-fastify","version_fields":["node","fastify","pg"],"acceptance_test":"tests/test_node_fastify_service.py","failure_test":"tests/test_node_fastify_acceptance.py"},
     {"id":"node-express","language":"Node.js","framework":"Express","display_name":"Node.js / Express","source_path":"apps/node-express","version_fields":["node","express","pg"],"acceptance_test":"tests/test_node_express_service.py","failure_test":"tests/test_node_express_acceptance.py"},
-    {"id":"python-fastapi","language":"Python","framework":"FastAPI","display_name":"Python / FastAPI","source_path":"apps/python-fastapi","version_fields":["python","fastapi","uvicorn","asyncpg"],"acceptance_test":"tests/test_python_fastapi_service.py","failure_test":"tests/test_python_fastapi_acceptance.py"}
+    {"id":"python-fastapi","language":"Python","framework":"FastAPI","display_name":"Python / FastAPI","source_path":"apps/python-fastapi","version_fields":["python","fastapi","uvicorn","asyncpg"],"acceptance_test":"tests/test_python_fastapi_service.py","failure_test":"tests/test_python_fastapi_acceptance.py"},
+    {"id":"python-flask","language":"Python","framework":"Flask","display_name":"Python / Flask","source_path":"apps/python-flask","version_fields":["python","flask","waitress","psycopg","psycopg-binary","psycopg-pool"],"acceptance_test":"tests/test_python_flask_service.py","failure_test":"tests/test_python_flask_acceptance.py"}
   ],
   "cohorts": {"four-stack-v1":{"definition":"simple-api-v1","members":["go-gin","rust-actix","node-fastify","python-fastapi"]}}
 }
