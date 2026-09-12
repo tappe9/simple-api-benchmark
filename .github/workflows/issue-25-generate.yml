@@ -27,20 +27,22 @@ jobs:
 
           test = Path('tests/test_benchmark_publication.py')
           text = test.read_text()
-          old = '''        self.assertEqual(
-              set(changed), {"README.md", "README.ja.md", "results/latest.json", *history}
-          )'''.replace('              ', '            ')
-          new = '''        charts = {
+          target = '            set(changed), {"README.md", "README.ja.md", "results/latest.json", *history}\n'
+          if text.count(target) != 1:
+              raise SystemExit('publication expectation line did not match exactly once')
+          replacement = '            set(changed), {"README.md", "README.ja.md", "results/latest.json", *history, *charts}\n'
+          text = text.replace(target, replacement)
+          assertion = '        self.assertEqual(\n' + replacement
+          if text.count(assertion) != 1:
+              raise SystemExit('publication assertion did not match exactly once')
+          charts = '''        charts = {
               "results/charts/json-throughput.svg",
               "results/charts/postgresql-throughput.svg",
               "results/charts/cpu-throughput.svg",
           }
-          self.assertEqual(
-              set(changed), {"README.md", "README.ja.md", "results/latest.json", *history, *charts}
-          )'''.replace('              ', '            ')
-          if text.count(old) != 1:
-              raise SystemExit('publication expectation pattern did not match exactly once')
-          test.write_text(text.replace(old, new))
+          '''.replace('              ', '            ')
+          text = text.replace(assertion, charts + assertion)
+          test.write_text(text)
 
           def move_results(path, heading, anchor):
               file = Path(path)
