@@ -79,6 +79,27 @@ test('view model preserves all three observed runs and identifies the selected w
   assert.equal(row.rpsMax, Math.max(...row.runs.map(run => run.rps)));
 });
 
+test('observed throughput range handles zero spread, ties, and wide spread deterministically', async () => {
+  const { viewModel } = await subject();
+
+  const zero = await report();
+  const zeroEntry = zero.implementations[0].endpoints[0];
+  for (const run of zeroEntry.runs) run.requests_per_second = 100;
+  zeroEntry.selected.requests_per_second = 100;
+  let row = viewModel(zero).rows.find(candidate => candidate.id === zero.implementations[0].implementation && candidate.endpoint === zeroEntry.endpoint);
+  assert.equal(row.rpsMin, 100);
+  assert.equal(row.rpsMax, 100);
+
+  const wide = await report();
+  const wideEntry = wide.implementations[0].endpoints[0];
+  [1, 100, 10000].forEach((value, index) => { wideEntry.runs[index].requests_per_second = value; });
+  const selectedRun = wideEntry.selected.run;
+  wideEntry.selected.requests_per_second = wideEntry.runs[selectedRun - 1].requests_per_second;
+  row = viewModel(wide).rows.find(candidate => candidate.id === wide.implementations[0].implementation && candidate.endpoint === wideEntry.endpoint);
+  assert.equal(row.rpsMin, 1);
+  assert.equal(row.rpsMax, 10000);
+});
+
 test('run validation fails closed on incomplete or inconsistent observed runs', async () => {
   const { viewModel } = await subject();
   const missingRun = await report();
