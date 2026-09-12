@@ -79,6 +79,16 @@ test('view model preserves all three observed runs and identifies the selected w
   assert.equal(row.rpsMax, Math.max(...row.runs.map(run => run.rps)));
 });
 
+test('selected whole-run equality is semantic and does not depend on JSON key order', async () => {
+  const { viewModel } = await subject();
+  const source = await report();
+  const entry = source.implementations[0].endpoints[0];
+  entry.selected = Object.fromEntries(Object.entries(entry.selected).reverse());
+  const model = viewModel(source);
+  const row = model.rows.find(candidate => candidate.id === source.implementations[0].implementation && candidate.endpoint === entry.endpoint);
+  assert.equal(row.selectedRun, entry.selected.run);
+});
+
 test('observed throughput range handles zero spread, ties, and wide spread deterministically', async () => {
   const { viewModel } = await subject();
 
