@@ -1,0 +1,63 @@
+name: Flask development lock helper
+
+on:
+  push:
+    branches:
+      - issue-32-python-flask
+    paths:
+      - apps/python-flask/requirements.in
+      - apps/python-flask/requirements-dev.in
+      - .github/workflows/flask-development.yml
+
+permissions:
+  contents: write
+
+jobs:
+  lock:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: issue-32-python-flask
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.14.7'
+          check-latest: false
+      - name: Generate hash-locked dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check 'pip-tools==7.5.1'
+          python -m piptools compile \
+            --quiet \
+            --generate-hashes \
+            --strip-extras \
+            --output-file apps/python-flask/requirements.lock \
+            apps/python-flask/requirements.in
+          printf 'pytest==9.1.1\nruff==0.16.5\n' > /tmp/flask-dev.in
+          python -m piptools compile \
+            --quiet \
+            --generate-hashes \
+            --strip-extras \
+            --output-file /tmp/flask-dev.lock \
+            /tmp/flask-dev.in
+          {
+            echo '# Development tools, in addition to the exact runtime dependency graph.'
+            echo '-r requirements.lock'
+            grep -v '^#' /tmp/flask-dev.lock | sed '/^[[:space:]]*$/d'
+          } > apps/python-flask/requirements-dev.lock
+          python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r apps/python-flask/requirements.lock
+          python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r apps/python-flask/requirements-dev.lock
+          python -m pip check
+      - name: Commit generated locks
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/python-flask/requirements.lock apps/python-flask/requirements-dev.lock
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m 'build: generate Flask dependency locks'
+          git push origin HEAD:issue-32-python-flask
