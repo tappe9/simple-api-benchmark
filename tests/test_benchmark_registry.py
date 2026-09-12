@@ -28,7 +28,15 @@ class RegistryBoundaryTests(unittest.TestCase):
         self.assertEqual(registry["schema_version"], 1)
         self.assertEqual(
             [entry["id"] for entry in registry["implementations"]],
-            ["go-gin", "go-echo", "rust-actix", "rust-axum", "node-fastify", "python-fastapi"],
+            [
+                "go-gin",
+                "go-echo",
+                "rust-actix",
+                "rust-axum",
+                "node-fastify",
+                "node-express",
+                "python-fastapi",
+            ],
         )
 
     def test_report_validation_does_not_import_measurement_orchestration(self):

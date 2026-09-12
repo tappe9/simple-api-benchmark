@@ -99,6 +99,18 @@ export const REGISTRY = {
       ]
     },
     {
+      "display_name": "Node.js / Express",
+      "framework": "Express",
+      "id": "node-express",
+      "language": "Node.js",
+      "source_path": "apps/node-express",
+      "version_fields": [
+        "node",
+        "express",
+        "pg"
+      ]
+    },
+    {
       "display_name": "Python / FastAPI",
       "framework": "FastAPI",
       "id": "python-fastapi",

@@ -94,6 +94,23 @@ services:
       retries: 30
       start_period: 5s
 
+  node-express:
+    <<: *api-defaults
+    build:
+      context: ./apps/node-express
+    environment:
+      <<: *database-environment
+      NODE_ENV: production
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - src/healthcheck.js
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
   python-fastapi:
     <<: *api-defaults
     build:
