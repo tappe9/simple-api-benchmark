@@ -59,9 +59,15 @@ class CohortPublicationTests(unittest.TestCase):
         self.assertEqual(self.git("rev-parse", commit + "^"), self.source)
         changed = self.git("diff-tree", "--no-commit-id", "--name-only", "-r", commit).splitlines()
         history = [path for path in changed if path.startswith("results/history/")]
+        charts = {
+            "results/charts/json-throughput.svg",
+            "results/charts/postgresql-throughput.svg",
+            "results/charts/cpu-throughput.svg",
+        }
         self.assertEqual(len(history), 1)
         self.assertEqual(
-            set(changed), {"README.md", "README.ja.md", "results/latest.json", *history}
+            set(changed),
+            {"README.md", "README.ja.md", "results/latest.json", *history, *charts},
         )
         self.assertEqual(
             self.git("show", commit + ":results/latest.json"),
