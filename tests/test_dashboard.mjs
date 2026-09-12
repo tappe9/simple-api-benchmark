@@ -137,6 +137,37 @@ test('rendered results expose observed spread and expandable three-run details w
   assert.equal((html.match(/data-run-row/g) || []).length, 36);
 });
 
+test('history index validation accepts bounded verified paths and rejects ambiguous navigation data', async () => {
+  const { validateHistoryIndex } = await subject();
+  const valid = {
+    schema_version: 1,
+    runs: [
+      { id: '34321830470-1', completed_at: '2026-09-09T07:25:22Z', path: './results/history/2026-09-09T07-25-22Z-34321830470-1.json' },
+      { id: '33979190013-1', completed_at: '2026-09-05T17:16:43Z', path: './results/history/2026-09-05T17-16-43Z-33979190013-1.json' },
+    ],
+  };
+  assert.deepEqual(validateHistoryIndex(valid), valid);
+  assert.throws(() => validateHistoryIndex({ ...valid, schema_version: 2 }), /history schema/i);
+  assert.throws(() => validateHistoryIndex({ ...valid, runs: [...valid.runs, valid.runs[0]] }), /history run id/i);
+  assert.throws(() => validateHistoryIndex({ ...valid, runs: [{ ...valid.runs[0], path: '../private.json' }] }), /history path/i);
+  assert.throws(() => validateHistoryIndex({ ...valid, runs: [{ ...valid.runs[0], id: 'bad' }] }), /history run id/i);
+});
+
+test('historical render keeps selected report provenance and exact JSON link while warning against cross-run inference', async () => {
+  const { renderReport } = await subject();
+  const source = await report();
+  const resultPath = './results/history/2026-09-09T07-25-22Z-34321830470-1.json';
+  const html = renderReport(source, { resultPath, selectedHistoryId: '34321830470-1' });
+  assert.match(html, /data-history-view/);
+  assert.match(html, /Historical verified run/);
+  assert.match(html, /shared host/i);
+  assert.match(html, /does not infer regressions/i);
+  assert.match(html, new RegExp(source.metadata.github.source_commit));
+  assert.match(html, new RegExp(source.metadata.github.run_id));
+  assert.match(html, /data-result-json/);
+  assert.match(html, new RegExp(resultPath.replaceAll('.', '\\.').replaceAll('/', '\\/')));
+});
+
 test('rendered results expose accessible dashboard controls while keeping the full verified table', async () => {
   const { renderReport } = await subject();
   const html = renderReport(await report());
