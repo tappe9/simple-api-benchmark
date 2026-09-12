@@ -1,71 +1,61 @@
-name: Flask development integration helper
+name: Flask development docs helper
 
 on:
   push:
     branches:
       - issue-32-python-flask
     paths:
-      - benchmark/implementations.json
-      - apps/python-flask/requirements.in
       - .github/workflows/flask-development.yml
 
 permissions:
   contents: write
 
 jobs:
-  generate:
+  docs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           ref: issue-32-python-flask
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: '3.14.7'
-          check-latest: false
-      - name: Patch Flask version extraction and generate projections
+      - name: Synchronize README implementation inventory
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-          path = Path('benchmark/environment.py')
-          text = path.read_text()
-          old = '''    python = dict(\n        re.findall(r"^([a-z]+)==([0-9.]+)$", read("python-fastapi/requirements.in"), re.MULTILINE)\n    )\n'''
-          new = '''    python = dict(\n        re.findall(r"^([a-z]+)==([0-9.]+)$", read("python-fastapi/requirements.in"), re.MULTILINE)\n    )\n    python_flask = dict(\n        re.findall(\n            r"^([a-z][a-z0-9-]*)==([0-9.]+)$",\n            read("python-flask/requirements.in"),\n            re.MULTILINE,\n        )\n    )\n'''
-          if old not in text:
-              raise SystemExit('FastAPI version extractor marker missing')
-          text = text.replace(old, new, 1)
-          old_entry = '        "python-fastapi": {"python": read("python-fastapi/.python-version").strip(), **python},\n'
-          new_entry = old_entry + '        "python-flask": {\n            "python": read("python-flask/.python-version").strip(),\n            **python_flask,\n        },\n'
-          if old_entry not in text:
-              raise SystemExit('FastAPI version entry marker missing')
-          path.write_text(text.replace(old_entry, new_entry, 1))
 
-          service = Path('tests/test_python_flask_service.py')
-          source = service.read_text()
-          if source.startswith('#!/usr/bin/env python3\n'):
-              source = source.split('\n', 1)[1]
-          source = source.replace(
-              'result = subprocess.run(command, cwd=cwd, capture_output=True, text=True, timeout=timeout)',
-              'result = subprocess.run(command, cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False)',
+          en = Path('README.md')
+          text = en.read_text()
+          text = text.replace('contains six API implementations', 'contains eight API implementations')
+          text = text.replace(
+              'Go / Echo and Rust / Axum are implemented and CI-covered, while',
+              'Go / Echo, Rust / Axum, Node.js / Express, and Python / Flask are implemented and CI-covered, while',
           )
-          service.write_text(source)
+          text = text.replace('| Node.js | Fastify |\n| Python | FastAPI |', '| Node.js | Fastify |\n| Node.js | Express |\n| Python | FastAPI |\n| Python | Flask |', 1)
+          text = text.replace('All six API implementations', 'All eight API implementations')
+          en.write_text(text)
+
+          ja = Path('README.ja.md')
+          text = ja.read_text()
+          text = text.replace('6つのAPI実装があります', '8つのAPI実装があります')
+          text = text.replace(
+              'Go / EchoとRust / Axumは実装済みでCI対象ですが',
+              'Go / Echo、Rust / Axum、Node.js / Express、Python / Flaskは実装済みでCI対象ですが',
+          )
+          text = text.replace('| Node.js | Fastify |\n| Python | FastAPI |', '| Node.js | Fastify |\n| Node.js | Express |\n| Python | FastAPI |\n| Python | Flask |', 1)
+          text = text.replace('6つのAPI実装', '8つのAPI実装')
+          ja.write_text(text)
           PY
-          python -m benchmark.registry --write
-          python -m benchmark.registry --check
-          python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r apps/python-flask/requirements-dev.lock
-          python -m ruff format benchmark/environment.py tests/test_benchmark_python_flask_candidate.py tests/test_python_flask_acceptance.py tests/test_python_flask_service.py
-          python -m ruff check benchmark/environment.py tests/test_benchmark_python_flask_candidate.py tests/test_python_flask_acceptance.py tests/test_python_flask_service.py
-      - name: Commit generated integration
+          git diff --check
+      - name: Commit README synchronization
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add benchmark/environment.py benchmark/implementations.mk site/registry.mjs tests/test_benchmark_python_flask_candidate.py tests/test_python_flask_acceptance.py tests/test_python_flask_service.py
+          git add README.md README.ja.md
           if git diff --cached --quiet; then
             exit 0
           fi
-          git commit -m 'build: generate Flask registry integration'
+          git commit -m 'docs: synchronize eight implementation inventory'
           git push origin HEAD:issue-32-python-flask
