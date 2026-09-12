@@ -39,7 +39,11 @@ export const REGISTRY = {
       "id": "go-gin",
       "language": "Go",
       "source_path": "apps/go-gin",
-      "version_fields": ["go", "gin", "pgx"]
+      "version_fields": [
+        "go",
+        "gin",
+        "pgx"
+      ]
     },
     {
       "display_name": "Go / Echo",
@@ -47,7 +51,11 @@ export const REGISTRY = {
       "id": "go-echo",
       "language": "Go",
       "source_path": "apps/go-echo",
-      "version_fields": ["go", "echo", "pgx"]
+      "version_fields": [
+        "go",
+        "echo",
+        "pgx"
+      ]
     },
     {
       "display_name": "Rust / Actix Web",
@@ -55,7 +63,13 @@ export const REGISTRY = {
       "id": "rust-actix",
       "language": "Rust",
       "source_path": "apps/rust-actix",
-      "version_fields": ["rust", "actix-web", "sqlx", "serde", "serde_json"]
+      "version_fields": [
+        "rust",
+        "actix-web",
+        "sqlx",
+        "serde",
+        "serde_json"
+      ]
     },
     {
       "display_name": "Rust / Axum",
@@ -63,7 +77,14 @@ export const REGISTRY = {
       "id": "rust-axum",
       "language": "Rust",
       "source_path": "apps/rust-axum",
-      "version_fields": ["rust", "axum", "tokio", "sqlx", "serde", "serde_json"]
+      "version_fields": [
+        "rust",
+        "axum",
+        "tokio",
+        "sqlx",
+        "serde",
+        "serde_json"
+      ]
     },
     {
       "display_name": "Node.js / Fastify",
@@ -71,7 +92,11 @@ export const REGISTRY = {
       "id": "node-fastify",
       "language": "Node.js",
       "source_path": "apps/node-fastify",
-      "version_fields": ["node", "fastify", "pg"]
+      "version_fields": [
+        "node",
+        "fastify",
+        "pg"
+      ]
     },
     {
       "display_name": "Node.js / Express",
@@ -79,7 +104,11 @@ export const REGISTRY = {
       "id": "node-express",
       "language": "Node.js",
       "source_path": "apps/node-express",
-      "version_fields": ["node", "express", "pg"]
+      "version_fields": [
+        "node",
+        "express",
+        "pg"
+      ]
     },
     {
       "display_name": "Python / FastAPI",
@@ -87,7 +116,12 @@ export const REGISTRY = {
       "id": "python-fastapi",
       "language": "Python",
       "source_path": "apps/python-fastapi",
-      "version_fields": ["python", "fastapi", "uvicorn", "asyncpg"]
+      "version_fields": [
+        "python",
+        "fastapi",
+        "uvicorn",
+        "asyncpg"
+      ]
     }
   ],
   "legacy_cohort": "four-stack-v1"
