@@ -31,7 +31,7 @@ Each implementation provides the same three benchmark endpoints:
 
 A separate `GET /health` endpoint is used only to check readiness.
 
-The published result below still represents `four-stack-v1`: Go / Gin, Rust / Actix Web, Node.js / Fastify, and Python / FastAPI. Neither Go / Echo nor Rust / Axum is silently added to that historical cohort.
+The published result below still represents `four-stack-v1`: Go / Gin, Rust / Actix Web, Node.js / Fastify, and Python / FastAPI. Go / Echo, Rust / Axum, Node.js / Express, and Python / Flask are not silently added to that historical cohort.
 
 ## Results
 
@@ -213,7 +213,7 @@ The complete acceptance target requires Python 3.14.7 on a POSIX host, Docker Co
 All eight API implementations and the shared contract suite are available:
 
 ```bash
-make test-contract                       # all six APIs, one at a time
+make test-contract                       # all eight APIs, one at a time
 make test-contract CONTRACT_IMPL=go-echo # one API with the same contract
 ```
 
@@ -223,8 +223,8 @@ See [the shared contract guide](CONTRIBUTING.md#shared-contract-checks) for
 requirements, standalone base-URL checks, and cleanup limits. The local benchmark runner
 is available, and pull requests run the same checks plus a non-publishing smoke benchmark.
 Official results come only from the trusted-main [weekly/manual workflow](docs/AUTOMATION.md).
-The active official cohort remains `four-stack-v1`, so adding Echo and Axum to the implementation
-registry does not alter or republish the existing official result set.
+The active official cohort remains `four-stack-v1`, so registering Echo, Axum, Express, and Flask
+does not alter or republish the existing official result set.
 
 ## Run the local benchmark
 
