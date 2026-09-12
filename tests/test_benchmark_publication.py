@@ -332,10 +332,10 @@ class GitPublicationTests(ModuleTest):
         history = [p for p in changed if p.startswith("results/history/")]
         self.assertEqual(len(history), 1)
         charts = {
-    "results/charts/json-throughput.svg",
-    "results/charts/postgresql-throughput.svg",
-    "results/charts/cpu-throughput.svg",
-}
+            "results/charts/json-throughput.svg",
+            "results/charts/postgresql-throughput.svg",
+            "results/charts/cpu-throughput.svg",
+        }
         self.assertEqual(
             set(changed), {"README.md", "README.ja.md", "results/latest.json", *history, *charts}
         )
