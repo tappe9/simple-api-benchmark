@@ -33,10 +33,10 @@ jobs:
               },
               'README.ja.md': {
                   '# 6実装を1つずつ順番に検証': '# 8実装を1つずつ順番に検証',
-                  '現行の公式cohortは`four-stack-v1`のままなので、EchoとAxumを実装registryへ追加しても、既存の公式結果は変更・再公開されません。':
-                  '現行の公式cohortは`four-stack-v1`のままなので、Echo、Axum、Express、Flaskを実装registryへ追加しても、既存の公式結果は変更・再公開されません。',
-                  'Go / EchoとRust / Axumは、この過去cohortへ暗黙には追加されません。':
-                  'Go / Echo、Rust / Axum、Node.js / Express、Python / Flaskは、この過去cohortへ暗黙には追加されません。',
+                  'active official cohortは引き続き`four-stack-v1`なので、EchoとAxumをimplementation registryへ追加しても\n既存の公式結果を変更したり再公開したりはしません。':
+                  'active official cohortは引き続き`four-stack-v1`なので、Echo、Axum、Express、Flaskをimplementation registryへ追加しても\n既存の公式結果を変更したり再公開したりはしません。',
+                  'Go / EchoやRust / Axumを既存のhistorical cohortへ暗黙に追加しません。':
+                  'Go / Echo、Rust / Axum、Node.js / Express、Python / Flaskを既存のhistorical cohortへ暗黙に追加しません。',
               },
           }
           for filename, mapping in replacements.items():
