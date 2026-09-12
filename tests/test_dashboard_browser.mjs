@@ -192,7 +192,8 @@ test('Pages dashboard works in a real browser under the project subpath', { time
 
   reportMode = 'malformed';
   await cdp.send('Page.reload', { ignoreCache: true });
-  await waitFor(cdp, `document.getElementById('results')?.getAttribute('role') === 'status'`);
+  await waitFor(cdp, `document.getElementById('results')?.textContent.includes('temporarily unavailable') === true`);
+  assert.equal(await evaluate(cdp, `document.getElementById('results').getAttribute('role')`), 'status');
   assert.match(await evaluate(cdp, `document.getElementById('results').textContent`), /temporarily unavailable/i);
   assert.equal(await evaluate(cdp, `document.getElementById('results').textContent.includes('0.000')`), false);
 });
