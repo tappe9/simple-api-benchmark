@@ -123,13 +123,21 @@ test('Pages dashboard works in a real browser under the project subpath', { time
   const browser = spawn(chromeBinary(), [
     '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
     `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`, page,
-  ], { stdio: 'ignore' });
+  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let browserStderr = '';
+  browser.stderr.setEncoding('utf8');
+  browser.stderr.on('data', chunk => { browserStderr += chunk; });
   t.after(async () => {
     browser.kill('SIGKILL');
     await rm(profile, { recursive: true, force: true });
   });
 
-  const targets = await pollJson(`http://127.0.0.1:${debugPort}/json/list`);
+  let targets;
+  try {
+    targets = await pollJson(`http://127.0.0.1:${debugPort}/json/list`);
+  } catch (error) {
+    throw new Error(`Chrome DevTools did not become ready (exit=${browser.exitCode ?? 'running'}): ${browserStderr.trim() || '<no stderr>'}`, { cause: error });
+  }
   const target = targets.find(entry => entry.type === 'page');
   assert.ok(target?.webSocketDebuggerUrl, 'browser page target must be available');
   const cdp = await connectCdp(target.webSocketDebuggerUrl);
