@@ -92,13 +92,17 @@ def memory_bytes(raw: str, container: str) -> int:
     text = data.get("MemUsage")
     require(type(text) is str, "memory sample has no MemUsage string")
     match = re.fullmatch(
-        r"([0-9]+(?:\.[0-9]+)?)(B|KiB|MiB|GiB) / ([0-9]+(?:\.[0-9]+)?)(B|KiB|MiB|GiB)", text
+        r"([0-9]+(?:\.[0-9]+)?)(B|KiB|MiB|GiB) / ([0-9]+(?:\.[0-9]+)?)(B|KiB|MiB|GiB)",
+        text,
     )
     require(match is not None, f"unrecognized Docker memory value/unit: {text!r}")
     units = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}
     usage = int((Decimal(match[1]) * units[match[2]]).to_integral_value(rounding=ROUND_CEILING))
     limit = Decimal(match[3]) * units[match[4]]
-    require(limit == 536870912 and 0 < usage <= limit, "invalid memory sample or API memory limit")
+    require(
+        limit == 536870912 and 0 < usage <= limit,
+        "invalid memory sample or API memory limit",
+    )
     return usage
 
 
@@ -153,7 +157,18 @@ def registered_pinned_versions() -> dict:
     node = strict_json(read("node-fastify/package.json").encode())
     node_express = strict_json(read("node-express/package.json").encode())
     python = dict(
-        re.findall(r"^([a-z]+)==([0-9.]+)$", read("python-fastapi/requirements.in"), re.MULTILINE)
+        re.findall(
+            r"^([a-z]+)==([0-9.]+)$",
+            read("python-fastapi/requirements.in"),
+            re.MULTILINE,
+        )
+    )
+    python_flask = dict(
+        re.findall(
+            r"^([a-z][a-z0-9-]*)==([0-9.]+)$",
+            read("python-flask/requirements.in"),
+            re.MULTILINE,
+        )
     )
     versions = {
         "go-gin": {
@@ -183,8 +198,18 @@ def registered_pinned_versions() -> dict:
             "serde_json": match(r'^serde_json = "=([0-9.]+)"$', axum),
         },
         "node-fastify": {"node": node["engines"]["node"], **node["dependencies"]},
-        "node-express": {"node": node_express["engines"]["node"], **node_express["dependencies"]},
-        "python-fastapi": {"python": read("python-fastapi/.python-version").strip(), **python},
+        "node-express": {
+            "node": node_express["engines"]["node"],
+            **node_express["dependencies"],
+        },
+        "python-fastapi": {
+            "python": read("python-fastapi/.python-version").strip(),
+            **python,
+        },
+        "python-flask": {
+            "python": read("python-flask/.python-version").strip(),
+            **python_flask,
+        },
     }
     require(
         set(versions) == set(implementation_ids()),
@@ -255,7 +280,11 @@ def provenance(oha: Path) -> dict:
                 "KernelVersion",
             )
         },
-        "oha": {"version": VERSION, "asset": platform_asset(), "sha256": SHA256[platform_asset()]},
+        "oha": {
+            "version": VERSION,
+            "asset": platform_asset(),
+            "sha256": SHA256[platform_asset()],
+        },
         "versions": pinned_versions(),
         "lock_sha256": {
             str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
@@ -293,7 +322,12 @@ class DockerEnvironment:
             "use docker compose without context or project overrides",
         )
         require(type(audit_health_events) is bool, "health event audit flag must be boolean")
-        self.prefix = executable + ["-f", str(ROOT / "docker-compose.yml"), "-p", self.project]
+        self.prefix = executable + [
+            "-f",
+            str(ROOT / "docker-compose.yml"),
+            "-p",
+            self.project,
+        ]
         self.artifacts = artifacts / self.project
         self.artifacts.mkdir(parents=True)
         self.oha = oha
@@ -307,7 +341,8 @@ class DockerEnvironment:
         self.readiness = None
         self.probe_command = None
         print(
-            f"Owned Compose project: {self.project}; raw diagnostics: {self.artifacts}", flush=True
+            f"Owned Compose project: {self.project}; raw diagnostics: {self.artifacts}",
+            flush=True,
         )
 
     def build(self, implementation: str) -> None:
@@ -370,7 +405,10 @@ class DockerEnvironment:
                 "API readiness was not healthy",
             )
             probe = state["Config"]["Healthcheck"]["Test"]
-            require(probe[0] == "CMD" and len(probe) > 1, "API health probe command unavailable")
+            require(
+                probe[0] == "CMD" and len(probe) > 1,
+                "API health probe command unavailable",
+            )
             self.probe_command = probe[1:]
             if self.audit_health_events:
                 readiness_completed = datetime.now(timezone.utc)
@@ -562,13 +600,16 @@ class DockerEnvironment:
         self.check()
         require(bool(samples), "memory collection produced no samples")
         require(
-            path.is_file() and path.stat().st_size <= 1024 * 1024, "oha result missing or oversized"
+            path.is_file() and path.stat().st_size <= 1024 * 1024,
+            "oha result missing or oversized",
         )
         result = parse_oha(
             path.read_bytes(), duration=duration, request_timeout=self.request_timeout
         )
         result.update(
-            run=max(index, 1), peak_memory_bytes=max(samples), memory_samples=len(samples)
+            run=max(index, 1),
+            peak_memory_bytes=max(samples),
+            memory_samples=len(samples),
         )
         if event_summary is not None:
             result["health_probe_events"] = event_summary
@@ -580,9 +621,14 @@ class DockerEnvironment:
 
     def cleanup(self) -> None:
         execute(
-            self.prefix + ["down", "--remove-orphans", "--volumes", "--timeout", "10"], timeout=60
+            self.prefix + ["down", "--remove-orphans", "--volumes", "--timeout", "10"],
+            timeout=60,
         )
-        for arguments in (["ps", "-aq"], ["network", "ls", "-q"], ["volume", "ls", "-q"]):
+        for arguments in (
+            ["ps", "-aq"],
+            ["network", "ls", "-q"],
+            ["volume", "ls", "-q"],
+        ):
             remaining = execute(
                 [
                     "docker",
@@ -593,7 +639,8 @@ class DockerEnvironment:
                 timeout=10,
             )
             require(
-                not remaining.strip(), f"cleanup left resources for {self.project}: {remaining}"
+                not remaining.strip(),
+                f"cleanup left resources for {self.project}: {remaining}",
             )
         self.container = None
         self.identity = None

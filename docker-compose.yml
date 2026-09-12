@@ -128,6 +128,23 @@ services:
       retries: 30
       start_period: 5s
 
+  python-flask:
+    <<: *api-defaults
+    build:
+      context: ./apps/python-flask
+    environment:
+      <<: *database-environment
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -m
+        - benchmark_api.healthcheck
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
   rust-actix:
     <<: *api-defaults
     build:

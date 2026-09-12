@@ -4,9 +4,9 @@
 
 **Go・Rust・Node.js・Pythonを、同じAPI・同じ制限・同じ負荷で比較します。**
 
-Simple API Benchmarkには、同じエンドポイント、同じDockerリソース制限、同じ検証ルールを使う6つのAPI実装があります。普遍的な最速言語を決めることではなく、誰でも理解できて、自分でも再実行できる小さな比較を目指します。
+Simple API Benchmarkには、同じエンドポイント、同じDockerリソース制限、同じ検証ルールを使う8つのAPI実装があります。普遍的な最速言語を決めることではなく、誰でも理解できて、自分でも再実行できる小さな比較を目指します。
 
-> **現在の状態:** v0.1.0をリリース済みです。CI、公式benchmark自動化、GitHub Pagesの結果サイトを利用できます。Go / EchoとRust / Axumは実装済みでCI対象ですが、完全な拡張cohortを有効化するまでは、公開中の公式benchmarkは凍結した`four-stack-v1`のままです。
+> **現在の状態:** v0.1.0をリリース済みです。CI、公式benchmark自動化、GitHub Pagesの結果サイトを利用できます。Go / Echo、Rust / Axum、Node.js / Express、Python / Flaskは実装済みでCI対象ですが、完全な拡張cohortを有効化するまでは、公開中の公式benchmarkは凍結した`four-stack-v1`のままです。
 
 ## 比較対象
 
@@ -17,7 +17,9 @@ Simple API Benchmarkには、同じエンドポイント、同じDockerリソー
 | Rust | Actix Web |
 | Rust | Axum |
 | Node.js | Fastify |
+| Node.js | Express |
 | Python | FastAPI |
+| Python | Flask |
 
 各実装は、同じ3つのベンチマーク用エンドポイントを提供します。
 
@@ -29,7 +31,7 @@ Simple API Benchmarkには、同じエンドポイント、同じDockerリソー
 
 `GET /health`は起動確認だけに使用します。
 
-下の公開結果は引き続き`four-stack-v1`、つまりGo / Gin、Rust / Actix Web、Node.js / Fastify、Python / FastAPIの4実装を表します。Go / EchoやRust / Axumを既存のhistorical cohortへ暗黙に追加しません。
+下の公開結果は引き続き`four-stack-v1`、つまりGo / Gin、Rust / Actix Web、Node.js / Fastify、Python / FastAPIの4実装を表します。Go / Echo、Rust / Axum、Node.js / Express、Python / Flaskを既存のhistorical cohortへ暗黙に追加しません。
 
 ## 結果
 
@@ -208,10 +210,10 @@ make test-python-fastapi PYTHON=python3.14
 
 acceptance targetにはPOSIX環境のPython 3.14.7、Docker Compose v2、Makeが必要です。一時virtual environmentへhash検証付きで開発用依存をinstallし、Ruff、focused pytest tests、実Dockerサービス、DB更新・異常系、資源制限、1 worker、起動失敗、SIGTERM終了、container・network削除を確認します。Dockerを使わないfocused testsは[Contributing](CONTRIBUTING.md)を参照してください。
 
-6つのAPI実装と共通contract suiteを利用できます。
+8つのAPI実装と共通contract suiteを利用できます。
 
 ```bash
-make test-contract                       # 6実装を1つずつ順番に検証
+make test-contract                       # 8実装を1つずつ順番に検証
 make test-contract CONTRACT_IMPL=go-echo # 1実装を同じ契約で検証
 ```
 
@@ -220,7 +222,7 @@ HTTP status、JSONの内容・型、規定のerror response、応答の再現性
 方法、cleanupの制約は[共通contractの実行ガイド](CONTRIBUTING.md#shared-contract-checks)を
 参照してください。ローカルのbenchmark runnerは利用可能です。PRでは同じ検証と公開しない短縮benchmarkを実行します。
 公式結果はtrusted mainの[週次・手動workflow](docs/AUTOMATION.md)だけから公開します。
-active official cohortは引き続き`four-stack-v1`なので、EchoとAxumをimplementation registryへ追加しても
+active official cohortは引き続き`four-stack-v1`なので、Echo、Axum、Express、Flaskをimplementation registryへ追加しても
 既存の公式結果を変更したり再公開したりはしません。
 
 ## ローカルでの計測

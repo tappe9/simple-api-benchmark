@@ -36,6 +36,7 @@ class RegistryBoundaryTests(unittest.TestCase):
                 "node-fastify",
                 "node-express",
                 "python-fastapi",
+                "python-flask",
             ],
         )
 

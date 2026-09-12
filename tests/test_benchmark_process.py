@@ -8,9 +8,26 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from benchmark.process import execute
 from benchmark.results import BenchmarkFailure
+
+
+def process_is_gone_or_zombie(pid: int) -> bool:
+    """Treat a disappearing /proc entry as successful process termination."""
+    stat = Path(f"/proc/{pid}/stat")
+    try:
+        return stat.read_text().split()[2] == "Z"
+    except (FileNotFoundError, ProcessLookupError):
+        return True
+
+
+class ProcessLivenessTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "linux", "Linux /proc process liveness assertion")
+    def test_disappearing_proc_entry_is_treated_as_terminated(self):
+        with patch.object(Path, "read_text", side_effect=ProcessLookupError()):
+            self.assertTrue(process_is_gone_or_zombie(12345))
 
 
 class ProcessTests(unittest.TestCase):
@@ -47,8 +64,7 @@ class ProcessTests(unittest.TestCase):
                 execute([sys.executable, "-c", source], timeout=3)
             pid = int(pidfile.read_text())
             for _ in range(50):
-                stat = Path(f"/proc/{pid}/stat")
-                if not stat.exists() or stat.read_text().split()[2] == "Z":
+                if process_is_gone_or_zombie(pid):
                     break
                 time.sleep(0.02)
             else:
@@ -89,8 +105,7 @@ class FailedParentTests(unittest.TestCase):
                     execute([sys.executable, "-c", source], timeout=10)
                 pid = int(pidfile.read_text())
                 for _ in range(50):
-                    stat = Path(f"/proc/{pid}/stat")
-                    if not stat.exists() or stat.read_text().split()[2] == "Z":
+                    if process_is_gone_or_zombie(pid):
                         break
                     time.sleep(0.02)
                 else:
