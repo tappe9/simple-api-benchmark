@@ -63,6 +63,49 @@ test('dashboard rows handle exact ties and zero latency without inventing values
   }));
 });
 
+test('view model preserves all three observed runs and identifies the selected whole run', async () => {
+  const { viewModel } = await subject();
+  const model = viewModel(await report());
+  const row = model.rows.find(candidate => candidate.id === 'go-gin' && candidate.endpoint === '/json');
+
+  assert.equal(row.runs.length, 3);
+  assert.deepEqual(row.runs.map(run => run.run), [1, 2, 3]);
+  assert.equal(row.runs.filter(run => run.selected).length, 1);
+  assert.equal(row.runs.find(run => run.selected).run, row.selectedRun);
+  assert.equal(row.rps, row.runs.find(run => run.selected).rps);
+  assert.equal(row.mean, row.runs.find(run => run.selected).mean);
+  assert.equal(row.memory, row.runs.find(run => run.selected).memory);
+  assert.equal(row.rpsMin, Math.min(...row.runs.map(run => run.rps)));
+  assert.equal(row.rpsMax, Math.max(...row.runs.map(run => run.rps)));
+});
+
+test('run validation fails closed on incomplete or inconsistent observed runs', async () => {
+  const { viewModel } = await subject();
+  const missingRun = await report();
+  missingRun.implementations[0].endpoints[0].runs.pop();
+  assert.throws(() => viewModel(missingRun), /three measured runs/i);
+
+  const duplicateRun = await report();
+  duplicateRun.implementations[0].endpoints[0].runs[2].run = 2;
+  assert.throws(() => viewModel(duplicateRun), /run numbers/i);
+
+  const mismatchedSelected = await report();
+  mismatchedSelected.implementations[0].endpoints[0].selected.requests_per_second += 1;
+  assert.throws(() => viewModel(mismatchedSelected), /selected run/i);
+});
+
+test('rendered results expose observed spread and expandable three-run details without statistical claims', async () => {
+  const { renderReport } = await subject();
+  const html = renderReport(await report());
+  assert.match(html, /Observed range/);
+  assert.match(html, /Selected run/);
+  assert.match(html, /Three measured runs/);
+  assert.match(html, /descriptive observations/i);
+  assert.match(html, /not a confidence interval/i);
+  assert.equal((html.match(/data-run-details/g) || []).length, 12);
+  assert.equal((html.match(/data-run-row/g) || []).length, 36);
+});
+
 test('rendered results expose accessible dashboard controls while keeping the full verified table', async () => {
   const { renderReport } = await subject();
   const html = renderReport(await report());
