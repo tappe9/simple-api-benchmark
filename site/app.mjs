@@ -1,11 +1,14 @@
 import { REGISTRY } from "./registry.mjs";
-import { METRICS, dashboardRows } from "./dashboard.mjs";
-import { wireDashboard, wireTheme } from "./interactions.mjs";
 
 const STACKS = Object.fromEntries(REGISTRY.implementations.map((spec) => [spec.id, spec]));
 const ENDPOINTS = REGISTRY.definition.conditions.endpoints;
 const NAMES = Object.fromEntries(REGISTRY.implementations.map((spec) => [spec.id, spec.display_name]));
 const TESTS = { "/json": "JSON", "/db/42": "PostgreSQL", "/cpu": "CPU" };
+const METRICS = {
+  rps: { label: "Requests/s", guidance: "Higher is better", better: "higher" },
+  mean: { label: "Mean response", guidance: "Lower is better", better: "lower" },
+  memory: { label: "Observed peak memory", guidance: "Lower is better", better: "lower" },
+};
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -141,18 +144,39 @@ export function chartRows(model, endpoint, metric) {
   }));
 }
 
-export { dashboardRows };
+export function dashboardRows(model, { endpoint, metric, visibleIds }) {
+  assert(ENDPOINTS.includes(endpoint), "unsupported endpoint");
+  assert(Object.hasOwn(METRICS, metric), "unsupported metric");
+  assert(Array.isArray(visibleIds), "visible implementations must be an array");
+  assert(new Set(visibleIds).size === visibleIds.length, "duplicate visible implementation");
+  assert(visibleIds.every((id) => model.implementations.includes(id)), "unknown visible implementation");
+  const order = new Map(model.implementations.map((id, index) => [id, index]));
+  const visible = new Set(visibleIds);
+  const rows = model.rows.filter((row) => row.endpoint === endpoint && visible.has(row.id));
+  if (rows.length === 0) return [];
+  const values = rows.map((row) => finite(row[metric], metric, { positive: metric !== "mean" }));
+  const maximum = Math.max(...values);
+  const bestValue = METRICS[metric].better === "higher" ? maximum : Math.min(...values);
+  return rows
+    .map((row) => ({
+      ...row,
+      best: row[metric] === bestValue,
+      percent: maximum === 0 ? 0 : (row[metric] / maximum) * 100,
+    }))
+    .sort((left, right) => {
+      const difference = METRICS[metric].better === "higher"
+        ? right[metric] - left[metric]
+        : left[metric] - right[metric];
+      return difference || order.get(left.id) - order.get(right.id);
+    });
+}
 
 function number(value) {
   return value.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 }
 
 function table(model) {
-  const rows = model.rows
-    .map(
-      (row) => `<tr data-result-row data-implementation="${escapeHtml(row.id)}" data-row-endpoint="${escapeHtml(row.endpoint)}"><th scope="row">${escapeHtml(NAMES[row.id])}</th><td>${escapeHtml(TESTS[row.endpoint])}</td><td>${number(row.rps)}</td><td>${number(row.mean)}</td><td>${number(row.memory)}</td></tr>`,
-    )
-    .join("");
+  const rows = model.rows.map((row) => `<tr data-result-row data-implementation="${escapeHtml(row.id)}" data-row-endpoint="${escapeHtml(row.endpoint)}"><th scope="row">${escapeHtml(NAMES[row.id])}</th><td>${escapeHtml(TESTS[row.endpoint])}</td><td>${number(row.rps)}</td><td>${number(row.mean)}</td><td>${number(row.memory)}</td></tr>`).join("");
   return `<div class="table-scroll"><table><caption>Verified results from this run. Requests/s: higher is better. Response time and observed API memory: lower is better.</caption><thead><tr><th>Backend</th><th>Test</th><th>Requests/s ↑</th><th>Mean response ms ↓</th><th>Observed peak MiB ↓</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
@@ -160,15 +184,14 @@ function chart(model, endpoint, metric) {
   const rows = dashboardRows(model, { endpoint, metric, visibleIds: model.implementations });
   const spec = METRICS[metric];
   const title = `${TESTS[endpoint]} ${metric === "rps" ? "throughput" : metric === "mean" ? "mean response time" : "peak API memory"}`;
-  const items = rows
-    .map((row) => {
-      const value = metric === "rps" ? `${number(row.rps)} req/s` : metric === "mean" ? `${number(row.mean)} ms` : `${number(row.memory)} MiB`;
-      const winner = row.best
-        ? metric === "rps" ? " — fastest in this run" : " — lowest in this run"
-        : "";
-      return `<li data-chart-implementation="${escapeHtml(row.id)}"><div class="bar-label"><span>${escapeHtml(NAMES[row.id])}${winner}</span><strong>${value}</strong></div><meter min="0" max="100" value="${row.percent.toFixed(6)}">${row.percent.toFixed(1)}%</meter></li>`;
-    })
-    .join("");
+  const items = rows.map((row) => {
+    const value = metric === "rps" ? `${number(row.rps)} req/s` : metric === "mean" ? `${number(row.mean)} ms` : `${number(row.memory)} MiB`;
+    const winner = row.best ? (metric === "rps" ? " — fastest in this run" : " — lowest in this run") : "";
+    const bar = metric === "mean"
+      ? `<progress max="100" value="${row.percent.toFixed(6)}">${row.percent.toFixed(1)}%</progress>`
+      : `<meter min="0" max="100" value="${row.percent.toFixed(6)}">${row.percent.toFixed(1)}%</meter>`;
+    return `<li data-chart-implementation="${escapeHtml(row.id)}"><div class="bar-label"><span>${escapeHtml(NAMES[row.id])}${winner}</span><strong>${value}</strong></div>${bar}</li>`;
+  }).join("");
   const hidden = endpoint === ENDPOINTS[0] && metric === "rps" ? "" : " hidden";
   return `<section class="chart" data-chart data-chart-endpoint="${escapeHtml(endpoint)}" data-chart-metric="${metric}"${hidden} aria-labelledby="${endpoint.replaceAll("/", "-")}-${metric}"><h3 id="${endpoint.replaceAll("/", "-")}-${metric}">${escapeHtml(title)}</h3><p>${spec.guidance}. Bar length starts at zero; labels and numbers remain the source of meaning.</p><ul>${items}</ul></section>`;
 }
@@ -184,9 +207,7 @@ function dashboardControls(model) {
 
 function versions(model) {
   return model.implementations.map((id) => {
-    const entries = Object.entries(model.versions[id])
-      .map(([key, value]) => `<li><code>${escapeHtml(key)}</code> ${escapeHtml(value)}</li>`)
-      .join("");
+    const entries = Object.entries(model.versions[id]).map(([key, value]) => `<li><code>${escapeHtml(key)}</code> ${escapeHtml(value)}</li>`).join("");
     return `<section class="version-card"><h3>${escapeHtml(NAMES[id])}</h3><ul>${entries}</ul><a href="https://github.com/tappe9/simple-api-benchmark/tree/${model.source}/${escapeHtml(STACKS[id].source_path)}">Implementation code</a></section>`;
   }).join("");
 }
@@ -206,9 +227,7 @@ export function renderReport(report) {
 export async function loadReport(fetcher = fetch) {
   try {
     const response = await fetcher("./results/latest.json", { cache: "no-store" });
-    if (response.status === 404) {
-      return { state: "empty", html: "", message: "No verified official result is available yet." };
-    }
+    if (response.status === 404) return { state: "empty", html: "", message: "No verified official result is available yet." };
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const report = await response.json();
     return { state: "ready", html: renderReport(report), message: "", model: viewModel(report) };
@@ -217,21 +236,102 @@ export async function loadReport(fetcher = fetch) {
   }
 }
 
+function wireDashboard(root, model) {
+  const dashboard = root.querySelector("[data-dashboard]");
+  if (!dashboard) return;
+  let endpoint = ENDPOINTS[0];
+  let metric = "rps";
+  const visibleImplementations = new Set(model.implementations);
+  const visibleLanguages = new Set(model.implementations.map((id) => STACKS[id].language));
+  const included = (id) => visibleImplementations.has(id) && visibleLanguages.has(STACKS[id].language);
+
+  const refresh = () => {
+    const endpointButtons = [...dashboard.querySelectorAll("[data-endpoint]")];
+    endpointButtons.forEach((button) => {
+      const selected = button.dataset.endpoint === endpoint;
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
+    });
+    dashboard.querySelectorAll("[data-metric]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.metric === metric)));
+    dashboard.querySelectorAll("[data-chart]").forEach((section) => {
+      section.hidden = section.dataset.chartEndpoint !== endpoint || section.dataset.chartMetric !== metric;
+      section.querySelectorAll("[data-chart-implementation]").forEach((item) => { item.hidden = !included(item.dataset.chartImplementation); });
+    });
+    root.querySelectorAll("[data-result-row]").forEach((row) => { row.hidden = row.dataset.rowEndpoint !== endpoint || !included(row.dataset.implementation); });
+    const count = model.implementations.filter(included).length;
+    const status = dashboard.querySelector("[data-dashboard-status]");
+    if (status) status.textContent = `Showing ${TESTS[endpoint]} ${METRICS[metric].label} for ${count} framework${count === 1 ? "" : "s"}.`;
+  };
+
+  dashboard.addEventListener("click", (event) => {
+    const endpointButton = event.target.closest("[data-endpoint]");
+    if (endpointButton) endpoint = endpointButton.dataset.endpoint;
+    const metricButton = event.target.closest("[data-metric]");
+    if (metricButton) metric = metricButton.dataset.metric;
+    refresh();
+  });
+  dashboard.addEventListener("keydown", (event) => {
+    const current = event.target.closest("[data-endpoint]");
+    if (!current || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const buttons = [...dashboard.querySelectorAll("[data-endpoint]")];
+    let index = buttons.indexOf(current);
+    if (event.key === "Home") index = 0;
+    else if (event.key === "End") index = buttons.length - 1;
+    else if (event.key === "ArrowRight") index = (index + 1) % buttons.length;
+    else index = (index - 1 + buttons.length) % buttons.length;
+    event.preventDefault();
+    endpoint = buttons[index].dataset.endpoint;
+    refresh();
+    buttons[index].focus();
+  });
+  dashboard.addEventListener("change", (event) => {
+    const framework = event.target.closest("[data-implementation-filter]");
+    if (framework) {
+      if (framework.checked) visibleImplementations.add(framework.dataset.implementationFilter);
+      else visibleImplementations.delete(framework.dataset.implementationFilter);
+    }
+    const language = event.target.closest("[data-language-filter]");
+    if (language) {
+      if (language.checked) visibleLanguages.add(language.dataset.languageFilter);
+      else visibleLanguages.delete(language.dataset.languageFilter);
+    }
+    refresh();
+  });
+  refresh();
+}
+
+function wireTheme() {
+  const button = document.getElementById("theme-toggle");
+  if (!button) return;
+  const root = document.documentElement;
+  const stored = localStorage.getItem("sab-theme");
+  const initial = stored === "dark" ? "dark" : "light";
+  const apply = (theme) => {
+    root.dataset.theme = theme;
+    button.setAttribute("aria-pressed", String(theme === "dark"));
+    button.textContent = theme === "dark" ? "Use light theme" : "Use dark theme";
+  };
+  apply(initial);
+  button.addEventListener("click", () => {
+    const next = root.dataset.theme === "dark" ? "light" : "dark";
+    localStorage.setItem("sab-theme", next);
+    apply(next);
+  });
+}
+
 async function boot() {
-  wireTheme(document);
+  wireTheme();
   const target = document.getElementById("results");
   if (!target) return;
   const state = await loadReport();
   if (state.state === "ready") {
     target.removeAttribute("role");
     target.innerHTML = state.html;
-    wireDashboard(target, state.model, { tests: TESTS, metrics: METRICS, stacks: STACKS });
+    wireDashboard(target, state.model);
   } else {
     target.setAttribute("role", "status");
     target.textContent = state.message;
   }
 }
 
-if (typeof document !== "undefined") {
-  void boot();
-}
+if (typeof document !== "undefined") void boot();
