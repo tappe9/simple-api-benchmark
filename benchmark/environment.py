@@ -183,9 +183,7 @@ def registered_pinned_versions() -> dict:
             "serde_json": match(r'^serde_json = "=([0-9.]+)"$', axum),
         },
         "node-fastify": {"node": node["engines"]["node"], **node["dependencies"]},
-        "node-express": {
-            "node": node_express["engines"]["node"], **node_express["dependencies"]
-        },
+        "node-express": {"node": node_express["engines"]["node"], **node_express["dependencies"]},
         "python-fastapi": {"python": read("python-fastapi/.python-version").strip(), **python},
     }
     require(
@@ -501,6 +499,7 @@ class DockerEnvironment:
         )
         interval_started = datetime.now(timezone.utc) if self.audit_health_events else None
         with path.with_suffix(".memory.jsonl").open("w", encoding="utf-8") as log:
+
             def sample():
                 self.check()
                 raw = execute(
