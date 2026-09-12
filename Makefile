@@ -112,7 +112,7 @@ test-workflows:
 test-site:
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p 'test_site.py' -v
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p 'test_pages.py' -v
-	@node --test tests/test_site.mjs
+	@node --test tests/test_site.mjs tests/test_dashboard.mjs
 
 generate-readme:
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.generate_readme
