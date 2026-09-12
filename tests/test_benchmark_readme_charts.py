@@ -1,11 +1,12 @@
-"""README chart generation regressions."""
+"""README chart generation and publication regressions."""
 
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from test_benchmark_publication import synthetic_report
+from test_benchmark_publication import START, END, context, synthetic_report
 
 
 class ReadmeChartTests(unittest.TestCase):
@@ -66,6 +67,56 @@ class ReadmeChartTests(unittest.TestCase):
         self.assertIn("<details>", text)
         self.assertIn("| Backend | Test | Requests/s", text)
         self.assertIn("Result JSON", text)
+
+
+class PublicationChartTests(unittest.TestCase):
+    def git(self, *args, cwd=None):
+        return subprocess.check_output(["git", *args], cwd=cwd or self.repo).decode().strip()
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.repo = self.root / "repo"
+        self.remote = self.root / "remote.git"
+        self.repo.mkdir()
+        self.git("init", "-q", "-b", "main")
+        self.git("config", "user.name", "Chart publication test")
+        self.git("config", "user.email", "test@example.invalid")
+        for filename in ("README.md", "README.ja.md"):
+            (self.repo / filename).write_text(f"intro\n{START}\nold\n{END}\noutro\n")
+        (self.repo / ".gitignore").write_text(".cache/\n")
+        (self.repo / "results").mkdir()
+        (self.repo / "results/latest.json").write_text('{"previous":"verified bytes"}\n')
+        self.git("add", ".")
+        self.git("commit", "-qm", "test: initial verified state")
+        self.source = self.git("rev-parse", "HEAD")
+        self.git("init", "-q", "--bare", str(self.remote))
+        self.git("remote", "add", "origin", str(self.remote))
+        self.git("push", "-q", "origin", "HEAD:main")
+        self.report = synthetic_report(self.repo, source=self.source)
+        self.report["metadata"]["source_tree"] = self.git("rev-parse", "HEAD^{tree}")
+
+    def test_publication_commit_allowlists_all_three_charts_with_results(self):
+        from benchmark import publish
+
+        commit = publish.publish(self.report, self.repo, expected_context=context(self.source))
+        changed = set(
+            self.git("diff-tree", "--no-commit-id", "--name-only", "-r", commit).splitlines()
+        )
+        history = {path for path in changed if path.startswith("results/history/")}
+        charts = {
+            "results/charts/json-throughput.svg",
+            "results/charts/postgresql-throughput.svg",
+            "results/charts/cpu-throughput.svg",
+        }
+        self.assertEqual(len(history), 1)
+        self.assertEqual(
+            changed,
+            {"README.md", "README.ja.md", "results/latest.json", *history, *charts},
+        )
+        for path in charts:
+            self.assertTrue(self.git("show", f"{commit}:{path}").startswith("<svg"))
 
 
 if __name__ == "__main__":
