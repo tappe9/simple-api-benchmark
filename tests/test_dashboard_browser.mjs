@@ -158,6 +158,7 @@ test('Pages dashboard works in a real browser under the project subpath', { time
   assert.equal(await evaluate(cdp, `location.pathname`), prefix);
   assert.equal(await evaluate(cdp, `document.documentElement.dataset.theme`), 'light');
   assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-chart]:not([hidden])').length`), 1);
+  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-run-details]:not([hidden])').length`), 4);
   assert.equal(
     await evaluate(cdp, `document.querySelector('.limitation a[href="./results/latest.json"]').href`),
     `${page}results/latest.json`,
@@ -166,13 +167,21 @@ test('Pages dashboard works in a real browser under the project subpath', { time
   await evaluate(cdp, `document.querySelector('[data-endpoint="/cpu"]').click(); document.querySelector('[data-metric="mean"]').click();`);
   assert.equal(await evaluate(cdp, `document.querySelector('[data-endpoint="/cpu"]').getAttribute('aria-selected')`), 'true');
   assert.equal(await evaluate(cdp, `document.querySelector('[data-metric="mean"]').getAttribute('aria-pressed')`), 'true');
+  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-run-details]:not([hidden])').length`), 4);
+  assert.equal(await evaluate(cdp, `[...document.querySelectorAll('[data-run-details]:not([hidden])')].every(node => node.dataset.rowEndpoint === '/cpu')`), true);
+  await evaluate(cdp, `document.querySelector('[data-run-details]:not([hidden])').open = true;`);
+  assert.equal(await evaluate(cdp, `document.querySelector('[data-run-details]:not([hidden])').querySelectorAll('[data-run-row]').length`), 3);
+  assert.equal(await evaluate(cdp, `document.querySelector('[data-run-details]:not([hidden])').querySelectorAll('[data-selected-run="true"]').length`), 1);
 
   await evaluate(cdp, `document.querySelector('[data-implementation-filter]').click();`);
   assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-chart]:not([hidden]) [data-chart-implementation]:not([hidden])').length`), 3);
+  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-run-details]:not([hidden])').length`), 3);
   await evaluate(cdp, `document.querySelector('[data-implementation-filter]').click(); document.querySelector('[data-language-filter="Go"]').click();`);
   assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-chart]:not([hidden]) [data-chart-implementation]:not([hidden])').length`), 3);
+  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-run-details]:not([hidden])').length`), 3);
   await evaluate(cdp, `document.querySelector('[data-language-filter="Go"]').click();`);
   assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-chart]:not([hidden]) [data-chart-implementation]:not([hidden])').length`), 4);
+  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-run-details]:not([hidden])').length`), 4);
 
   await evaluate(cdp, `document.getElementById('theme-toggle').click();`);
   assert.equal(await evaluate(cdp, `document.documentElement.dataset.theme`), 'dark');
@@ -189,6 +198,7 @@ test('Pages dashboard works in a real browser under the project subpath', { time
   })()`);
   assert.equal(await evaluate(cdp, `document.activeElement.dataset.endpoint`), '/json');
   assert.equal(await evaluate(cdp, `document.querySelector('[data-endpoint="/json"]').getAttribute('aria-selected')`), 'true');
+  assert.equal(await evaluate(cdp, `[...document.querySelectorAll('[data-run-details]:not([hidden])')].every(node => node.dataset.rowEndpoint === '/json')`), true);
 
   reportMode = 'malformed';
   await cdp.send('Page.reload', { ignoreCache: true });
