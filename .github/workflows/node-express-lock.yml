@@ -1,0 +1,38 @@
+name: Node Express lockfile helper
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  generate:
+    if: github.head_ref == 'issue-31-node-express'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.20.0'
+      - run: |
+          mkdir -p apps/node-express
+          cat > apps/node-express/package.json <<'JSON'
+          {
+            "name": "simple-api-benchmark-node-express",
+            "version": "0.1.0",
+            "private": true,
+            "type": "module",
+            "engines": { "node": "24.20.0" },
+            "dependencies": {
+              "express": "5.2.1",
+              "pg": "8.23.0"
+            }
+          }
+          JSON
+          npm install --package-lock-only --ignore-scripts --prefix apps/node-express
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: node-express-lock-${{ github.run_id }}-${{ github.run_attempt }}
+          path: apps/node-express/package-lock.json
+          retention-days: 7
