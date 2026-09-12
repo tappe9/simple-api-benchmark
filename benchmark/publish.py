@@ -1,4 +1,4 @@
-"""Publish four generated files with one fast-forward Git ref update, never a force push."""
+"""Publish verified results and generated presentation assets in one fast-forward Git update."""
 
 import base64
 import json
@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .generate_readme import render, replace_section
 from .official import trusted_context
+from .readme_charts import CHARTS, render_charts
 from .report import REPOSITORY, audit_raw, read_regular, timestamp, validate_report
 from .results import BenchmarkFailure, require, strict_json
 from .run import ROOT
@@ -67,6 +68,12 @@ def publish(report: dict, root: Path, *, expected_context: dict, environment=Non
     for filename, locale in (("README.md", "en"), ("README.ja.md", "ja")):
         original = read_regular(root / filename, root).decode("utf-8")
         updates[filename] = replace_section(original, render(report, locale)).encode()
+    charts = render_charts(report)
+    expected_charts = {path for path, _ in CHARTS.values()}
+    require(set(charts) == expected_charts, "unexpected README chart output")
+    updates.update({path: svg.encode("utf-8") for path, svg in charts.items()})
+    allowed = {"README.md", "README.ja.md", "results/latest.json", history, *expected_charts}
+    require(set(updates) == allowed, "unexpected publication path")
     with tempfile.TemporaryDirectory(prefix="sab-publish-") as directory:
         env = dict(os.environ if environment is None else environment)
         env.update(
@@ -100,7 +107,7 @@ def publish(report: dict, root: Path, *, expected_context: dict, environment=Non
             environment=env,
         )
         changed = git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", commit).splitlines()
-        require(set(changed) == set(updates), "publication must update exactly four result files")
+        require(set(changed) == allowed, "publication changed an unexpected path")
         # The remote ref update is the only publication commit point. A concurrent main
         # update makes this ordinary push non-fast-forward; it is never rebased or forced.
         git(root, "push", "origin", f"{commit}:refs/heads/main", environment=env)
