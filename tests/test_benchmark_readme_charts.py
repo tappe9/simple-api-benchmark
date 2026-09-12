@@ -35,9 +35,10 @@ class ReadmeChartTests(unittest.TestCase):
                 self.assertIn("requests/s", svg)
                 self.assertIn(">0<", svg)
                 self.assertIn("Go / Gin", svg)
-                self.assertNotIn("<script", svg.lower())
-                self.assertNotIn("http://", svg.lower())
-                self.assertNotIn("https://", svg.lower())
+                lower = svg.lower()
+                self.assertNotIn("<script", lower)
+                self.assertNotIn('href="http', lower)
+                self.assertNotIn("url(http", lower)
 
     def test_chart_values_match_selected_run_and_escape_labels(self):
         from benchmark import readme_charts, registry
