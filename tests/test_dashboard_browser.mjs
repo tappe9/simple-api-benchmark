@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,12 +20,22 @@ function chromeBinary() {
   throw new Error('a Chromium-based browser is required for the Pages browser test');
 }
 
-async function freePort() {
-  const server = createNetServer();
-  await new Promise((resolve, reject) => server.listen(0, '127.0.0.1', error => error ? reject(error) : resolve()));
-  const { port } = server.address();
-  await new Promise(resolve => server.close(resolve));
-  return port;
+async function pollDevToolsPort(profile, timeoutMs = 10000) {
+  const file = join(profile, 'DevToolsActivePort');
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      const [portLine] = (await readFile(file, 'utf8')).trim().split(/\r?\n/);
+      const port = Number(portLine);
+      if (Number.isInteger(port) && port > 0 && port <= 65535) return port;
+      lastError = new Error(`invalid DevToolsActivePort: ${portLine}`);
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw lastError || new Error(`timed out waiting for ${file}`);
 }
 
 async function pollJson(url, timeoutMs = 10000) {
@@ -118,11 +127,10 @@ test('Pages dashboard works in a real browser under the project subpath', { time
   t.after(() => new Promise(resolve => server.close(resolve)));
   const page = `http://127.0.0.1:${server.address().port}${prefix}`;
 
-  const debugPort = await freePort();
   const profile = await mkdtemp(join(tmpdir(), 'sab-chrome-'));
   const browser = spawn(chromeBinary(), [
     '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
-    `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`, page,
+    '--remote-debugging-port=0', `--user-data-dir=${profile}`, page,
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
   let browserStderr = '';
   browser.stderr.setEncoding('utf8');
@@ -132,8 +140,10 @@ test('Pages dashboard works in a real browser under the project subpath', { time
     await rm(profile, { recursive: true, force: true });
   });
 
+  let debugPort;
   let targets;
   try {
+    debugPort = await pollDevToolsPort(profile);
     targets = await pollJson(`http://127.0.0.1:${debugPort}/json/list`);
   } catch (error) {
     throw new Error(`Chrome DevTools did not become ready (exit=${browser.exitCode ?? 'running'}): ${browserStderr.trim() || '<no stderr>'}`, { cause: error });
