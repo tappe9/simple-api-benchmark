@@ -66,6 +66,18 @@ function reportCohort(report) {
   return { id, members: REGISTRY.cohorts[id].members };
 }
 
+function validateMeasuredRun(run, expectedRun) {
+  object(run, `measured run ${expectedRun}`);
+  integer(run.run, `measured run ${expectedRun} number`);
+  assert(run.run === expectedRun, "measured run numbers must be 1, 2, 3");
+  const rps = finite(run.requests_per_second, `run ${expectedRun} requests per second`, { positive: true });
+  const mean = finite(run.mean_response_time_ms, `run ${expectedRun} mean response time`);
+  const memoryBytes = finite(run.peak_memory_bytes, `run ${expectedRun} peak memory`, { positive: true });
+  integer(run.memory_samples, `run ${expectedRun} memory samples`);
+  assert(run.memory_samples > 0, "memory samples required");
+  return { run: run.run, rps, mean, memory: memoryBytes / 1048576 };
+}
+
 function validateReport(report) {
   object(report, "report");
   const cohort = reportCohort(report);
@@ -101,14 +113,29 @@ function validateReport(report) {
     backend.endpoints.forEach((entry, endpointIndex) => {
       object(entry, "endpoint result");
       assert(entry.endpoint === ENDPOINTS[endpointIndex], "endpoint identity/order mismatch");
+      assert(Array.isArray(entry.runs) && entry.runs.length === 3, "three measured runs required");
+      const runs = entry.runs.map((run, index) => validateMeasuredRun(run, index + 1));
       const selected = object(entry.selected, "selected run");
       integer(selected.run, "selected run number");
+      assert(selected.run >= 1 && selected.run <= 3, "selected run number must reference a measured run");
       const rps = finite(selected.requests_per_second, "requests per second", { positive: true });
       const mean = finite(selected.mean_response_time_ms, "mean response time");
       const memoryBytes = finite(selected.peak_memory_bytes, "peak memory", { positive: true });
       integer(selected.memory_samples, "memory samples");
       assert(selected.memory_samples > 0, "memory samples required");
-      rows.push({ id, endpoint: entry.endpoint, rps, mean, memory: memoryBytes / 1048576 });
+      assert(JSON.stringify(entry.runs[selected.run - 1]) === JSON.stringify(selected), "selected run must match a measured whole run");
+      const observations = runs.map((run) => ({ ...run, selected: run.run === selected.run }));
+      rows.push({
+        id,
+        endpoint: entry.endpoint,
+        rps,
+        mean,
+        memory: memoryBytes / 1048576,
+        selectedRun: selected.run,
+        runs: observations,
+        rpsMin: Math.min(...observations.map((run) => run.rps)),
+        rpsMax: Math.max(...observations.map((run) => run.rps)),
+      });
     });
   });
   return { rows, metadata, versions, cohort };
@@ -187,13 +214,22 @@ function chart(model, endpoint, metric) {
   const items = rows.map((row) => {
     const value = metric === "rps" ? `${number(row.rps)} req/s` : metric === "mean" ? `${number(row.mean)} ms` : `${number(row.memory)} MiB`;
     const winner = row.best ? (metric === "rps" ? " — fastest in this run" : " — lowest in this run") : "";
+    const spread = metric === "rps" ? `<small>Observed range: ${number(row.rpsMin)}–${number(row.rpsMax)} req/s · Selected run ${row.selectedRun}</small>` : "";
     const bar = metric === "mean"
       ? `<progress max="100" value="${row.percent.toFixed(6)}">${row.percent.toFixed(1)}%</progress>`
       : `<meter min="0" max="100" value="${row.percent.toFixed(6)}">${row.percent.toFixed(1)}%</meter>`;
-    return `<li data-chart-implementation="${escapeHtml(row.id)}"><div class="bar-label"><span>${escapeHtml(NAMES[row.id])}${winner}</span><strong>${value}</strong></div>${bar}</li>`;
+    return `<li data-chart-implementation="${escapeHtml(row.id)}"><div class="bar-label"><span>${escapeHtml(NAMES[row.id])}${winner}</span><strong>${value}</strong></div>${spread}${bar}</li>`;
   }).join("");
   const hidden = endpoint === ENDPOINTS[0] && metric === "rps" ? "" : " hidden";
   return `<section class="chart" data-chart data-chart-endpoint="${escapeHtml(endpoint)}" data-chart-metric="${metric}"${hidden} aria-labelledby="${endpoint.replaceAll("/", "-")}-${metric}"><h3 id="${endpoint.replaceAll("/", "-")}-${metric}">${escapeHtml(title)}</h3><p>${spec.guidance}. Bar length starts at zero; labels and numbers remain the source of meaning.</p><ul>${items}</ul></section>`;
+}
+
+function runDetails(model) {
+  const details = model.rows.map((row) => {
+    const runRows = row.runs.map((run) => `<tr data-run-row${run.selected ? " data-selected-run=\"true\"" : ""}><th scope="row">Run ${run.run}${run.selected ? " — selected" : ""}</th><td>${number(run.rps)}</td><td>${number(run.mean)}</td><td>${number(run.memory)}</td></tr>`).join("");
+    return `<details data-run-details data-implementation="${escapeHtml(row.id)}" data-row-endpoint="${escapeHtml(row.endpoint)}"><summary>${escapeHtml(NAMES[row.id])} · ${escapeHtml(TESTS[row.endpoint])} · Observed range ${number(row.rpsMin)}–${number(row.rpsMax)} req/s · Selected run ${row.selectedRun}</summary><div class="table-scroll"><table><caption>Three measured runs for ${escapeHtml(NAMES[row.id])} ${escapeHtml(TESTS[row.endpoint])}.</caption><thead><tr><th>Run</th><th>Requests/s</th><th>Mean response ms</th><th>Observed peak MiB</th></tr></thead><tbody>${runRows}</tbody></table></div></details>`;
+  }).join("");
+  return `<section class="run-observations"><h2>Three measured runs</h2><p>These three runs are descriptive observations from this benchmark execution, not a confidence interval or proof of statistical significance. The headline result remains the selected whole run.</p>${details}</section>`;
 }
 
 function dashboardControls(model) {
@@ -221,7 +257,7 @@ export function renderReport(report) {
   const model = viewModel(report);
   const charts = ENDPOINTS.flatMap((endpoint) => Object.keys(METRICS).map((metric) => chart(model, endpoint, metric))).join("");
   const conditions = model.conditions;
-  return `<article class="results"><header><p class="eyebrow">Verified official benchmark</p><h2>Results</h2><p>Cohort: <code>${escapeHtml(model.cohort)}</code> · Definition: <code>${escapeHtml(REGISTRY.definition.id)}</code>.</p><p>Measured <time datetime="${escapeHtml(model.completedAt)}">${escapeHtml(model.completedAt)}</time> on shared GitHub-hosted hardware. <a href="${escapeHtml(model.runUrl)}">Actions run</a>.</p><p>${conditions.api_cpus} CPU · ${(conditions.api_memory_bytes / 1048576).toFixed(0)} MiB · ${conditions.workers} worker · DB pool ${conditions.pool_max} · HTTP/${escapeHtml(conditions.http_version)} · ${conditions.connections} connections · ${conditions.warmup_seconds}s warm-up · ${conditions.runs} × ${conditions.duration_seconds}s.</p>${environment(model)}</header><section class="dashboard" data-dashboard><h2>Compare this run</h2><p class="dashboard-help">Switch endpoint and metric, or filter by language and framework. Every value comes from this verified run; missing values are never shown as zero.</p>${dashboardControls(model)}<div class="charts" data-dashboard-charts>${charts}</div><p class="sr-only" aria-live="polite" data-dashboard-status>Showing ${escapeHtml(TESTS[ENDPOINTS[0]])} ${escapeHtml(METRICS.rps.label)}.</p></section><section><h2>Complete results table</h2>${table(model)}</section><section><h2>Versions in this run</h2><div class="version-grid">${versions(model)}</div></section><section class="limitation"><h2>What this result means</h2><p>This compares complete API stacks on shared hosted hardware, including runtime, framework, HTTP server, database driver, and container configuration. It is a reference for this run, not universal proof that one language or framework is always faster.</p><p><a href="https://github.com/tappe9/simple-api-benchmark/blob/${model.source}/docs/METHODOLOGY.md">Read the methodology</a> · <a href="./results/latest.json">Inspect the result JSON</a></p></section></article>`;
+  return `<article class="results"><header><p class="eyebrow">Verified official benchmark</p><h2>Results</h2><p>Cohort: <code>${escapeHtml(model.cohort)}</code> · Definition: <code>${escapeHtml(REGISTRY.definition.id)}</code>.</p><p>Measured <time datetime="${escapeHtml(model.completedAt)}">${escapeHtml(model.completedAt)}</time> on shared GitHub-hosted hardware. <a href="${escapeHtml(model.runUrl)}">Actions run</a>.</p><p>${conditions.api_cpus} CPU · ${(conditions.api_memory_bytes / 1048576).toFixed(0)} MiB · ${conditions.workers} worker · DB pool ${conditions.pool_max} · HTTP/${escapeHtml(conditions.http_version)} · ${conditions.connections} connections · ${conditions.warmup_seconds}s warm-up · ${conditions.runs} × ${conditions.duration_seconds}s.</p>${environment(model)}</header><section class="dashboard" data-dashboard><h2>Compare this run</h2><p class="dashboard-help">Switch endpoint and metric, or filter by language and framework. Every value comes from this verified run; missing values are never shown as zero.</p>${dashboardControls(model)}<div class="charts" data-dashboard-charts>${charts}</div><p class="sr-only" aria-live="polite" data-dashboard-status>Showing ${escapeHtml(TESTS[ENDPOINTS[0]])} ${escapeHtml(METRICS.rps.label)}.</p></section>${runDetails(model)}<section><h2>Complete results table</h2>${table(model)}</section><section><h2>Versions in this run</h2><div class="version-grid">${versions(model)}</div></section><section class="limitation"><h2>What this result means</h2><p>This compares complete API stacks on shared hosted hardware, including runtime, framework, HTTP server, database driver, and container configuration. It is a reference for this run, not universal proof that one language or framework is always faster.</p><p><a href="https://github.com/tappe9/simple-api-benchmark/blob/${model.source}/docs/METHODOLOGY.md">Read the methodology</a> · <a href="./results/latest.json">Inspect the result JSON</a></p></section></article>`;
 }
 
 export async function loadReport(fetcher = fetch) {
@@ -258,6 +294,7 @@ function wireDashboard(root, model) {
       section.querySelectorAll("[data-chart-implementation]").forEach((item) => { item.hidden = !included(item.dataset.chartImplementation); });
     });
     root.querySelectorAll("[data-result-row]").forEach((row) => { row.hidden = row.dataset.rowEndpoint !== endpoint || !included(row.dataset.implementation); });
+    root.querySelectorAll("[data-run-details]").forEach((details) => { details.hidden = details.dataset.rowEndpoint !== endpoint || !included(details.dataset.implementation); });
     const count = model.implementations.filter(included).length;
     const status = dashboard.querySelector("[data-dashboard-status]");
     if (status) status.textContent = `Showing ${TESTS[endpoint]} ${METRICS[metric].label} for ${count} framework${count === 1 ? "" : "s"}.`;
