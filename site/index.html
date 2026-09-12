@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,14 +10,17 @@
 </head>
 <body>
   <header class="hero">
-    <div class="shell">
-      <p class="eyebrow">Same API. Same limits. Simple results.</p>
-      <h1>Simple API Benchmark</h1>
-      <p class="lede">A small, reproducible comparison of Go / Gin, Rust / Actix Web, Node.js / Fastify, and Python / FastAPI using the same endpoints and resource limits.</p>
-      <nav aria-label="Project links">
-        <a href="https://github.com/tappe9/simple-api-benchmark">Repository</a>
-        <a href="https://github.com/tappe9/simple-api-benchmark/blob/main/docs/METHODOLOGY.md">Methodology</a>
-      </nav>
+    <div class="shell hero-layout">
+      <div>
+        <p class="eyebrow">Same API. Same limits. Simple results.</p>
+        <h1>Simple API Benchmark</h1>
+        <p class="lede">A small, reproducible comparison of complete API stacks using the same endpoints and resource limits.</p>
+        <nav aria-label="Project links">
+          <a href="https://github.com/tappe9/simple-api-benchmark">Repository</a>
+          <a href="https://github.com/tappe9/simple-api-benchmark/blob/main/docs/METHODOLOGY.md">Methodology</a>
+        </nav>
+      </div>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false">Use dark theme</button>
     </div>
   </header>
   <main class="shell">
