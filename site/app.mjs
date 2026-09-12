@@ -9,6 +9,10 @@ const METRICS = {
   mean: { label: "Mean response", guidance: "Lower is better", better: "lower" },
   memory: { label: "Observed peak memory", guidance: "Lower is better", better: "lower" },
 };
+const EMPTY_HISTORY = { schema_version: 1, runs: [] };
+const HISTORY_ID = /^[1-9][0-9]*-[1-9][0-9]*$/;
+const HISTORY_PATH = /^\.\/results\/history\/\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z-([1-9][0-9]*-[1-9][0-9]*)\.json$/;
+const MAX_HISTORY_RUNS = 128;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -42,6 +46,31 @@ function escapeHtml(value) {
 function exactKeys(value, keys, label) {
   object(value, label);
   assert(Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key)), `unexpected ${label} fields`);
+}
+
+export function validateHistoryIndex(index) {
+  exactKeys(index, ["schema_version", "runs"], "history index");
+  assert(index.schema_version === 1, "unsupported history schema");
+  assert(Array.isArray(index.runs), "history runs must be an array");
+  assert(index.runs.length <= MAX_HISTORY_RUNS, "too many history runs");
+  const ids = new Set();
+  const paths = new Set();
+  let previous = null;
+  for (const entry of index.runs) {
+    exactKeys(entry, ["id", "completed_at", "path"], "history entry");
+    assert(typeof entry.id === "string" && HISTORY_ID.test(entry.id), "invalid history run id");
+    assert(!ids.has(entry.id), "duplicate history run id");
+    ids.add(entry.id);
+    assert(typeof entry.completed_at === "string" && !Number.isNaN(Date.parse(entry.completed_at)), "invalid history completion time");
+    const match = typeof entry.path === "string" ? entry.path.match(HISTORY_PATH) : null;
+    assert(match && match[1] === entry.id, "invalid history path");
+    assert(!paths.has(entry.path), "duplicate history path");
+    paths.add(entry.path);
+    const sortKey = `${entry.completed_at}\u0000${entry.id}`;
+    if (previous !== null) assert(previous >= sortKey, "history entries must be newest first");
+    previous = sortKey;
+  }
+  return index;
 }
 
 function validateConditions(conditions) {
@@ -156,6 +185,7 @@ export function viewModel(report) {
     versions,
     source: metadata.source_commit,
     completedAt: report.completed_at,
+    runId: String(metadata.github.run_id),
     runUrl: metadata.github.run_url,
     runner: { ...metadata.runner },
     conditions: { ...report.conditions, endpoints: [...report.conditions.endpoints] },
@@ -259,23 +289,69 @@ function environment(model) {
   return `<dl class="environment"><div><dt>Runner</dt><dd>${escapeHtml(runner.environment)}</dd></div><div><dt>OS / architecture</dt><dd>${escapeHtml(runner.os)} / ${escapeHtml(runner.architecture)}</dd></div><div><dt>Runner image</dt><dd>${escapeHtml(runner.image_os)} ${escapeHtml(runner.image_version)}</dd></div><div><dt>CPU</dt><dd>${escapeHtml(runner.cpu_model)}</dd></div></dl>`;
 }
 
-export function renderReport(report) {
-  const model = viewModel(report);
-  const charts = ENDPOINTS.flatMap((endpoint) => Object.keys(METRICS).map((metric) => chart(model, endpoint, metric))).join("");
-  const conditions = model.conditions;
-  return `<article class="results"><header><p class="eyebrow">Verified official benchmark</p><h2>Results</h2><p>Cohort: <code>${escapeHtml(model.cohort)}</code> · Definition: <code>${escapeHtml(REGISTRY.definition.id)}</code>.</p><p>Measured <time datetime="${escapeHtml(model.completedAt)}">${escapeHtml(model.completedAt)}</time> on shared GitHub-hosted hardware. <a href="${escapeHtml(model.runUrl)}">Actions run</a>.</p><p>${conditions.api_cpus} CPU · ${(conditions.api_memory_bytes / 1048576).toFixed(0)} MiB · ${conditions.workers} worker · DB pool ${conditions.pool_max} · HTTP/${escapeHtml(conditions.http_version)} · ${conditions.connections} connections · ${conditions.warmup_seconds}s warm-up · ${conditions.runs} × ${conditions.duration_seconds}s.</p>${environment(model)}</header><section class="dashboard" data-dashboard><h2>Compare this run</h2><p class="dashboard-help">Switch endpoint and metric, or filter by language and framework. Every value comes from this verified run; missing values are never shown as zero.</p>${dashboardControls(model)}<div class="charts" data-dashboard-charts>${charts}</div><p class="sr-only" aria-live="polite" data-dashboard-status>Showing ${escapeHtml(TESTS[ENDPOINTS[0]])} ${escapeHtml(METRICS.rps.label)}.</p></section>${runDetails(model)}<section><h2>Complete results table</h2>${table(model)}</section><section><h2>Versions in this run</h2><div class="version-grid">${versions(model)}</div></section><section class="limitation"><h2>What this result means</h2><p>This compares complete API stacks on shared hosted hardware, including runtime, framework, HTTP server, database driver, and container configuration. It is a reference for this run, not universal proof that one language or framework is always faster.</p><p><a href="https://github.com/tappe9/simple-api-benchmark/blob/${model.source}/docs/METHODOLOGY.md">Read the methodology</a> · <a href="./results/latest.json">Inspect the result JSON</a></p></section></article>`;
+function historyNavigation(historyIndex, selectedHistoryId) {
+  validateHistoryIndex(historyIndex);
+  const options = historyIndex.runs.map((entry) => `<option value="${escapeHtml(entry.id)}"${entry.id === selectedHistoryId ? " selected" : ""}>${escapeHtml(entry.completed_at)} · Run ${escapeHtml(entry.id)}</option>`).join("");
+  const banner = selectedHistoryId
+    ? `<aside class="limitation" data-history-view><h2>Historical verified run</h2><p>Showing archived run <code>${escapeHtml(selectedHistoryId)}</code>. This page does not infer regressions or improvements across runs. Commits, runner images, toolchains, drivers, shared-host placement, and methodology may differ; matching metadata does not guarantee the same shared host.</p></aside>`
+    : "";
+  return `<section class="history-navigation"><h2>Result history</h2><label for="history-select">Verified run</label><select id="history-select" data-history-select><option value=""${selectedHistoryId ? "" : " selected"}>Latest verified result</option>${options}</select><p>Historical reports are validated with the same supported-report rules before publication. Select a run to create a shareable URL.</p></section>${banner}`;
 }
 
-export async function loadReport(fetcher = fetch) {
+export function renderReport(report, options = {}) {
+  const model = viewModel(report);
+  const historyIndex = options.historyIndex ?? EMPTY_HISTORY;
+  const selectedHistoryId = options.selectedHistoryId ?? "";
+  const resultPath = options.resultPath ?? "./results/latest.json";
+  validateHistoryIndex(historyIndex);
+  if (selectedHistoryId) assert(historyIndex.runs.length === 0 || historyIndex.runs.some((entry) => entry.id === selectedHistoryId), "selected history run is not indexed");
+  assert(resultPath === "./results/latest.json" || HISTORY_PATH.test(resultPath), "invalid result JSON path");
+  const charts = ENDPOINTS.flatMap((endpoint) => Object.keys(METRICS).map((metric) => chart(model, endpoint, metric))).join("");
+  const conditions = model.conditions;
+  return `<article class="results">${historyNavigation(historyIndex, selectedHistoryId)}<header><p class="eyebrow">Verified official benchmark</p><h2>Results</h2><p>Cohort: <code>${escapeHtml(model.cohort)}</code> · Definition: <code>${escapeHtml(REGISTRY.definition.id)}</code>.</p><p>Measured <time datetime="${escapeHtml(model.completedAt)}">${escapeHtml(model.completedAt)}</time> on shared GitHub-hosted hardware. Source <code>${escapeHtml(model.source)}</code> · Run <code>${escapeHtml(model.runId)}</code> · <a href="${escapeHtml(model.runUrl)}">Actions run</a>.</p><p>${conditions.api_cpus} CPU · ${(conditions.api_memory_bytes / 1048576).toFixed(0)} MiB · ${conditions.workers} worker · DB pool ${conditions.pool_max} · HTTP/${escapeHtml(conditions.http_version)} · ${conditions.connections} connections · ${conditions.warmup_seconds}s warm-up · ${conditions.runs} × ${conditions.duration_seconds}s.</p>${environment(model)}</header><section class="dashboard" data-dashboard><h2>Compare this run</h2><p class="dashboard-help">Switch endpoint and metric, or filter by language and framework. Every value comes from this verified run; missing values are never shown as zero.</p>${dashboardControls(model)}<div class="charts" data-dashboard-charts>${charts}</div><p class="sr-only" aria-live="polite" data-dashboard-status>Showing ${escapeHtml(TESTS[ENDPOINTS[0]])} ${escapeHtml(METRICS.rps.label)}.</p></section>${runDetails(model)}<section><h2>Complete results table</h2>${table(model)}</section><section><h2>Versions in this run</h2><div class="version-grid">${versions(model)}</div></section><section class="limitation"><h2>What this result means</h2><p>This compares complete API stacks on shared hosted hardware, including runtime, framework, HTTP server, database driver, and container configuration. It is a reference for this run, not universal proof that one language or framework is always faster.</p><p><a href="https://github.com/tappe9/simple-api-benchmark/blob/${model.source}/docs/METHODOLOGY.md">Read the methodology</a> · <a href="${escapeHtml(resultPath)}">Inspect the result JSON</a></p></section></article>`;
+}
+
+export async function loadReport(fetcher = fetch, options = {}) {
+  const resultPath = options.resultPath ?? "./results/latest.json";
+  const selectedHistoryId = options.selectedHistoryId ?? "";
+  const historyIndex = options.historyIndex ?? EMPTY_HISTORY;
   try {
-    const response = await fetcher("./results/latest.json", { cache: "no-store" });
-    if (response.status === 404) return { state: "empty", html: "", message: "No verified official result is available yet." };
+    const response = await fetcher(resultPath, { cache: "no-store" });
+    if (response.status === 404) return { state: "empty", html: "", message: selectedHistoryId ? "Requested verified result was not found." : "No verified official result is available yet." };
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const report = await response.json();
-    return { state: "ready", html: renderReport(report), message: "", model: viewModel(report) };
+    return { state: "ready", html: renderReport(report, { resultPath, selectedHistoryId, historyIndex }), message: "", model: viewModel(report) };
   } catch (_error) {
     return { state: "unavailable", html: "", message: "Verified results are temporarily unavailable. No missing value is shown as zero." };
   }
+}
+
+async function loadHistoryIndex(fetcher = fetch) {
+  const response = await fetcher("./results/history/index.json", { cache: "no-store" });
+  if (response.status === 404) return EMPTY_HISTORY;
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return validateHistoryIndex(await response.json());
+}
+
+function selectedHistory(historyIndex, search) {
+  const params = new URLSearchParams(search);
+  const values = params.getAll("run");
+  if (values.length === 0) return { id: "", path: "./results/latest.json" };
+  assert(values.length === 1 && HISTORY_ID.test(values[0]), "requested verified result was not found");
+  const entry = historyIndex.runs.find((candidate) => candidate.id === values[0]);
+  assert(entry, "requested verified result was not found");
+  return { id: entry.id, path: entry.path };
+}
+
+function wireHistory(root) {
+  const select = root.querySelector("[data-history-select]");
+  if (!select) return;
+  select.addEventListener("change", () => {
+    const url = new URL(window.location.href);
+    if (select.value) url.searchParams.set("run", select.value);
+    else url.searchParams.delete("run");
+    window.location.assign(url.href);
+  });
 }
 
 function wireDashboard(root, model) {
@@ -366,14 +442,24 @@ async function boot() {
   wireTheme();
   const target = document.getElementById("results");
   if (!target) return;
-  const state = await loadReport();
-  if (state.state === "ready") {
-    target.removeAttribute("role");
-    target.innerHTML = state.html;
-    wireDashboard(target, state.model);
-  } else {
+  try {
+    const historyIndex = await loadHistoryIndex();
+    const selection = selectedHistory(historyIndex, window.location.search);
+    const state = await loadReport(fetch, { resultPath: selection.path, selectedHistoryId: selection.id, historyIndex });
+    if (state.state === "ready") {
+      target.removeAttribute("role");
+      target.innerHTML = state.html;
+      wireHistory(target);
+      wireDashboard(target, state.model);
+    } else {
+      target.setAttribute("role", "status");
+      target.textContent = state.message;
+    }
+  } catch (error) {
     target.setAttribute("role", "status");
-    target.textContent = state.message;
+    target.textContent = String(error?.message || "").toLowerCase().includes("not found")
+      ? "Requested verified result was not found. No missing value is shown as zero."
+      : "Verified result history is temporarily unavailable. No missing value is shown as zero.";
   }
 }
 
