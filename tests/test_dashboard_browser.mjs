@@ -99,6 +99,13 @@ async function waitFor(cdp, expression, timeoutMs = 8000) {
 test('Pages dashboard works in a real browser under the project subpath', { timeout: 30000 }, async t => {
   execFileSync(python, ['-m', 'benchmark.site'], { cwd: root, stdio: 'pipe' });
   const output = join(root, '.cache', 'site');
+  const historyIndex = JSON.parse(await readFile(join(output, 'results/history/index.json'), 'utf8'));
+  const historical = historyIndex.runs.at(-1);
+  const historicalReport = historical
+    ? JSON.parse(await readFile(join(output, historical.path.replace(/^\.\//, '')), 'utf8'))
+    : null;
+  assert.ok(historical && historicalReport, 'repository fixture must provide a historical run');
+
   let reportMode = 'valid';
   const prefix = '/simple-api-benchmark/';
   const server = createServer(async (request, response) => {
@@ -156,11 +163,13 @@ test('Pages dashboard works in a real browser under the project subpath', { time
   await waitFor(cdp, `document.querySelectorAll('[data-result-row]').length === 12`);
 
   assert.equal(await evaluate(cdp, `location.pathname`), prefix);
+  assert.equal(await evaluate(cdp, `location.search`), '');
   assert.equal(await evaluate(cdp, `document.documentElement.dataset.theme`), 'light');
   assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-chart]:not([hidden])').length`), 1);
   assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-run-details]:not([hidden])').length`), 4);
+  assert.equal(await evaluate(cdp, `document.querySelector('[data-history-select]').value`), '');
   assert.equal(
-    await evaluate(cdp, `document.querySelector('.limitation a[href="./results/latest.json"]').href`),
+    await evaluate(cdp, `document.querySelector('[data-result-json]').href`),
     `${page}results/latest.json`,
   );
 
@@ -200,9 +209,31 @@ test('Pages dashboard works in a real browser under the project subpath', { time
   assert.equal(await evaluate(cdp, `document.querySelector('[data-endpoint="/json"]').getAttribute('aria-selected')`), 'true');
   assert.equal(await evaluate(cdp, `[...document.querySelectorAll('[data-run-details]:not([hidden])')].every(node => node.dataset.rowEndpoint === '/json')`), true);
 
+  await evaluate(cdp, `location.href = ${JSON.stringify(`${page}?run=${historical.id}`)}`);
+  await waitFor(cdp, `location.search === ${JSON.stringify(`?run=${historical.id}`)} && document.querySelectorAll('[data-result-row]').length === 12`);
+  assert.equal(await evaluate(cdp, `document.querySelector('[data-history-select]').value`), historical.id);
+  assert.equal(await evaluate(cdp, `document.querySelector('[data-history-view]') !== null`), true);
+  assert.equal(await evaluate(cdp, `document.getElementById('results').textContent.includes(${JSON.stringify(historicalReport.metadata.github.source_commit)})`), true);
+  assert.equal(await evaluate(cdp, `document.getElementById('results').textContent.includes(${JSON.stringify(historicalReport.metadata.github.run_id)})`), true);
+  assert.equal(
+    await evaluate(cdp, `document.querySelector('[data-result-json]').href`),
+    new URL(historical.path.replace(/^\.\//, ''), page).href,
+  );
+  assert.match(await evaluate(cdp, `document.querySelector('[data-history-view]').textContent`), /does not infer regressions/i);
+  assert.equal(await evaluate(cdp, `document.documentElement.scrollWidth <= window.innerWidth`), true);
+
+  await evaluate(cdp, `document.querySelector('[data-history-select]').value = ''; document.querySelector('[data-history-select]').dispatchEvent(new Event('change', { bubbles: true }));`);
+  await waitFor(cdp, `location.search === '' && document.querySelectorAll('[data-result-row]').length === 12`);
+  assert.equal(await evaluate(cdp, `document.querySelector('[data-history-select]').value`), '');
+
+  await evaluate(cdp, `location.href = ${JSON.stringify(`${page}?run=999999999-1`)}`);
+  await waitFor(cdp, `location.search === '?run=999999999-1' && document.getElementById('results')?.textContent.includes('not found') === true`);
+  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-result-row]').length`), 0);
+  assert.equal(await evaluate(cdp, `document.getElementById('results').textContent.includes('0.000')`), false);
+
   reportMode = 'malformed';
-  await cdp.send('Page.reload', { ignoreCache: true });
-  await waitFor(cdp, `document.getElementById('results')?.textContent.includes('temporarily unavailable') === true`);
+  await evaluate(cdp, `location.href = ${JSON.stringify(page)}`);
+  await waitFor(cdp, `location.search === '' && document.getElementById('results')?.textContent.includes('temporarily unavailable') === true`);
   assert.equal(await evaluate(cdp, `document.getElementById('results').getAttribute('role')`), 'status');
   assert.match(await evaluate(cdp, `document.getElementById('results').textContent`), /temporarily unavailable/i);
   assert.equal(await evaluate(cdp, `document.getElementById('results').textContent.includes('0.000')`), false);
