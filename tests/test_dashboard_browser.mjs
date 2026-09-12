@@ -140,6 +140,10 @@ test('Pages dashboard works in a real browser under the project subpath', { time
   assert.equal(await evaluate(cdp, `location.pathname`), prefix);
   assert.equal(await evaluate(cdp, `document.documentElement.dataset.theme`), 'light');
   assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-chart]:not([hidden])').length`), 1);
+  assert.equal(
+    await evaluate(cdp, `document.querySelector('.limitation a[href="./results/latest.json"]').href`),
+    `${page}results/latest.json`,
+  );
 
   await evaluate(cdp, `document.querySelector('[data-endpoint="/cpu"]').click(); document.querySelector('[data-metric="mean"]').click();`);
   assert.equal(await evaluate(cdp, `document.querySelector('[data-endpoint="/cpu"]').getAttribute('aria-selected')`), 'true');
@@ -147,6 +151,10 @@ test('Pages dashboard works in a real browser under the project subpath', { time
 
   await evaluate(cdp, `document.querySelector('[data-implementation-filter]').click();`);
   assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-chart]:not([hidden]) [data-chart-implementation]:not([hidden])').length`), 3);
+  await evaluate(cdp, `document.querySelector('[data-implementation-filter]').click(); document.querySelector('[data-language-filter="Go"]').click();`);
+  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-chart]:not([hidden]) [data-chart-implementation]:not([hidden])').length`), 3);
+  await evaluate(cdp, `document.querySelector('[data-language-filter="Go"]').click();`);
+  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-chart]:not([hidden]) [data-chart-implementation]:not([hidden])').length`), 4);
 
   await evaluate(cdp, `document.getElementById('theme-toggle').click();`);
   assert.equal(await evaluate(cdp, `document.documentElement.dataset.theme`), 'dark');
@@ -156,7 +164,6 @@ test('Pages dashboard works in a real browser under the project subpath', { time
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 375, height: 812, deviceScaleFactor: 1, mobile: true });
   assert.equal(await evaluate(cdp, `document.documentElement.scrollWidth <= window.innerWidth`), true);
 
-  // ARIA tablists must support arrow-key movement without requiring a pointer.
   await evaluate(cdp, `(() => {
     const current = document.querySelector('[data-endpoint="/cpu"]');
     current.focus();
