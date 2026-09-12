@@ -41,6 +41,16 @@ jobs:
           if old_entry not in text:
               raise SystemExit('FastAPI version entry marker missing')
           path.write_text(text.replace(old_entry, new_entry, 1))
+
+          service = Path('tests/test_python_flask_service.py')
+          source = service.read_text()
+          if source.startswith('#!/usr/bin/env python3\n'):
+              source = source.split('\n', 1)[1]
+          source = source.replace(
+              'result = subprocess.run(command, cwd=cwd, capture_output=True, text=True, timeout=timeout)',
+              'result = subprocess.run(command, cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False)',
+          )
+          service.write_text(source)
           PY
           python -m benchmark.registry --write
           python -m benchmark.registry --check
