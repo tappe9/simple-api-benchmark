@@ -52,7 +52,10 @@ services:
       <<: *database-environment
       GIN_MODE: release
     healthcheck:
-      test: [CMD, /go-gin, healthcheck]
+      test:
+        - CMD
+        - /go-gin
+        - healthcheck
       interval: 2s
       timeout: 3s
       retries: 30
@@ -65,7 +68,10 @@ services:
     environment:
       <<: *database-environment
     healthcheck:
-      test: [CMD, /go-echo, healthcheck]
+      test:
+        - CMD
+        - /go-echo
+        - healthcheck
       interval: 2s
       timeout: 3s
       retries: 30
@@ -79,7 +85,10 @@ services:
       <<: *database-environment
       NODE_ENV: production
     healthcheck:
-      test: [CMD, node, src/healthcheck.js]
+      test:
+        - CMD
+        - node
+        - src/healthcheck.js
       interval: 2s
       timeout: 3s
       retries: 30
@@ -93,7 +102,10 @@ services:
       <<: *database-environment
       NODE_ENV: production
     healthcheck:
-      test: [CMD, node, src/healthcheck.js]
+      test:
+        - CMD
+        - node
+        - src/healthcheck.js
       interval: 2s
       timeout: 3s
       retries: 30
@@ -106,7 +118,11 @@ services:
     environment:
       <<: *database-environment
     healthcheck:
-      test: [CMD, python, -m, benchmark_api.healthcheck]
+      test:
+        - CMD
+        - python
+        - -m
+        - benchmark_api.healthcheck
       interval: 2s
       timeout: 3s
       retries: 30
@@ -119,7 +135,11 @@ services:
     environment:
       <<: *database-environment
     healthcheck:
-      test: [CMD, python, -m, benchmark_api.healthcheck]
+      test:
+        - CMD
+        - python
+        - -m
+        - benchmark_api.healthcheck
       interval: 2s
       timeout: 3s
       retries: 30
@@ -132,7 +152,10 @@ services:
     environment:
       <<: *database-environment
     healthcheck:
-      test: [CMD, /usr/local/bin/rust-actix, healthcheck]
+      test:
+        - CMD
+        - /usr/local/bin/rust-actix
+        - healthcheck
       interval: 2s
       timeout: 3s
       retries: 30
@@ -145,7 +168,10 @@ services:
     environment:
       <<: *database-environment
     healthcheck:
-      test: [CMD, /usr/local/bin/rust-axum, healthcheck]
+      test:
+        - CMD
+        - /usr/local/bin/rust-axum
+        - healthcheck
       interval: 2s
       timeout: 3s
       retries: 30
