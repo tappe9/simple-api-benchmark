@@ -154,7 +154,7 @@ test('the document is self-contained, mobile-ready and has a non-JavaScript expl
 });
 
 function resultLink(html) {
-  const match = html.match(/<a href="([^"]+)">Inspect the result JSON<\/a>/);
+  const match = html.match(/<a\b[^>]*\bhref="([^"]+)"[^>]*>Inspect the result JSON<\/a>/);
   assert.ok(match, 'the rendered result must expose its JSON link');
   return match[1];
 }

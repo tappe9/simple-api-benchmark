@@ -29,8 +29,8 @@
 html { background: var(--page); }
 body { margin: 0; background: var(--page); color: var(--text); }
 a { color: var(--accent); }
-button, input { font: inherit; }
-button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+button, input, select { font: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .shell { width: min(1120px, calc(100% - 2rem)); margin-inline: auto; }
 .hero { padding: 3.5rem 0 2.5rem; border-bottom: 1px solid var(--border); background: var(--surface); }
 .hero-layout { display: flex; justify-content: space-between; align-items: flex-start; gap: 2rem; }
@@ -42,9 +42,13 @@ nav { display: flex; gap: 1rem; flex-wrap: wrap; }
 .theme-toggle { white-space: nowrap; }
 main { padding-block: 2rem 4rem; }
 .status { padding: 1.25rem; border: 1px solid var(--border); border-radius: .9rem; background: var(--surface); }
-.results > header, .limitation, .dashboard { padding: 1.35rem; border: 1px solid var(--border); border-radius: .9rem; background: var(--surface); }
+.results > header, .limitation, .dashboard, .history-navigation { padding: 1.35rem; border: 1px solid var(--border); border-radius: .9rem; background: var(--surface); }
 .results h2 { margin-top: 2.4rem; }
-.results > header h2, .limitation h2, .dashboard h2 { margin-top: .3rem; }
+.results > header h2, .limitation h2, .dashboard h2, .history-navigation h2 { margin-top: .3rem; }
+.history-navigation { margin-bottom: 1.5rem; }
+.history-navigation label { display: block; margin-bottom: .45rem; font-weight: 700; }
+.history-navigation select { width: min(100%, 38rem); max-width: 100%; padding: .65rem .75rem; border: 1px solid var(--border); border-radius: .65rem; background: var(--surface); color: var(--text); }
+.history-navigation p { color: var(--muted); max-width: 780px; }
 .dashboard { margin-top: 1.5rem; }
 .dashboard-help { color: var(--muted); max-width: 780px; }
 .dashboard-controls { display: grid; gap: 1rem; margin: 1.25rem 0; }

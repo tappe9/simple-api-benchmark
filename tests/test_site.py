@@ -57,7 +57,7 @@ class SiteBuildTests(unittest.TestCase):
         self.assertTrue((self.output / ".nojekyll").is_file())
         self.assertEqual(
             {p.relative_to(self.output).as_posix() for p in self.output.rglob("*") if p.is_file()},
-            {*ASSETS, ".nojekyll", "results/latest.json"},
+            {*ASSETS, ".nojekyll", "results/latest.json", "results/history/index.json"},
         )
 
     def test_unofficial_partial_and_tampered_reports_preserve_previous_build(self):
@@ -107,6 +107,7 @@ class SiteBuildTests(unittest.TestCase):
         self.build()
         self.assertTrue((self.output / "index.html").exists())
         self.assertFalse((self.output / "results/latest.json").exists())
+        self.assertTrue((self.output / "results/history/index.json").exists())
         self.assertFalse((self.root / "results/latest.json").exists())
 
     def test_duplicate_keys_and_invalid_json_do_not_replace_previous_build(self):
