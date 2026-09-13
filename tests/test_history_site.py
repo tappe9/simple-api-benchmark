@@ -60,6 +60,17 @@ class HistorySiteTests(unittest.TestCase):
         build(self.root)
         self.assertEqual(self.index(), {"schema_version": 1, "runs": []})
 
+    def test_single_history_run_is_indexed_and_published(self):
+        keep = self.history_sources[0].name
+        for path in (self.root / "results/history").iterdir():
+            if path.name != keep:
+                path.unlink()
+        build(self.root)
+        runs = self.index()["runs"]
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(Path(runs[0]["path"]).name, keep)
+        self.assertTrue((self.output / runs[0]["path"].removeprefix("./")).is_file())
+
     def test_duplicate_run_identity_is_rejected_without_replacing_previous_site(self):
         build(self.root)
         previous = (self.output / "index.html").read_bytes()
