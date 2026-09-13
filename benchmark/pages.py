@@ -6,6 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from .publication import expected_publication_paths
 from .report import REPOSITORY, validate_report
 from .results import BenchmarkFailure, require, strict_json
 
@@ -90,13 +91,9 @@ def validate_event(environment, event, *, head: str, parents=(), changed=(), rep
     )
 
     paths = list(changed)
-    require(len(paths) == 4, "official publication must change exactly four files")
-    fixed = {"README.md", "README.ja.md", "results/latest.json"}
-    require(fixed <= set(paths), "official publication files missing")
-    history = [
-        path for path in paths if path.startswith("results/history/") and path.endswith(".json")
-    ]
-    require(len(history) == 1 and set(paths) == fixed | set(history), "unexpected publication path")
+    require(all(type(path) is str and bool(path) for path in paths), "invalid publication path")
+    require(len(paths) == len(set(paths)), "duplicate publication path")
+    require(set(paths) == expected_publication_paths(report), "unexpected publication path")
 
 
 def git(*args: str) -> str:
