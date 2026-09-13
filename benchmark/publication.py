@@ -3,9 +3,7 @@
 from .readme_charts import CHARTS
 from .report import timestamp
 
-FIXED_PUBLICATION_PATHS = frozenset(
-    {"README.md", "README.ja.md", "results/latest.json"}
-)
+FIXED_PUBLICATION_PATHS = frozenset({"README.md", "README.ja.md", "results/latest.json"})
 CHART_PUBLICATION_PATHS = frozenset(path for path, _ in CHARTS.values())
 
 
