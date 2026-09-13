@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from test_benchmark_publication import REPOSITORY, START, END, context, synthetic_report
+from test_benchmark_publication import END, REPOSITORY, START, context, synthetic_report
 
 PAGES_WORKFLOW = REPOSITORY + "/.github/workflows/pages.yml@refs/heads/main"
 EXPECTED_HISTORY = "results/history/2026-09-05T11-00-00Z-12345-1.json"
