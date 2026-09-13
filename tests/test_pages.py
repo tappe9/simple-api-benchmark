@@ -19,7 +19,7 @@ EXPECTED_PUBLICATION_PATHS = [
     "results/latest.json",
     EXPECTED_HISTORY,
     "results/charts/json-throughput.svg",
-    "results/charts/db-throughput.svg",
+    "results/charts/postgresql-throughput.svg",
     "results/charts/cpu-throughput.svg",
 ]
 
@@ -147,15 +147,19 @@ class PagesContextTests(unittest.TestCase):
     def test_official_rejects_manifest_substitutions(self):
         arguments = self.official()
         substitutions = (
-            [path for path in arguments["changed"] if path != "results/charts/db-throughput.svg"],
+            [
+                path
+                for path in arguments["changed"]
+                if path != "results/charts/postgresql-throughput.svg"
+            ],
             [
                 "results/history/wrong.json" if path == EXPECTED_HISTORY else path
                 for path in arguments["changed"]
             ],
             [*arguments["changed"], "results/history/extra.json"],
             [
-                "results/charts/db-throughput.txt"
-                if path == "results/charts/db-throughput.svg"
+                "results/charts/postgresql-throughput.txt"
+                if path == "results/charts/postgresql-throughput.svg"
                 else path
                 for path in arguments["changed"]
             ],
