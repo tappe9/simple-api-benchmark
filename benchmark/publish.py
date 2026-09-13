@@ -10,8 +10,9 @@ from pathlib import Path
 
 from .generate_readme import render, replace_section
 from .official import trusted_context
-from .readme_charts import CHARTS, render_charts
-from .report import REPOSITORY, audit_raw, read_regular, timestamp, validate_report
+from .publication import CHART_PUBLICATION_PATHS, expected_publication_paths, history_path
+from .readme_charts import render_charts
+from .report import REPOSITORY, audit_raw, read_regular, validate_report
 from .results import BenchmarkFailure, require, strict_json
 from .run import ROOT
 
@@ -33,12 +34,6 @@ def git(root: Path, *args: str, data: bytes | None = None, environment=None) -> 
     # Do not include subprocess output here: transport errors could contain credentials.
     require(result.returncode == 0, f"Git operation failed: {args[0]} (exit {result.returncode})")
     return result.stdout.decode("utf-8").strip()
-
-
-def history_path(report: dict) -> str:
-    date = timestamp(report["completed_at"]).strftime("%Y-%m-%dT%H-%M-%SZ")
-    context = report["metadata"]["github"]
-    return f"results/history/{date}-{context['run_id']}-{context['run_attempt']}.json"
 
 
 def publish(report: dict, root: Path, *, expected_context: dict, environment=None) -> str:
@@ -69,10 +64,9 @@ def publish(report: dict, root: Path, *, expected_context: dict, environment=Non
         original = read_regular(root / filename, root).decode("utf-8")
         updates[filename] = replace_section(original, render(report, locale)).encode()
     charts = render_charts(report)
-    expected_charts = {path for path, _ in CHARTS.values()}
-    require(set(charts) == expected_charts, "unexpected README chart output")
+    require(set(charts) == CHART_PUBLICATION_PATHS, "unexpected README chart output")
     updates.update({path: svg.encode("utf-8") for path, svg in charts.items()})
-    allowed = {"README.md", "README.ja.md", "results/latest.json", history, *expected_charts}
+    allowed = expected_publication_paths(report)
     require(set(updates) == allowed, "unexpected publication path")
     with tempfile.TemporaryDirectory(prefix="sab-publish-") as directory:
         env = dict(os.environ if environment is None else environment)

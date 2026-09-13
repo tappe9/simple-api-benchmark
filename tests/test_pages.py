@@ -12,6 +12,16 @@ ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "tappe9/simple-api-benchmark"
 HEAD = "b" * 40
 WORKFLOW = REPOSITORY + "/.github/workflows/pages.yml@refs/heads/main"
+EXPECTED_HISTORY = "results/history/2026-09-09T07-25-22Z-34321830470-1.json"
+EXPECTED_PUBLICATION_PATHS = [
+    "README.md",
+    "README.ja.md",
+    "results/latest.json",
+    EXPECTED_HISTORY,
+    "results/charts/json-throughput.svg",
+    "results/charts/postgresql-throughput.svg",
+    "results/charts/cpu-throughput.svg",
+]
 
 
 class PagesContextTests(unittest.TestCase):
@@ -61,12 +71,7 @@ class PagesContextTests(unittest.TestCase):
         )
         return {
             "parents": [context["source_commit"]],
-            "changed": [
-                "README.md",
-                "README.ja.md",
-                "results/latest.json",
-                "results/history/test-publication.json",
-            ],
+            "changed": list(EXPECTED_PUBLICATION_PATHS),
             "report": self.report,
         }
 
@@ -119,8 +124,9 @@ class PagesContextTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(BenchmarkFailure):
                 self.validate()
 
-    def test_official_success_requires_its_exact_run_and_single_publication_only_commit(self):
+    def test_official_success_requires_its_exact_run_and_publication_manifest(self):
         arguments = self.official()
+        self.assertEqual(arguments["changed"], EXPECTED_PUBLICATION_PATHS)
         self.validate(**arguments)
         for changes in (
             {"parents": ["a" * 40]},
@@ -137,6 +143,30 @@ class PagesContextTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(BenchmarkFailure):
                 self.validate(**arguments)
             self.event["workflow_run"][key] = old
+
+    def test_official_rejects_manifest_substitutions(self):
+        arguments = self.official()
+        substitutions = (
+            [
+                path
+                for path in arguments["changed"]
+                if path != "results/charts/postgresql-throughput.svg"
+            ],
+            [
+                "results/history/wrong.json" if path == EXPECTED_HISTORY else path
+                for path in arguments["changed"]
+            ],
+            [*arguments["changed"], "results/history/extra.json"],
+            [
+                "results/charts/postgresql-throughput.txt"
+                if path == "results/charts/postgresql-throughput.svg"
+                else path
+                for path in arguments["changed"]
+            ],
+        )
+        for changed in substitutions:
+            with self.subTest(changed=changed), self.assertRaises(BenchmarkFailure):
+                self.validate(**{**arguments, "changed": changed})
 
     def test_an_invalid_report_never_authorizes_an_official_publication_event(self):
         arguments = self.official()
