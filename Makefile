@@ -106,7 +106,7 @@ test:
 	@$(MAKE) --no-print-directory axum-diagnostic
 
 test-workflows:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p test_workflows.py -v
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p 'test_workflows*.py' -v
 	@actionlint
 
 test-site:
