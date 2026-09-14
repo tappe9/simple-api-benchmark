@@ -1,75 +1,102 @@
-.DEFAULT_GOAL := help
+COMPOSE ?= docker compose
 PYTHON ?= python3
+CONTRACT_IMPL ?= all
 
-.PHONY: help up down logs ps test test-implementations test-contract test-benchmark test-workflows test-site generate-readme benchmark benchmark-smoke benchmark-official benchmark-publish benchmark-healthcheck-investigation axum-diagnostic
+DB_SERVICE := postgres
+DB_NAME := benchmark
+DB_USER := benchmark
+DB_WAIT_TIMEOUT ?= 60
+PSQL := $(COMPOSE) exec -T $(DB_SERVICE) psql -X --username $(DB_USER) --dbname $(DB_NAME) --set ON_ERROR_STOP=1 --tuples-only --no-align
 
-help:
-	@echo "Targets:"
-	@echo "  up             Start all services"
-	@echo "  down           Stop all services and remove volumes"
-	@echo "  logs           Follow service logs"
-	@echo "  ps             Show Compose services"
-	@echo "  test           Run all local quality gates"
-	@echo "  test-implementations Run implementation-specific acceptance/failure tests"
-	@echo "  test-contract  Run the shared API contract suite"
-	@echo "  test-benchmark Run benchmark unit/integration tests"
-	@echo "  test-workflows Run workflow syntax and policy tests"
-	@echo "  test-site      Run Pages/static-site tests"
-	@echo "  generate-readme Regenerate README benchmark sections"
-	@echo "  benchmark      Run local benchmark"
-	@echo "  benchmark-smoke Run short non-publishing benchmark smoke"
-	@echo "  benchmark-official Run the trusted official benchmark wrapper"
-	@echo "  benchmark-publish Publish an audited official result"
-	@echo "  benchmark-healthcheck-investigation Run non-publishing healthcheck diagnostic"
-	@echo "  axum-diagnostic Run the non-publishing Axum load diagnostic"
+.PHONY: db-up db-check db-reset test-db test-implementations test-registry test-compose test-contract down
 
-up:
-	docker compose up --build -d
+db-up:
+	@echo "Starting PostgreSQL $(DB_SERVICE) service..."
+	@status=0; \
+	$(COMPOSE) up --detach --wait --wait-timeout $(DB_WAIT_TIMEOUT) $(DB_SERVICE) || status=$$?; \
+	if [ "$$status" -eq 0 ]; then \
+		$(MAKE) --no-print-directory db-check || status=$$?; \
+	fi; \
+	if [ "$$status" -ne 0 ]; then \
+		echo >&2 "PostgreSQL startup or fixture validation failed (exit $$status)."; \
+		$(COMPOSE) ps >&2 || true; \
+		$(COMPOSE) logs --no-color $(DB_SERVICE) >&2 || true; \
+		$(COMPOSE) down --remove-orphans --volumes >/dev/null 2>&1 || true; \
+		exit "$$status"; \
+	fi
+	@echo "PostgreSQL is healthy and the benchmark fixture is ready."
 
-down:
-	docker compose down --remove-orphans --volumes
+db-check:
+	@set -eu; \
+	row="$$( $(PSQL) --field-separator='|' --command "SELECT id, name, price FROM items WHERE id = 42;" )"; \
+	if [ "$$row" != "42|Item 42|4200" ]; then \
+		echo >&2 "Unexpected fixture row: '$$row'"; \
+		exit 1; \
+	fi; \
+	count="$$( $(PSQL) --command "SELECT COUNT(*) FROM items;" )"; \
+	if [ "$$count" != "1" ]; then \
+		echo >&2 "Unexpected items row count: '$$count'"; \
+		exit 1; \
+	fi; \
+	echo "Verified items fixture: 42|Item 42|4200 (row count: 1)."
 
-logs:
-	docker compose logs -f
+db-reset:
+	@echo "Resetting the benchmark database from database/init.sql..."
+	@$(MAKE) --no-print-directory down
+	@$(MAKE) --no-print-directory db-up
 
-ps:
-	docker compose ps
+test-db:
+	@$(PYTHON) tests/test_database_environment.py
 
-test-go-gin:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/test_go_gin_service.py
+include benchmark/implementations.mk
 
-test-go-echo:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/test_go_echo_service.py
+# Keep even `make -j test-implementations` sequential on shared host port 8080.
+test-implementations: test-registry
+	@set -eu; for target in $(IMPLEMENTATION_TARGETS); do \
+		$(MAKE) --no-print-directory "$$target"; \
+	done
 
-test-rust-actix:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/test_rust_actix_service.py
+test-registry:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.registry --check
 
-test-rust-axum:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/test_rust_axum_service.py
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/test_rust_axum_acceptance.py
-
-test-node-fastify:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/test_node_fastify_service.py
-
-test-node-express:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/test_node_express_service.py
-
-test-python-fastapi:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/test_python_fastapi_service.py
-
-test-python-flask:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) tests/test_python_flask_service.py
-
-test-implementations:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.ci implementations
+test-compose:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p 'test_compose_parity.py' -v
 
 test-contract:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p 'test_contract_*.py' -v
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p 'test_contract_*.py'
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.contract_runner --implementation "$(CONTRACT_IMPL)" --compose "$(COMPOSE)"
+
+down:
+	@echo "Removing benchmark containers and project network..."
+	@$(COMPOSE) down --remove-orphans --volumes
+
+.PHONY: benchmark test-benchmark benchmark-smoke healthcheck-investigation axum-diagnostic install-oha
+
+install-oha:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.run --install-only
 
 test-benchmark:
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests -p 'test_benchmark_*.py' -v
 
+benchmark:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.run --compose "$(COMPOSE)"
+
+benchmark-smoke:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.run --compose "$(COMPOSE)" --smoke
+
+axum-diagnostic:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.axum_diagnostic --compose "$(COMPOSE)"
+
+healthcheck-investigation:
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.healthcheck_investigation
+
+.PHONY: test test-workflows test-site generate-readme
+
+# Recursive invocations deliberately serialize services sharing loopback port 8080.
 test:
+	@$(MAKE) --no-print-directory test-registry
+	@$(MAKE) --no-print-directory test-compose
+	@$(MAKE) --no-print-directory test-db
 	@$(MAKE) --no-print-directory test-implementations
 	@$(MAKE) --no-print-directory test-contract
 	@$(MAKE) --no-print-directory test-benchmark
@@ -90,21 +117,3 @@ test-site:
 
 generate-readme:
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.generate_readme
-
-benchmark:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.run
-
-benchmark-smoke:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.run --smoke
-
-benchmark-official:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.official
-
-benchmark-publish:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.publish
-
-benchmark-healthcheck-investigation:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.healthcheck_investigation
-
-axum-diagnostic:
-	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m benchmark.axum_diagnostic
