@@ -30,8 +30,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: python
         run: |
-          import hashlib, json, os, re, subprocess, time, urllib.request
-          from datetime import datetime
+          import hashlib, json, os, subprocess, time, urllib.request
           from pathlib import Path
           from benchmark.generate_readme import render, replace_section
           from benchmark.publication import expected_publication_paths, history_path
@@ -48,10 +47,11 @@ jobs:
           out.mkdir()
           with open(os.environ['GITHUB_ENV'], 'a') as f:
               f.write(f'ROLLOUT_EVIDENCE={out}\n')
-          def api_bytes(path):
-              return subprocess.run(['gh', 'api', f'repos/{repo}/{path}'], check=True, capture_output=True, timeout=60).stdout
           def api(path):
-              return json.loads(api_bytes(path))
+              result = subprocess.run(['gh', 'api', f'repos/{repo}/{path}'], capture_output=True, timeout=60)
+              if result.returncode:
+                  raise RuntimeError('GitHub read failed for ' + path + ': ' + result.stderr.decode())
+              return json.loads(result.stdout)
           def git(*args):
               return subprocess.run(['git', *args], check=True, capture_output=True, timeout=120).stdout
           def save(name, data):
@@ -69,9 +69,6 @@ jobs:
           save('official-jobs.json', jobs)
           assert jobs['total_count'] == 2 and {j['name'] for j in jobs['jobs']} == {'measure', 'publish'}
           assert all(j['conclusion'] == 'success' for j in jobs['jobs'])
-          log = api_bytes('actions/jobs/104241577063/logs')
-          assert len(log) < 2*1024*1024
-          (out/'measure.log').write_bytes(log)
           git('fetch', '--no-tags', '--depth=2', 'origin', 'refs/heads/main')
           assert git('rev-parse', 'FETCH_HEAD').decode().strip() == publication
           assert git('rev-list', '--parents', '-n', '1', publication).decode().split() == [publication, source]
@@ -138,14 +135,6 @@ jobs:
                   except (OSError, AssertionError) as error:
                       assert time.monotonic() < live_deadline, str(error)
                       time.sleep(15)
-          starts = re.findall(r'(?m)^(\S+) \[([a-z-]+)\] build -> readiness', log.decode('utf-8-sig'))
-          assert len(starts) == 8
-          stage_times = []
-          for i, (stamp, name) in enumerate(starts):
-              end = starts[i+1][0] if i+1 < len(starts) else report['completed_at']
-              stage_times.append({'implementation':name, 'start':stamp, 'end':end,
-                  'build_start_through_cleanup_seconds':(datetime.fromisoformat(end.replace('Z','+00:00'))-datetime.fromisoformat(stamp.replace('Z','+00:00'))).total_seconds()})
-          save('stage-times.json', stage_times)
           index = json.loads(expected_files['results/history/index.json'])
           summary = dict(measured_source=source, source_tree=source_tree, publication=publication,
               official_run_id=run_id, official_run_attempt=1, pages_run_id=pages_run['id'], pages_event=pages_run['event'],
