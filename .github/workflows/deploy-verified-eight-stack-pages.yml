@@ -1,0 +1,54 @@
+name: Deploy verified eight-stack Pages
+on:
+  push:
+    branches: [ops/deploy-eight-stack-pages]
+permissions:
+  contents: read
+  actions: write
+jobs:
+  dispatch:
+    if: github.repository == 'tappe9/simple-api-benchmark'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify exact publication identity and dispatch existing main-only Pages once
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          import json, subprocess
+          repo = 'tappe9/simple-api-benchmark'
+          source = 'c8e033ea176366644f5bed5ded12cab79e6fcbeb'
+          publication = '25fa3f086919f7124afe3c8d22f0791bd83768ef'
+          def api(path, method='GET', data=None):
+              command = ['gh', 'api', '--method', method, f'repos/{repo}/{path}']
+              if data is not None:
+                  command += ['--input', '-']
+              result = subprocess.run(command, input=None if data is None else json.dumps(data), text=True, capture_output=True, check=True, timeout=60)
+              return json.loads(result.stdout) if result.stdout.strip() else None
+          run = api('actions/runs/34925168324')
+          assert run['head_sha'] == source and run['run_attempt'] == 1
+          assert run['status'] == 'completed' and run['conclusion'] == 'success'
+          assert run['path'] == '.github/workflows/benchmark.yml'
+          assert api('git/ref/heads/main')['object']['sha'] == publication
+          commit = api(f'commits/{publication}')
+          assert [p['sha'] for p in commit['parents']] == [source]
+          expected = {'README.md', 'README.ja.md', 'results/latest.json',
+              'results/history/2026-09-15T04-14-09Z-34925168324-1.json',
+              'results/charts/json-throughput.svg', 'results/charts/postgresql-throughput.svg', 'results/charts/cpu-throughput.svg'}
+          assert len(commit['files']) == 7 and {f['filename'] for f in commit['files']} == expected
+          candidates = api(f'actions/runs?head_sha={publication}&per_page=100')['workflow_runs']
+          pages = [r for r in candidates if r['path'] == '.github/workflows/pages.yml' and r['head_branch'] == 'main' and r['status'] != 'completed']
+          passed = [r for r in candidates if r['path'] == '.github/workflows/pages.yml' and r['conclusion'] == 'success']
+          if pages or passed:
+              print('An exact-publication Pages run already exists; no duplicate dispatch.')
+          else:
+              assert api('git/ref/heads/main')['object']['sha'] == publication
+              api('actions/workflows/pages.yml/dispatches', 'POST', {'ref': 'main'})
+              print('Dispatched only the existing Pages workflow for verified publication ' + publication)
+          superseded = api('actions/runs/34926323866')
+          assert superseded['head_sha'] == '309afd6d5220070bfc987f20fdf9f3f67a7904d0'
+          assert superseded['path'] == '.github/workflows/eight-stack-rollout-verification.yml'
+          if superseded['status'] != 'completed':
+              api('actions/runs/34926323866/cancel', 'POST')
+              print('Cancelled only the superseded verifier that expected an automatic event.')
