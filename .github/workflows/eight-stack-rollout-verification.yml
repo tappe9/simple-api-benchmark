@@ -9,7 +9,7 @@ jobs:
   verify:
     if: github.repository == 'tappe9/simple-api-benchmark'
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 20
     env:
       PYTHONDONTWRITEBYTECODE: '1'
       PYTHONPATH: ${{ github.workspace }}
@@ -25,12 +25,13 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: apps/node-fastify/.node-version
-      - name: Audit the existing official run and compare every live Pages file
+      - name: Audit completed official publication and every live Pages file
         env:
           GH_TOKEN: ${{ github.token }}
         shell: python
         run: |
-          import hashlib, json, os, subprocess, time, urllib.request
+          import hashlib, json, os, re, subprocess, time, urllib.request
+          from datetime import datetime
           from pathlib import Path
           from benchmark.generate_readme import render, replace_section
           from benchmark.publication import expected_publication_paths, history_path
@@ -40,41 +41,40 @@ jobs:
           repo = 'tappe9/simple-api-benchmark'
           source = 'c8e033ea176366644f5bed5ded12cab79e6fcbeb'
           source_tree = '9389884db4164633b45151b737fdebd8c2706176'
+          publication = '25fa3f086919f7124afe3c8d22f0791bd83768ef'
           run_id = 34925168324
           root = Path.cwd()
           out = Path(os.environ['RUNNER_TEMP']) / 'rollout-evidence'
           out.mkdir()
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f'ROLLOUT_EVIDENCE={out}\n')
+          def api_bytes(path):
+              return subprocess.run(['gh', 'api', f'repos/{repo}/{path}'], check=True, capture_output=True, timeout=60).stdout
           def api(path):
-              result = subprocess.run(['gh', 'api', f'repos/{repo}/{path}'], check=True, capture_output=True, timeout=60)
-              return json.loads(result.stdout)
+              return json.loads(api_bytes(path))
           def git(*args):
               return subprocess.run(['git', *args], check=True, capture_output=True, timeout=120).stdout
           def save(name, data):
               (out / name).write_text(json.dumps(data, indent=2) + '\n')
           assert git('rev-parse', 'HEAD').decode().strip() == source
           assert git('rev-parse', 'HEAD^{tree}').decode().strip() == source_tree
-          deadline = time.monotonic() + 3000
-          while True:
-              run = api(f'actions/runs/{run_id}')
-              assert run['head_sha'] == source and run['run_attempt'] == 1
-              assert run['path'] == '.github/workflows/benchmark.yml'
-              assert run['event'] == 'workflow_dispatch' and run['head_branch'] == 'main'
-              assert run['head_repository']['full_name'] == repo
-              if run['status'] == 'completed':
-                  save('official-run.json', run)
-                  assert run['conclusion'] == 'success', f"official run failed: {run['conclusion']}"
-                  break
-              assert time.monotonic() < deadline, 'official completion deadline exceeded'
-              print('Existing authorized official run is still measuring; no new dispatch.', flush=True)
-              time.sleep(60)
+          run = api(f'actions/runs/{run_id}')
+          save('official-run.json', run)
+          assert run['head_sha'] == source and run['run_attempt'] == 1
+          assert run['path'] == '.github/workflows/benchmark.yml'
+          assert run['event'] == 'workflow_dispatch' and run['head_branch'] == 'main'
+          assert run['head_repository']['full_name'] == repo
+          assert run['status'] == 'completed' and run['conclusion'] == 'success'
           jobs = api(f'actions/runs/{run_id}/jobs?per_page=100')
           save('official-jobs.json', jobs)
           assert jobs['total_count'] == 2 and {j['name'] for j in jobs['jobs']} == {'measure', 'publish'}
           assert all(j['conclusion'] == 'success' for j in jobs['jobs'])
+          log = api_bytes('actions/jobs/104241577063/logs')
+          assert len(log) < 2*1024*1024
+          (out/'measure.log').write_bytes(log)
           git('fetch', '--no-tags', '--depth=2', 'origin', 'refs/heads/main')
-          publication = git('rev-parse', 'FETCH_HEAD').decode().strip()
-          parents = git('rev-list', '--parents', '-n', '1', publication).decode().split()
-          assert parents == [publication, source], 'publication must be the sole child of measured source'
+          assert git('rev-parse', 'FETCH_HEAD').decode().strip() == publication
+          assert git('rev-list', '--parents', '-n', '1', publication).decode().split() == [publication, source]
           report_bytes = git('show', f'{publication}:results/latest.json')
           report = json.loads(report_bytes)
           expected_context = dict(repository=repo, ref='refs/heads/main', source_commit=source,
@@ -87,7 +87,10 @@ jobs:
           assert len(report['implementations']) == 8
           assert sum(len(e['runs']) for b in report['implementations'] for e in b['endpoints']) == 72
           changed = git('diff-tree', '--no-commit-id', '--name-only', '-r', publication).decode().splitlines()
-          assert len(changed) == 7 and set(changed) == expected_publication_paths(report)
+          exact = {'README.md', 'README.ja.md', 'results/latest.json',
+              'results/history/2026-09-15T04-14-09Z-34925168324-1.json',
+              'results/charts/json-throughput.svg', 'results/charts/postgresql-throughput.svg', 'results/charts/cpu-throughput.svg'}
+          assert len(changed) == 7 and set(changed) == exact == expected_publication_paths(report)
           assert git('show', f'{publication}:{history_path(report)}') == report_bytes
           for path, locale in [('README.md', 'en'), ('README.ja.md', 'ja')]:
               expected = replace_section((root/path).read_text(), render(report, locale)).encode()
@@ -99,19 +102,24 @@ jobs:
           output = build(public_root)
           expected_files = {str(p.relative_to(output)): p.read_bytes() for p in output.rglob('*') if p.is_file()}
           save('expected-files.json', {name: hashlib.sha256(data).hexdigest() for name, data in expected_files.items()})
-          pages_deadline = time.monotonic() + 900
+          pages_deadline = time.monotonic() + 600
           while True:
-              candidates = api(f'actions/runs?head_sha={publication}&event=workflow_run&per_page=100')['workflow_runs']
-              pages = [r for r in candidates if r['path'] == '.github/workflows/pages.yml' and r['head_sha'] == publication]
+              candidates = api(f'actions/runs?head_sha={publication}&per_page=100')['workflow_runs']
+              pages = [r for r in candidates if r['path'] == '.github/workflows/pages.yml'
+                  and r['head_sha'] == publication and r['head_branch'] == 'main'
+                  and r['event'] in ('workflow_run', 'workflow_dispatch')
+                  and r['head_repository']['full_name'] == repo]
               successful = [r for r in pages if r['status'] == 'completed' and r['conclusion'] == 'success']
               if successful:
                   pages_run = max(successful, key=lambda r: r['id'])
                   save('pages-run.json', pages_run)
-                  save('pages-jobs.json', api(f"actions/runs/{pages_run['id']}/jobs?per_page=100"))
+                  page_jobs = api(f"actions/runs/{pages_run['id']}/jobs?per_page=100")
+                  save('pages-jobs.json', page_jobs)
+                  assert all(any(j['name'] == name and j['conclusion'] == 'success' for j in page_jobs['jobs']) for name in ('build','deploy'))
                   break
               assert not any(r['status'] == 'completed' and r['conclusion'] == 'failure' for r in pages), 'Pages failed'
               assert time.monotonic() < pages_deadline, 'Pages completion deadline exceeded'
-              time.sleep(20)
+              time.sleep(15)
           base = 'https://tappe9.github.io/simple-api-benchmark/'
           live_deadline = time.monotonic() + 600
           live = {}
@@ -130,17 +138,22 @@ jobs:
                   except (OSError, AssertionError) as error:
                       assert time.monotonic() < live_deadline, str(error)
                       time.sleep(15)
+          starts = re.findall(r'(?m)^(\S+) \[([a-z-]+)\] build -> readiness', log.decode('utf-8-sig'))
+          assert len(starts) == 8
+          stage_times = []
+          for i, (stamp, name) in enumerate(starts):
+              end = starts[i+1][0] if i+1 < len(starts) else report['completed_at']
+              stage_times.append({'implementation':name, 'start':stamp, 'end':end,
+                  'build_start_through_cleanup_seconds':(datetime.fromisoformat(end.replace('Z','+00:00'))-datetime.fromisoformat(stamp.replace('Z','+00:00'))).total_seconds()})
+          save('stage-times.json', stage_times)
           index = json.loads(expected_files['results/history/index.json'])
-          historical = index['runs'][-1]
           summary = dict(measured_source=source, source_tree=source_tree, publication=publication,
-              official_run_id=run_id, official_run_attempt=1, pages_run_id=pages_run['id'],
+              official_run_id=run_id, official_run_attempt=1, pages_run_id=pages_run['id'], pages_event=pages_run['event'],
               cohort=report['benchmark']['cohort'], implementations=8, measurements=72,
-              changed_paths=changed, live_files=live, historical=historical)
+              changed_paths=changed, live_files=live, historical=index['runs'][-1])
           save('verification.json', summary)
           (out/'latest.json').write_bytes(report_bytes)
           print(json.dumps(summary, indent=2), flush=True)
-          with open(os.environ['GITHUB_ENV'], 'a') as f:
-              f.write(f'ROLLOUT_EVIDENCE={out}\n')
       - name: Exercise the actual public dashboard in Chrome
         shell: bash
         run: |
