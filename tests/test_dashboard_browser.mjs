@@ -154,8 +154,12 @@ test('Pages dashboard works in a real browser under the project subpath', { time
   browser.stderr.setEncoding('utf8');
   browser.stderr.on('data', chunk => { browserStderr += chunk; });
   t.after(async () => {
-    browser.kill('SIGKILL');
-    await rm(profile, { recursive: true, force: true });
+    if (browser.exitCode === null && browser.signalCode === null) {
+      const closed = new Promise(resolve => browser.once('close', resolve));
+      browser.kill('SIGKILL');
+      await closed;
+    }
+    await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   let debugPort;
