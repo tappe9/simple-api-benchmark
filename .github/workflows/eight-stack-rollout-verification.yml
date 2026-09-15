@@ -12,6 +12,7 @@ jobs:
     timeout-minutes: 60
     env:
       PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -115,6 +116,8 @@ jobs:
           live_deadline = time.monotonic() + 600
           live = {}
           for name, expected in expected_files.items():
+              if name == '.nojekyll':
+                  continue
               while True:
                   url = base + name + '?verified-publication=' + publication
                   try:
