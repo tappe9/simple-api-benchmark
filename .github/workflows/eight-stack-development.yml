@@ -5,31 +5,76 @@ on:
 permissions:
   contents: read
 jobs:
-  regression:
-    if: github.repository == 'tappe9/simple-api-benchmark'
+  prepare:
+    if: >-
+      github.repository == 'tappe9/simple-api-benchmark' &&
+      github.ref == 'refs/heads/feat/eight-stack-cohort' &&
+      github.actor == 'tappe9'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
     env:
       PYTHONDONTWRITEBYTECODE: '1'
+      EXPECTED_TREE: 75b94d0faae1fe1b0a45ff68e94a2eb9f446edd4
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.10'
-      - name: Export source and hash-verified formatting tool for offline verification
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: apps/node-fastify/.node-version
+      - name: Apply reviewed patch and remove every temporary transport file
         run: |
-          mkdir -p "$RUNNER_TEMP/eight-stack-tools"
-          git bundle create "$RUNNER_TEMP/eight-stack-tools/source.bundle" HEAD refs/remotes/origin/main
-          grep '^ruff==' apps/python-fastapi/requirements-dev.lock > "$RUNNER_TEMP/ruff.lock"
-          python -m pip download --require-hashes --only-binary=:all: --no-deps -r "$RUNNER_TEMP/ruff.lock" --dest "$RUNNER_TEMP/eight-stack-tools"
+          cat .github/eight-stack-transfer.0 .github/eight-stack-transfer.1 .github/eight-stack-transfer.2 | gzip -dc > "$RUNNER_TEMP/cohort.patch"
+          printf 'b828703689737d89a69717db7c94f52191aff941f7fc295243de7341f0bf2fb5  %s\n' "$RUNNER_TEMP/cohort.patch" | sha256sum --check
+          git apply --check --exclude=.github/workflows/eight-stack-development.yml "$RUNNER_TEMP/cohort.patch"
+          git apply --exclude=.github/workflows/eight-stack-development.yml "$RUNNER_TEMP/cohort.patch"
+          rm -- .github/workflows/eight-stack-development.yml .github/eight-stack-transfer.0 .github/eight-stack-transfer.1 .github/eight-stack-transfer.2
+          git add --all
+          test "$(git write-tree)" = "$EXPECTED_TREE"
+          git diff --cached --check
+          git diff --cached --exit-code 27fb16aeb333b56c03974dc3ad31237cdcc4896c -- results apps docker-compose.yml benchmark/definition.py .github/workflows/ci.yml .github/workflows/benchmark.yml .github/workflows/pages.yml
+      - name: Verify cohort compatibility, publication boundaries and real browser behavior
+        run: |
+          python -m benchmark.registry --check
+          python -m benchmark.generate_readme --check
+          python -m unittest discover -s tests -p test_benchmark_eight_stack.py -v
+          make test-site
+          test "$(git write-tree)" = "$EXPECTED_TREE"
+          git diff --exit-code
+          test -z "$(git ls-files --others --exclude-standard)"
+      - name: Commit only the exact verified tree to the owned development branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$GITHUB_REPOSITORY" = tappe9/simple-api-benchmark
+          test "$GITHUB_REF" = refs/heads/feat/eight-stack-cohort
+          case "$(git remote get-url origin)" in
+            https://github.com/tappe9/simple-api-benchmark|https://github.com/tappe9/simple-api-benchmark.git) ;;
+            *) exit 1 ;;
+          esac
+          test "$(git ls-remote origin refs/heads/feat/eight-stack-cohort | cut -f1)" = "$GITHUB_SHA"
+          test "$(git write-tree)" = "$EXPECTED_TREE"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: prepare versioned eight-stack cohort compatibility' -m 'Preserve four-stack activation and historical reports while validating the real eight-stack cohort, publication boundaries, provenance display and history controls. Refs #50.'
+          header=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$header"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $header" push origin HEAD:refs/heads/feat/eight-stack-cohort
+          git show --no-patch --format='Prepared commit: %H%nVerified tree: %T' HEAD
+          git bundle create "$RUNNER_TEMP/eight-stack-ready.bundle" HEAD
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: eight-stack-tools-${{ github.run_id }}
-          path: ${{ runner.temp }}/eight-stack-tools/
+          name: eight-stack-ready-${{ github.run_id }}
+          path: ${{ runner.temp }}/eight-stack-ready.bundle
           retention-days: 1
           if-no-files-found: error
-      - name: Expose missing real eight-stack cohort before implementation
-        run: python -m unittest discover -s tests -p test_benchmark_eight_stack.py -v
