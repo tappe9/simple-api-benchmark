@@ -257,6 +257,8 @@ HTTP status、JSONの内容・型、規定のerror response、応答の再現性
 active official cohortは`eight-stack-v1`です。8構成の結果を公開するには、新しい完全な公式計測と検証が必要です。
 過去の4構成のレポートは書き換えません。
 
+公式結果の監査・push成功後に、共通Pages workflowを直接呼び出します。[認可と復旧手順](docs/AUTOMATION.md#github-pages-and-v010-release)を参照してください。表示の復旧だけのために再計測する必要はありません。
+
 ## ローカルでの計測
 
 変更をcommitした作業ツリー、Python 3.10以上、curl、ローカルのDocker Compose v2で実行します。

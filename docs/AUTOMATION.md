@@ -66,13 +66,13 @@ cleans a separate random `sab-benchmark-*` project on its runner. See
 
 Smoke output is not uploaded, committed, or promoted to an official result.
 The temporary `axum-development.yml` workflow is removed; the repository retains
-only `ci.yml`, `benchmark.yml`, and `pages.yml`. Neither diagnostic evidence nor
+`ci.yml`, `benchmark.yml`, `pages.yml`, and the local reusable `pages-deploy.yml`. Neither diagnostic evidence nor
 its upload grants publication permissions or changes official cohort membership.
 
 ## Official benchmark trust boundary
 
 `.github/workflows/benchmark.yml` runs Saturdays at 14:27 UTC (23:27 JST) and
-through `workflow_dispatch`, without caller-supplied inputs. Both jobs check the
+through `workflow_dispatch`, without caller-supplied inputs. The measurement, publication and dependent Pages call check the
 repository, event, and default-branch ref. The Python entry point additionally
 requires the exact `main` workflow ref and matching workflow/source SHA. A
 dispatch from a feature branch is skipped; a renamed default branch requires an
@@ -193,20 +193,108 @@ that every memory metric improves.
 
 ## GitHub Pages and v0.1.0 release
 
-`pages.yml` runs only after a completed `CI` or `Official benchmark` workflow, or
-through an explicit manual dispatch. Keeping the workflow name `CI` preserves
-that trigger after CI partitioning. `benchmark.pages` independently verifies the
-repository, default-branch ref, workflow identity, source SHA, upstream event, and
-upstream conclusion before the static artifact is built. A pull-request CI run,
-even with a successful `required` job, is not a trusted Pages input.
+The automatic official route is now a job dependency, not another completion event:
 
-The Pages build job has read-only repository access. Only the dependent deploy job
-receives `pages: write` and OIDC permissions. The one-time `v0.1.0` release job
-runs after a successful Pages deployment and only when the upstream workflow is a
-successful `push` CI run for the repository's default branch at the same SHA. It
-receives `contents: write` only for release creation. Manual Pages runs and
-official benchmark result refreshes cannot create the release. If `v0.1.0`
-already exists, the job leaves it unchanged.
+```text
+benchmark.yml: measure -> publish -> pages-deploy.yml (build -> deploy)
+pages.yml:     successful main CI / manual recovery -> pages-deploy.yml
+```
+
+`pages.yml` subscribes only to successful, current-main push `CI` runs and retains
+explicit main-only `workflow_dispatch` recovery. `Official benchmark` is no longer
+in its `workflow_run` subscription: there is one automatic official-publication
+route, regardless of whether the producer was scheduled or dispatched by a
+maintainer or bot. An unsuccessful, cancelled or skipped `publish` cannot invoke
+that route. PR and smoke jobs remain read-only and cannot call deployment.
+
+After the raw audit and successful fast-forward push, `benchmark.publish` emits
+`publication_sha`, `source_sha`, `producer_run_id` and `producer_run_attempt` through
+`GITHUB_OUTPUT`. Failed publication does not emit handoff outputs. A later output
+write failure cannot undo a completed publication; recover Pages rather than
+rerunning measurement or pushing the old result again.
+
+Both callers use the local reusable workflow from their own immutable revision.
+GitHub's reusable-workflow context belongs to the caller: for official runs,
+`GITHUB_SHA` is the **measured source**, not its child publication commit. The
+controller checkout always uses that caller SHA. `benchmark.pages_handoff`
+separately validates the target SHA, caller workflow/ref/event/repository and
+producer identity, fetches only current main, then requires the official target
+to have the measured source as its sole parent. It revalidates the report/context,
+source tree, exact seven-path manifest, byte-identical history, and deterministic
+README/SVG contents. No GitHub environment variable is spoofed, and no code is
+executed from a caller-supplied feature-branch revision. The historical
+`benchmark.pages.validate_event` validator remains available for existing audit
+callers; the reusable entry point allows only CI through that event route.
+
+Build uses a detached, verified-target worktree under `.cache/pages-source`.
+The artifact name binds the target, run ID and **build attempt**, and the deploy
+job consumes the build job's saved output. Deployment-only retries can have a
+new caller attempt while retaining the original producer attempt and original
+artifact name. They cannot invent a new measurement identity. An expired/missing
+artifact requires rebuilding the Pages jobs or explicit Pages recovery, never a
+new benchmark solely to repair presentation.
+
+The caller grants a ceiling of `contents: read`, `pages: write`, and
+`id-token: write` only to the reusable call. Its build job reduces this to
+`contents: read`; its deploy job retains read access for the trusted-controller
+checkout and freshness check plus Pages/OIDC permissions. The publisher keeps
+only its existing `contents: write`; neither measurement nor PR privileges change.
+No `actions: write`, PAT, App secret or new credential is introduced.
+
+Only the dependent deploy job acquires the shared `pages` concurrency group, with
+`cancel-in-progress: false`. Ineligible runs cannot cancel a valid deployment.
+After environment approval and inside that serialized job, the controller
+re-fetches main and repeats authorization immediately before `deploy-pages`.
+Thus an older queued target cannot overwrite an already newer deployment. This
+check is not an atomic lock on repository writes, and concurrency is not an
+exactly-once delivery guarantee. A main update after the last check is handled by
+the newer eligible deployment; repeated explicit deployment of identical content
+is safe. The artifact content SHA is the validated target; Actions/Pages run
+metadata can still identify the caller's measured-source SHA on official calls.
+Record these identities separately.
+
+The existing one-time `v0.1.0` release bootstrap remains **only in `pages.yml`**,
+after the reusable call, and only for successful same-SHA main push CI. Manual
+recovery and the official reusable route cannot create a release. Removing that
+bootstrap remains Issue #53; this change does not retag or recreate a release.
+
+### Recovery and validation status (#59)
+
+During Issue #50's bot-dispatched run `34925168324`, measurement and publication
+succeeded but no automatic Pages completion run was observed for publication
+`25fa3f086919f7124afe3c8d22f0791bd83768ef`. Existing manual Pages run `34928391910`
+successfully deployed that exact publication. Local event replay passed the old
+validator, but does not prove that GitHub delivered an event. Token-origin and
+chaining rules remain hypotheses; the internal cause was not established. Older
+scheduled runs used different revisions or failed before publication and are not
+controlled reproductions. The direct dependency removes that extra event from
+the new official path; it does not claim to explain GitHub's internal decision.
+
+To recover presentation without altering measurements, first verify the current
+main SHA, successful publication run, published report and intended source. Then
+explicitly dispatch the existing Pages workflow on main and check the resulting
+deployment SHA and live JSON. The main-only validator refuses stale runs.
+
+```bash
+# Read current identities before dispatch; do not substitute an old publisher rerun.
+gh api repos/tappe9/simple-api-benchmark/git/ref/heads/main --jq '.object.sha'
+gh workflow run pages.yml --repo tappe9/simple-api-benchmark --ref main
+gh run list --repo tappe9/simple-api-benchmark --workflow pages.yml --limit 5
+```
+
+Do not run another official benchmark merely to validate this refactoring.
+Regression tests cover successful/rejected calls, real isolated Git publication,
+producer/build retry identities, and stale-target rejection. A normal post-merge
+Pages deployment exercises the shared workflow against existing verified data.
+The complete new **official producer -> dependent deployment** path is only live
+verified when an authorized or normally scheduled official run exercises it;
+track that evidence under Issue #59 rather than presenting fixture tests as a
+real measurement or a manual recovery as an automatic handoff.
+
+Platform references: [reusable workflow context and permissions](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations),
+[rerun identity](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs),
+[trigger recursion](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow),
+and [skip instructions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/skip-workflow-runs).
 
 ## Registry and methodology compatibility
 
@@ -257,8 +345,8 @@ Configured timeout ceilings are 10 minutes for `plan` and `required`, 25 minutes
 for `shared`, and 30 minutes for each implementation and smoke job. These provide
 large margins over observed responsibility-specific runtimes while retaining
 finite failure/cleanup bounds. The official measurement budget remains 60 minutes.
-No eight-framework official runtime is claimed or inferred from the synthetic
-registry fixture.
+Actual eight-stack rollout timings are recorded in Issue #50; synthetic fixtures
+do not establish runtime or performance.
 
 ## Developer checks
 

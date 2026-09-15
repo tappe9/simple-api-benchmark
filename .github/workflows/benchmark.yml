@@ -40,6 +40,11 @@ jobs:
           if-no-files-found: error
   publish:
     needs: measure
+    outputs:
+      publication_sha: ${{ steps.publication.outputs.publication_sha }}
+      source_sha: ${{ steps.publication.outputs.source_sha }}
+      producer_run_id: ${{ steps.publication.outputs.producer_run_id }}
+      producer_run_attempt: ${{ steps.publication.outputs.producer_run_attempt }}
     if: >-
       needs.measure.result == 'success' &&
       github.repository == 'tappe9/simple-api-benchmark' &&
@@ -65,6 +70,27 @@ jobs:
           name: official-benchmark-${{ github.run_id }}-${{ github.run_attempt }}
           path: .cache/official/
       - name: Audit and atomically publish results without overwriting newer main
+        id: publication
         env:
           GH_TOKEN: ${{ github.token }}
         run: python -m benchmark.publish
+
+  pages:
+    needs: publish
+    if: >-
+      needs.publish.result == 'success' &&
+      github.repository == 'tappe9/simple-api-benchmark' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages-deploy.yml
+    with:
+      caller: official
+      target_sha: ${{ needs.publish.outputs.publication_sha }}
+      source_sha: ${{ needs.publish.outputs.source_sha }}
+      producer_run_id: ${{ needs.publish.outputs.producer_run_id }}
+      producer_run_attempt: ${{ needs.publish.outputs.producer_run_attempt }}
+      producer_result: ${{ needs.publish.result }}
