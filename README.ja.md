@@ -18,9 +18,9 @@ Simple API Benchmarkには、同じエンドポイント、同じDockerリソー
 
 <!-- benchmark-results:start -->
 
-計測完了（UTC）: `2026-09-09T07:25:22.908825+00:00`
-Source: `94500edc982a0cfb09be73262266e46eea1cde45` · [Actions run](https://github.com/tappe9/simple-api-benchmark/actions/runs/34321830470)
-比較グループ: `four-stack-v1` · 測定定義: `simple-api-v1` · API readiness: `external-readiness`
+計測完了（UTC）: `2026-09-15T04:14:09.912998+00:00`
+Source: `c8e033ea176366644f5bed5ded12cab79e6fcbeb` · [Actions run](https://github.com/tappe9/simple-api-benchmark/actions/runs/34925168324)
+比較グループ: `eight-stack-v1` · 測定定義: `simple-api-v1` · API readiness: `external-readiness`
 
 1 CPU・512 MiB・1 worker・DB pool 10・HTTP/1.1・50接続・warm-up 5秒・各endpointを30秒×3回。処理件数/秒が中央の1回から全指標を採用します。
 
@@ -37,18 +37,30 @@ Source: `94500edc982a0cfb09be73262266e46eea1cde45` · [Actions run](https://gith
 
 | バックエンド | テスト | 処理件数/秒 ↑ | 平均応答 ms ↓ | 観測最大メモリ MiB ↓ |
 | --- | --- | ---: | ---: | ---: |
-| Go / Gin | JSON | 62,360.983 | 0.800 | 13.080 |
-| Go / Gin | PostgreSQL | 27,337.810 | 1.827 | 16.130 |
-| Go / Gin | CPU | 306.113 | 162.939 | 15.940 |
-| Rust / Actix Web | JSON | 110,917.004 | 0.450 | 2.828 |
-| Rust / Actix Web | PostgreSQL | 22,723.975 | 2.198 | 4.547 |
-| Rust / Actix Web | CPU | 424.353 | 117.597 | 4.352 |
-| Node.js / Fastify | JSON | 46,833.611 | 1.066 | 42.500 |
-| Node.js / Fastify | PostgreSQL | 16,157.800 | 3.092 | 53.240 |
-| Node.js / Fastify | CPU | 158.943 | 312.997 | 51.280 |
-| Python / FastAPI | JSON | 6,307.000 | 7.925 | 40.530 |
-| Python / FastAPI | PostgreSQL | 3,127.435 | 15.982 | 42.080 |
-| Python / FastAPI | CPU | 16.840 | 2,840.372 | 42.020 |
+| Go / Gin | JSON | 22,283.608 | 2.241 | 13.050 |
+| Go / Gin | PostgreSQL | 10,317.677 | 4.842 | 16.210 |
+| Go / Gin | CPU | 211.482 | 235.349 | 14.860 |
+| Go / Echo | JSON | 22,647.920 | 2.205 | 12.990 |
+| Go / Echo | PostgreSQL | 10,328.868 | 4.836 | 16.480 |
+| Go / Echo | CPU | 213.028 | 233.817 | 13.790 |
+| Rust / Actix Web | JSON | 49,996.212 | 0.998 | 2.969 |
+| Rust / Actix Web | PostgreSQL | 8,789.323 | 5.684 | 4.602 |
+| Rust / Actix Web | CPU | 326.480 | 152.744 | 4.758 |
+| Rust / Axum | JSON | 48,212.659 | 1.035 | 3.266 |
+| Rust / Axum | PostgreSQL | 9,334.549 | 5.352 | 4.617 |
+| Rust / Axum | CPU | 322.622 | 154.554 | 4.773 |
+| Node.js / Fastify | JSON | 13,902.852 | 3.593 | 33.770 |
+| Node.js / Fastify | PostgreSQL | 6,392.491 | 7.816 | 44.850 |
+| Node.js / Fastify | CPU | 94.911 | 522.313 | 44.870 |
+| Node.js / Express | JSON | 8,309.469 | 6.014 | 45.190 |
+| Node.js / Express | PostgreSQL | 4,739.262 | 10.543 | 48.170 |
+| Node.js / Express | CPU | 94.584 | 523.981 | 48.080 |
+| Python / FastAPI | JSON | 3,095.040 | 16.146 | 41.010 |
+| Python / FastAPI | PostgreSQL | 1,737.628 | 28.760 | 42.250 |
+| Python / FastAPI | CPU | 9.061 | 5,099.296 | 42.840 |
+| Python / Flask | JSON | 158.426 | 315.452 | 37.850 |
+| Python / Flask | PostgreSQL | 1,207.221 | 41.387 | 37.890 |
+| Python / Flask | CPU | 9.038 | 5,109.111 | 37.870 |
 
 </details>
 
