@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { testThemeStorage } from './theme_storage_cases.mjs';
 
 const root = dirname(fileURLToPath(new URL('../Makefile', import.meta.url)));
 const python = process.env.PYTHON || 'python3';
@@ -96,7 +97,7 @@ async function waitFor(cdp, expression, timeoutMs = 8000) {
   throw new Error(`timed out waiting for browser condition: ${expression}`);
 }
 
-test('Pages dashboard works in a real browser under the project subpath', { timeout: 30000 }, async t => {
+test('Pages dashboard works in a real browser under the project subpath', { timeout: 90000 }, async t => {
   execFileSync(python, ['-m', 'benchmark.site'], { cwd: root, stdio: 'pipe' });
   const output = join(root, '.cache', 'site');
   const historyIndex = JSON.parse(await readFile(join(output, 'results/history/index.json'), 'utf8'));
@@ -121,7 +122,17 @@ test('Pages dashboard works in a real browser under the project subpath', { time
         response.writeHead(200, { 'Content-Type': 'application/json' }).end('{bad json');
         return;
       }
+      if (relative === 'results/latest.json' && reportMode === 'server-error') {
+        response.writeHead(503).end('Unavailable');
+        return;
+      }
       const body = await readFile(join(output, relative));
+      if (relative === 'results/latest.json' && reportMode === 'unverified') {
+        const invalid = JSON.parse(body);
+        invalid.status = 'unverified';
+        response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(invalid));
+        return;
+      }
       const type = extname(relative) === '.json' ? 'application/json'
         : extname(relative) === '.mjs' ? 'text/javascript'
           : extname(relative) === '.css' ? 'text/css' : 'text/html';
@@ -143,8 +154,12 @@ test('Pages dashboard works in a real browser under the project subpath', { time
   browser.stderr.setEncoding('utf8');
   browser.stderr.on('data', chunk => { browserStderr += chunk; });
   t.after(async () => {
-    browser.kill('SIGKILL');
-    await rm(profile, { recursive: true, force: true });
+    if (browser.exitCode === null && browser.signalCode === null) {
+      const closed = new Promise(resolve => browser.once('close', resolve));
+      browser.kill('SIGKILL');
+      await closed;
+    }
+    await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   let debugPort;
@@ -237,4 +252,10 @@ test('Pages dashboard works in a real browser under the project subpath', { time
   assert.equal(await evaluate(cdp, `document.getElementById('results').getAttribute('role')`), 'status');
   assert.match(await evaluate(cdp, `document.getElementById('results').textContent`), /temporarily unavailable/i);
   assert.equal(await evaluate(cdp, `document.getElementById('results').textContent.includes('0.000')`), false);
+
+  await testThemeStorage(t, {
+    cdp, evaluate, waitFor, page, historical, historicalReport,
+    latestReport: JSON.parse(await readFile(join(output, 'results/latest.json'), 'utf8')),
+    setReportMode: mode => { reportMode = mode; },
+  });
 });

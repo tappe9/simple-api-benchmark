@@ -423,7 +423,12 @@ function wireTheme() {
   const button = document.getElementById("theme-toggle");
   if (!button) return;
   const root = document.documentElement;
-  const stored = localStorage.getItem("sab-theme");
+  let stored = null;
+  try {
+    stored = localStorage.getItem("sab-theme");
+  } catch {
+    // Theme persistence is optional, including access to the storage object.
+  }
   const initial = stored === "dark" ? "dark" : "light";
   const apply = (theme) => {
     root.dataset.theme = theme;
@@ -433,8 +438,12 @@ function wireTheme() {
   apply(initial);
   button.addEventListener("click", () => {
     const next = root.dataset.theme === "dark" ? "light" : "dark";
-    localStorage.setItem("sab-theme", next);
     apply(next);
+    try {
+      localStorage.setItem("sab-theme", next);
+    } catch {
+      // Keep the visible theme usable when persistence is unavailable.
+    }
   });
 }
 
