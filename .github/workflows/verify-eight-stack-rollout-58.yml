@@ -1,0 +1,324 @@
+name: Verify eight-stack rollout
+on:
+  push:
+    branches: [ops/verify-eight-stack-rollout-58]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    if: >-
+      github.repository == 'tappe9/simple-api-benchmark' &&
+      github.ref == 'refs/heads/ops/verify-eight-stack-rollout-58' &&
+      github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      EXPECTED_SOURCE: c8e033ea176366644f5bed5ded12cab79e6fcbeb
+      EXPECTED_RUN: '34925168324'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: c8e033ea176366644f5bed5ded12cab79e6fcbeb
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Wait for the one authorized run and its downstream publication
+        id: context
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, re, time, urllib.request
+          repo = 'tappe9/simple-api-benchmark'
+          source = os.environ['EXPECTED_SOURCE']
+          run_id = int(os.environ['EXPECTED_RUN'])
+          evidence = pathlib.Path(os.environ['RUNNER_TEMP']) / 'verified-rollout'
+          evidence.mkdir()
+          def require(condition, message):
+              if not condition: raise RuntimeError(message)
+          def api(path):
+              request = urllib.request.Request('https://api.github.com/repos/' + repo + path,
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                           'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10'}, method='GET')
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+          def save(name, data):
+              (evidence / name).write_text(json.dumps(data, indent=2))
+          deadline = time.monotonic() + 65 * 60
+          while True:
+              run = api(f'/actions/runs/{run_id}')
+              require(run['head_sha'] == source and run['head_branch'] == 'main' and
+                      run['path'] == '.github/workflows/benchmark.yml' and run['event'] == 'workflow_dispatch' and
+                      run['head_repository']['full_name'] == repo and run['run_attempt'] == 1, 'Unexpected official run identity')
+              save('official-run.json', run)
+              if run['status'] == 'completed':
+                  require(run['conclusion'] == 'success', 'Official run failed; do not retry or claim publication success')
+                  break
+              require(time.monotonic() < deadline, 'Verification deadline reached; do not dispatch another run')
+              time.sleep(30)
+          jobs = api(f'/actions/runs/{run_id}/jobs?per_page=100')
+          save('official-jobs.json', jobs)
+          require(jobs['total_count'] == len(jobs['jobs']) == 2 and
+                  {job['name'] for job in jobs['jobs']} == {'measure', 'publish'} and
+                  all(job['conclusion'] == 'success' and job['head_sha'] == source for job in jobs['jobs']), 'Both official jobs must succeed')
+          publication = api('/git/ref/heads/main')['object']['sha']
+          require(re.fullmatch('[0-9a-f]{40}', publication) and publication != source, 'Publication commit missing')
+          commit = api('/git/commits/' + publication)
+          save('publication-commit.json', commit)
+          require([parent['sha'] for parent in commit['parents']] == [source], 'Publication must have exactly the measured source as its parent')
+          save('official-artifacts.json', api(f'/actions/runs/{run_id}/artifacts?per_page=100'))
+          deadline = time.monotonic() + 12 * 60
+          while True:
+              require(api('/git/ref/heads/main')['object']['sha'] == publication, 'Main changed during publication verification')
+              pages_runs = api('/actions/workflows/pages.yml/runs?event=workflow_run&per_page=100')['workflow_runs']
+              matches = [item for item in pages_runs if item['head_sha'] == publication and item['head_branch'] == 'main']
+              require(len(matches) <= 1, 'Ambiguous Pages deployment')
+              if matches:
+                  pages = matches[0]
+                  require(pages['path'] == '.github/workflows/pages.yml' and pages['event'] == 'workflow_run' and
+                          pages['head_repository']['full_name'] == repo and pages['run_attempt'] == 1, 'Unexpected Pages identity')
+                  save('pages-run.json', pages)
+                  if pages['status'] == 'completed':
+                      require(pages['conclusion'] == 'success', 'Pages deployment failed')
+                      break
+              require(time.monotonic() < deadline, 'Pages verification deadline reached')
+              time.sleep(15)
+          pages_jobs = api(f"/actions/runs/{pages['id']}/jobs?per_page=100")
+          save('pages-jobs.json', pages_jobs)
+          mapping = {job['name']: job for job in pages_jobs['jobs']}
+          require(pages_jobs['total_count'] == len(pages_jobs['jobs']) and
+                  all(name in mapping and mapping[name]['conclusion'] == 'success' and mapping[name]['head_sha'] == publication for name in ('build', 'deploy')), 'Pages build/deploy must succeed on the publication')
+          require('release' not in mapping or mapping['release']['conclusion'] == 'skipped', 'Official publication must not create a product release')
+          save('pages-artifacts.json', api(f"/actions/runs/{pages['id']}/artifacts?per_page=100"))
+          identities = {'source': source, 'publication': publication, 'official_run': run_id, 'attempt': 1, 'pages_run': pages['id']}
+          save('identities.json', identities)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f"publication={publication}\npages_run={int(pages['id'])}\n")
+          print(json.dumps(identities, indent=2))
+          PY
+      - name: Check out the exact publication without changing any branch
+        env:
+          PUBLICATION: ${{ steps.context.outputs.publication }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$PUBLICATION"
+          git switch --detach "$PUBLICATION"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_SOURCE"
+          test "$(git rev-parse "$EXPECTED_SOURCE^{tree}")" = 9389884db4164633b45151b737fdebd8c2706176
+          test -z "$(git status --porcelain)"
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version-file: apps/python-fastapi/.python-version
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: apps/node-fastify/.node-version
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: official-benchmark-34925168324-1
+          run-id: 34925168324
+          github-token: ${{ github.token }}
+          path: .cache/official/
+      - name: Audit real raw measurements and the atomic publication
+        env:
+          PUBLICATION: ${{ steps.context.outputs.publication }}
+        run: |
+          python - <<'PY'
+          from datetime import datetime
+          import hashlib, json, os, pathlib, subprocess
+          from benchmark.generate_readme import render, replace_section
+          from benchmark.publication import expected_publication_paths, history_path
+          from benchmark.readme_charts import render_charts
+          from benchmark.report import validate_report, audit_raw
+          from benchmark.results import strict_json
+          root = pathlib.Path.cwd()
+          evidence = pathlib.Path(os.environ['RUNNER_TEMP']) / 'verified-rollout'
+          source, publication, run_id = os.environ['EXPECTED_SOURCE'], os.environ['PUBLICATION'], os.environ['EXPECTED_RUN']
+          def require(condition, message):
+              if not condition: raise RuntimeError(message)
+          def git(*args):
+              return subprocess.check_output(['git', *args], timeout=30)
+          require(git('rev-parse', 'HEAD').decode().strip() == publication, 'Wrong publication checkout')
+          require(git('rev-list', '--parents', '-n', '1', 'HEAD').decode().split() == [publication, source], 'Wrong publication parent')
+          raw = (root / 'results/latest.json').read_bytes()
+          report = strict_json(raw)
+          context = {'repository': 'tappe9/simple-api-benchmark', 'ref': 'refs/heads/main', 'source_commit': source,
+                     'event': 'workflow_dispatch', 'workflow_ref': 'tappe9/simple-api-benchmark/.github/workflows/benchmark.yml@refs/heads/main',
+                     'workflow_sha': source, 'run_id': run_id, 'run_attempt': '1',
+                     'run_url': f'https://github.com/tappe9/simple-api-benchmark/actions/runs/{run_id}'}
+          validate_report(report, expected_context=context)
+          require(report['benchmark'] == {'definition': 'simple-api-v1', 'cohort': 'eight-stack-v1'}, 'Wrong cohort')
+          require(report['metadata']['source_tree'] == '9389884db4164633b45151b737fdebd8c2706176', 'Wrong measured tree')
+          require(report['metadata']['api_health_policy'] == 'external-readiness', 'Wrong readiness policy')
+          require(strict_json((root / '.cache/official/selected.json').read_bytes()) == report, 'Published data differs from the official artifact')
+          audit_raw(report, root)
+          require(sum(len(endpoint['runs']) for backend in report['implementations'] for endpoint in backend['endpoints']) == 72, 'Not all 72 samples are present')
+          changed = git('diff-tree', '--no-commit-id', '--name-only', '-r', publication).decode().splitlines()
+          require(len(changed) == 7 and set(changed) == expected_publication_paths(report), 'Unexpected publication paths')
+          require((root / history_path(report)).read_bytes() == raw, 'Latest and new history differ')
+          preserved = []
+          for name in git('ls-tree', '-r', '--name-only', source, '--', 'results/history').decode().splitlines():
+              old = git('show', source + ':' + name)
+              require((root / name).read_bytes() == old, 'Historical data was rewritten')
+              preserved.append({'path': name, 'sha256': hashlib.sha256(old).hexdigest()})
+          for name, locale in [('README.md', 'en'), ('README.ja.md', 'ja')]:
+              old = git('show', source + ':' + name).decode()
+              require((root / name).read_bytes() == replace_section(old, render(report, locale)).encode(), 'Unexpected README change')
+          for name, content in render_charts(report).items():
+              require((root / name).read_bytes() == content.encode(), 'SVG drift')
+          jobs = json.loads((evidence / 'official-jobs.json').read_text())['jobs']
+          elapsed = {job['name']: (datetime.fromisoformat(job['completed_at'].replace('Z', '+00:00')) - datetime.fromisoformat(job['started_at'].replace('Z', '+00:00'))).total_seconds() for job in jobs}
+          result = {'status': 'verified', 'source': source, 'publication': publication, 'run_id': run_id, 'attempt': 1,
+                    'samples': 72, 'cohort': 'eight-stack-v1', 'report_sha256': hashlib.sha256(raw).hexdigest(),
+                    'changed_paths': sorted(changed), 'preserved_history': preserved, 'job_elapsed_seconds': elapsed,
+                    'report_started_at': report['started_at'], 'report_completed_at': report['completed_at']}
+          (evidence / 'publication-audit.json').write_text(json.dumps(result, indent=2))
+          print(json.dumps(result, indent=2))
+          PY
+          python -m benchmark.generate_readme --check
+          make test-benchmark test-site
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: github-pages
+          run-id: ${{ steps.context.outputs.pages_run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/deployed-pages/
+      - name: Compare the deployed artifact and every public asset with the verified build
+        run: |
+          python -m benchmark.site
+          python - <<'PY'
+          import hashlib, json, os, pathlib, tarfile, time, urllib.request
+          root = pathlib.Path('.cache/site')
+          evidence = pathlib.Path(os.environ['RUNNER_TEMP']) / 'verified-rollout'
+          expected = {path.relative_to(root).as_posix(): path.read_bytes() for path in root.rglob('*') if path.is_file()}
+          actual = {}
+          with tarfile.open(pathlib.Path(os.environ['RUNNER_TEMP']) / 'deployed-pages/artifact.tar') as archive:
+              for item in archive.getmembers():
+                  name = pathlib.PurePosixPath(item.name)
+                  if item.isdir(): continue
+                  if name.is_absolute() or '..' in name.parts or not item.isfile() or item.size > 20*1024*1024:
+                      raise RuntimeError('Unexpected Pages archive member')
+                  normalized = name.as_posix().removeprefix('./')
+                  if normalized in actual: raise RuntimeError('Duplicate Pages member')
+                  actual[normalized] = archive.extractfile(item).read()
+          if actual != expected: raise RuntimeError('Deployed artifact differs from verified build')
+          receipts = []
+          for name, data in expected.items():
+              digest = hashlib.sha256(data).hexdigest()
+              entry = {'path': name, 'sha256': digest, 'artifact_match': True}
+              if name != '.nojekyll':
+                  url = 'https://tappe9.github.io/simple-api-benchmark/' + name
+                  for attempt in range(10):
+                      request = urllib.request.Request(url, headers={'Cache-Control': 'no-cache'})
+                      with urllib.request.urlopen(request, timeout=20) as response:
+                          received = response.read(20*1024*1024)
+                          status = response.status
+                      if status == 200 and received == data: break
+                      time.sleep(3)
+                  if status != 200 or received != data: raise RuntimeError('Live asset differs: ' + name)
+                  entry['http_status'] = status
+              receipts.append(entry)
+          (evidence / 'pages-byte-verification.json').write_text(json.dumps(receipts, indent=2))
+          print(json.dumps(receipts, indent=2))
+          PY
+      - name: Verify the live dashboard with a real browser
+        run: |
+          python - <<'PY'
+          import os, pathlib
+          source = pathlib.Path('tests/test_dashboard_browser.mjs').read_text()
+          helpers = source[source.index('function chromeBinary()'):source.index("test('Pages dashboard works")]
+          script = "import assert from 'node:assert/strict';\nimport {execFileSync,spawn} from 'node:child_process';\nimport {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';\nimport {tmpdir} from 'node:os';\nimport {join} from 'node:path';\n" + helpers
+          script += r'''
+          const page = 'https://tappe9.github.io/simple-api-benchmark/';
+          const source = process.env.EXPECTED_SOURCE;
+          const runId = process.env.EXPECTED_RUN;
+          const index = JSON.parse(await readFile('.cache/site/results/history/index.json', 'utf8'));
+          const legacy = index.runs.at(-1);
+          assert.ok(legacy && legacy.id !== `${runId}-1`);
+          assert.equal(JSON.parse(await readFile(join('.cache/site', legacy.path), 'utf8')).implementations.length, 4);
+          const profile = await mkdtemp(join(tmpdir(), 'sab-live-rollout-'));
+          const browser = spawn(chromeBinary(), ['--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--remote-debugging-port=0',`--user-data-dir=${profile}`,page], {stdio:['ignore','ignore','pipe']});
+          let stderr = '';
+          browser.stderr.setEncoding('utf8');
+          browser.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-8000); });
+          let cdp;
+          try {
+            const port = await pollDevToolsPort(profile);
+            const targets = await pollJson(`http://127.0.0.1:${port}/json/list`);
+            const target = targets.find(item => item.type === 'page');
+            assert.ok(target?.webSocketDebuggerUrl);
+            cdp = await connectCdp(target.webSocketDebuggerUrl);
+            await cdp.send('Runtime.enable');
+            await cdp.send('Page.enable');
+            await waitFor(cdp, "document.querySelectorAll('[data-result-row]').length === 24", 30000);
+            for (const value of [source, runId, 'eight-stack-v1', 'external-readiness']) {
+              assert.equal(await evaluate(cdp, `document.getElementById('results').textContent.includes(${JSON.stringify(value)})`), true);
+            }
+            assert.equal(await evaluate(cdp, "document.querySelector('[data-result-json]').href"), page + 'results/latest.json');
+            for (const endpoint of ['/json','/db/42','/cpu']) {
+              await evaluate(cdp, `document.querySelector('[data-endpoint="${endpoint}"]').click()`);
+              for (const metric of ['rps','mean','memory']) {
+                await evaluate(cdp, `document.querySelector('[data-metric="${metric}"]').click()`);
+                assert.equal(await evaluate(cdp, "document.querySelectorAll('[data-chart]:not([hidden]) [data-chart-implementation]:not([hidden])').length"), 8);
+                assert.equal(await evaluate(cdp, "document.querySelectorAll('[data-run-details]:not([hidden])').length"), 8);
+              }
+            }
+            await evaluate(cdp, "document.querySelector('[data-language-filter=\"Go\"]').click()");
+            assert.equal(await evaluate(cdp, "document.querySelectorAll('[data-run-details]:not([hidden])').length"), 6);
+            await evaluate(cdp, "document.querySelector('[data-language-filter=\"Go\"]').click(); document.getElementById('theme-toggle').click()");
+            assert.equal(await evaluate(cdp, 'document.documentElement.dataset.theme'), 'dark');
+            await cdp.send('Emulation.setDeviceMetricsOverride', {width:375,height:812,deviceScaleFactor:1,mobile:true});
+            assert.equal(await evaluate(cdp, 'document.documentElement.scrollWidth <= window.innerWidth'), true);
+            await evaluate(cdp, `location.href = ${JSON.stringify(page + '?run=' + legacy.id)}`);
+            await waitFor(cdp, "document.querySelectorAll('[data-result-row]').length === 12", 30000);
+            assert.equal(await evaluate(cdp, "document.querySelector('[data-history-select]').value"), legacy.id);
+            assert.equal(await evaluate(cdp, "document.querySelector('[data-result-json]').href"), new URL(legacy.path, page).href);
+            assert.equal(await evaluate(cdp, "document.getElementById('results').textContent.includes('four-stack-v1')"), true);
+            await evaluate(cdp, "document.querySelector('[data-history-select]').value = ''; document.querySelector('[data-history-select]').dispatchEvent(new Event('change',{bubbles:true}))");
+            await waitFor(cdp, "location.search === '' && document.querySelectorAll('[data-result-row]').length === 24", 30000);
+            await cdp.send('Emulation.clearDeviceMetricsOverride');
+            const screenshot = await cdp.send('Page.captureScreenshot',{format:'png'});
+            const output = join(process.env.RUNNER_TEMP, 'verified-rollout');
+            await writeFile(join(output, 'live-eight-stack.png'), Buffer.from(screenshot.data,'base64'));
+            const receipt = {status:'verified',page,source,officialRun:runId,rows:24,stacks:8,endpointMetricCombinations:9,filteredGoStacks:6,legacyRun:legacy.id,legacyRows:12,mobileWidth:375};
+            await writeFile(join(output,'live-browser.json'),JSON.stringify(receipt,null,2));
+            console.log(JSON.stringify(receipt,null,2));
+          } catch (error) {
+            console.error('Browser stderr:', stderr);
+            throw error;
+          } finally {
+            cdp?.close();
+            if (browser.exitCode === null && browser.signalCode === null) {
+              const closed = new Promise(resolve => browser.once('close',resolve));
+              browser.kill('SIGKILL');
+              await closed;
+            }
+            await rm(profile,{recursive:true,force:true,maxRetries:5,retryDelay:100});
+          }
+          '''
+          pathlib.Path(os.environ['RUNNER_TEMP'],'live-browser.mjs').write_text(script)
+          PY
+          node --check "$RUNNER_TEMP/live-browser.mjs"
+          timeout 180 node "$RUNNER_TEMP/live-browser.mjs"
+      - name: Retain the exact verified publication
+        env:
+          PUBLICATION: ${{ steps.context.outputs.publication }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PUBLICATION"
+          test -z "$(git status --porcelain)"
+          git bundle create "$RUNNER_TEMP/verified-rollout/publication.bundle" HEAD
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: verified-eight-stack-rollout-${{ github.run_id }}
+          path: ${{ runner.temp }}/verified-rollout/
+          retention-days: 14
+          if-no-files-found: error
