@@ -26,7 +26,8 @@ EXPECTED_PUBLICATION_PATHS = [
 
 class PagesContextTests(unittest.TestCase):
     def setUp(self):
-        self.report = json.loads((ROOT / "results/latest.json").read_bytes())
+        # Keep the independently asserted manifest tied to its immutable history fixture.
+        self.report = json.loads((ROOT / EXPECTED_HISTORY).read_bytes())
         self.env = {
             "GITHUB_ACTIONS": "true",
             "GITHUB_REPOSITORY": REPOSITORY,

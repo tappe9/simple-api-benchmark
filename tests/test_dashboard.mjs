@@ -48,8 +48,8 @@ test('dashboard rows handle exact ties and zero latency without inventing values
   const latency = dashboardRows(model, {
     endpoint: '/json', metric: 'mean', visibleIds: model.implementations,
   });
-  assert.deepEqual(latency.map(row => row.mean), [0, 0, 1, 1]);
-  assert.deepEqual(latency.map(row => row.best), [true, true, false, false]);
+  assert.deepEqual(latency.map(row => row.mean), [0, 0, ...Array(model.implementations.length - 2).fill(1)]);
+  assert.deepEqual(latency.map(row => row.best), [true, true, ...Array(model.implementations.length - 2).fill(false)]);
   assert.ok(latency.every(row => Number.isFinite(row.percent)));
 
   assert.throws(() => dashboardRows(model, {
@@ -127,14 +127,15 @@ test('run validation fails closed on incomplete or inconsistent observed runs', 
 
 test('rendered results expose observed spread and expandable three-run details without statistical claims', async () => {
   const { renderReport } = await subject();
-  const html = renderReport(await report());
+  const source = await report();
+  const html = renderReport(source);
   assert.match(html, /Observed range/);
   assert.match(html, /Selected run/);
   assert.match(html, /Three measured runs/);
   assert.match(html, /descriptive observations/i);
   assert.match(html, /not a confidence interval/i);
-  assert.equal((html.match(/data-run-details/g) || []).length, 12);
-  assert.equal((html.match(/data-run-row/g) || []).length, 36);
+  assert.equal((html.match(/data-run-details/g) || []).length, source.implementations.length * 3);
+  assert.equal((html.match(/data-run-row/g) || []).length, source.implementations.length * 9);
 });
 
 test('history index validation accepts bounded verified paths and rejects ambiguous navigation data', async () => {
@@ -170,19 +171,20 @@ test('historical render keeps selected report provenance and exact JSON link whi
 
 test('rendered results expose accessible dashboard controls while keeping the full verified table', async () => {
   const { renderReport } = await subject();
-  const html = renderReport(await report());
+  const source = await report();
+  const html = renderReport(source);
   assert.match(html, /data-dashboard/);
   assert.match(html, /role="tablist"/);
   assert.equal((html.match(/data-endpoint=/g) || []).length, 3);
   assert.equal((html.match(/data-metric=/g) || []).length, 3);
   assert.equal((html.match(/data-language-filter=/g) || []).length, 4);
-  assert.equal((html.match(/data-implementation-filter=/g) || []).length, 4);
+  assert.equal((html.match(/data-implementation-filter=/g) || []).length, source.implementations.length);
   assert.match(html, /Requests\/s/);
   assert.match(html, /Mean response/);
   assert.match(html, /Observed peak memory/);
   assert.match(html, /higher is better/i);
   assert.match(html, /lower is better/i);
-  assert.equal((html.match(/data-result-row/g) || []).length, 12);
+  assert.equal((html.match(/data-result-row/g) || []).length, source.implementations.length * 3);
 });
 
 test('the static shell provides an explicit theme toggle and theme CSS is user-selectable', async () => {
