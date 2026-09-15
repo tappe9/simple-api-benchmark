@@ -143,11 +143,12 @@ The common suite needs Python 3.10+ on a POSIX host, Docker Compose v2 with
 toolchains are not needed on the host for this target.
 
 ```bash
-make test-contract                         # all six registered implementations, sequentially
+make test-contract                         # all eight registered implementations, sequentially
 make test-contract CONTRACT_IMPL=go-gin     # one implementation, same assertions
 ```
 
-`CONTRACT_IMPL` also accepts `go-echo`, `rust-actix`, `rust-axum`, `node-fastify`, and `python-fastapi`.
+`CONTRACT_IMPL` also accepts `go-echo`, `rust-actix`, `rust-axum`, `node-fastify`,
+`node-express`, `python-fastapi`, and `python-flask`.
 The target first runs the suite's focused tests, then builds and starts the selected
 production services. All expected statuses and JSON objects are read from the
 paired HTTP/JSON examples in `docs/API-CONTRACT.md`; that document remains the

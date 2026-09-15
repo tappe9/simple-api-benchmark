@@ -14,7 +14,7 @@ its results should not be compared as identical to native Linux results.
 ```bash
 make install-oha       # optional; make benchmark also verifies/installs it
 make test-benchmark    # focused tests; no Docker and no performance claims
-make benchmark         # full documented profile, all four APIs and endpoints
+make benchmark        # full documented profile, all eight APIs and endpoints
 make benchmark-smoke   # short diagnostic only; never writes results/latest.json
 ```
 
@@ -28,7 +28,7 @@ profile requires updating its validator, tests and methodology in a reviewed
 change, not silently adjusting a slow implementation. The full profile is 1 CPU,
 512 MiB (536,870,912 bytes), one server/worker, pool maximum 10, HTTP/1.1, 50
 connections, a 5-second warm-up per endpoint, and exactly three 30-second measured
-runs for each of JSON, PostgreSQL and CPU. All four implementations run
+runs for each of JSON, PostgreSQL and CPU. All eight active implementations run
 sequentially on the same host. API dependencies and Dockerfile pins are not
 changed by the runner.
 
@@ -39,7 +39,7 @@ execution overlays only the currently measured API service with
 contract workflows keep their existing healthchecks.
 
 The smoke profile uses one-second warm-ups, two-second runs and two connections,
-still with three runs and all four APIs. It exercises the same
+still with three runs and all eight active APIs. It exercises the same
 `external-readiness` startup path as the full benchmark, but its report is
 explicitly `mode: smoke`, `official: false`, saved only in its unique
 `.cache/benchmark/` directory. It does not substitute for full-profile validation
@@ -177,8 +177,9 @@ Short spikes between samples can be missed. See the
 
 ## Result format and atomic publication
 
-`results/latest.json` is an ignored local output generated only after **all 36
-measured runs and all four teardowns** succeed. No fabricated result file is
+A local `make benchmark` writes `results/latest.json` only after **all 72
+measured runs and all eight teardowns** succeed. This local output is not an
+official publication and must not be committed over verified official results. No fabricated result file is
 committed. The local command does not create official README/Pages results or
 history. Once an official result is committed, a local run replaces only your
 working copy with `official: false`; do not commit that local replacement as

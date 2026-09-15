@@ -139,13 +139,15 @@ build, package install, or benchmark runs in this write-enabled job.
 The publisher revalidates complete schema and provenance, including the API health
 policy, normalized records against raw oha and API-only memory samples, selected
 whole runs, and the exact source commit/tree. Symlinked, missing, oversized, and
-escaping artifact paths are rejected. It prepares these four publication paths
+escaping artifact paths are rejected. It prepares these seven publication paths
 from the same report:
 
 - `results/latest.json`;
 - `results/history/<UTC-completion>-<run_id>-<attempt>.json`;
 - the marker-delimited result section in `README.md`;
-- the corresponding section in `README.ja.md`.
+- the corresponding section in `README.ja.md`;
+- all three `results/charts/*-throughput.svg` files (JSON, PostgreSQL and CPU),
+  using the exact shared publication manifest rather than a directory wildcard.
 
 History filenames distinguish same-day runs and attempts and are never
 overwritten. Both README tables show throughput, mean response time, and observed

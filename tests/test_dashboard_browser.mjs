@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { REGISTRY } from '../site/registry.mjs';
 import { testThemeStorage } from './theme_storage_cases.mjs';
 import { realCohortFixtures, testEightStackBrowser } from './eight_stack_cases.mjs';
 
@@ -22,7 +23,8 @@ function chromeBinary() {
   throw new Error('a Chromium-based browser is required for the Pages browser test');
 }
 
-async function pollDevToolsPort(profile, timeoutMs = 10000) {
+// Allow bounded cold browser startup; page assertions retain their own deadlines.
+async function pollDevToolsPort(profile, timeoutMs = 30000) {
   const file = join(profile, 'DevToolsActivePort');
   const deadline = Date.now() + timeoutMs;
   let lastError;
@@ -101,12 +103,18 @@ async function waitFor(cdp, expression, timeoutMs = 8000) {
 test('Pages dashboard works in a real browser under the project subpath', { timeout: 90000 }, async t => {
   execFileSync(python, ['-m', 'benchmark.site'], { cwd: root, stdio: 'pipe' });
   const output = join(root, '.cache', 'site');
+  const latestReport = JSON.parse(await readFile(join(output, 'results/latest.json'), 'utf8'));
+  const memberCount = latestReport.implementations.length;
+  const latestRowCount = memberCount * 3;
+  const goCount = latestReport.implementations.filter(backend =>
+    REGISTRY.implementations.some(spec => spec.id === backend.implementation && spec.language === 'Go')).length;
   const historyIndex = JSON.parse(await readFile(join(output, 'results/history/index.json'), 'utf8'));
   const historical = historyIndex.runs.at(-1);
   const historicalReport = historical
     ? JSON.parse(await readFile(join(output, historical.path.replace(/^\.\//, '')), 'utf8'))
     : null;
   assert.ok(historical && historicalReport, 'repository fixture must provide a historical run');
+  const historicalRowCount = historicalReport.implementations.length * 3;
 
   const { eight } = await realCohortFixtures();
   let reportMode = 'valid';
@@ -170,24 +178,26 @@ test('Pages dashboard works in a real browser under the project subpath', { time
 
   let debugPort;
   let targets;
+  const debugStarted = Date.now();
   try {
     debugPort = await pollDevToolsPort(profile);
     targets = await pollJson(`http://127.0.0.1:${debugPort}/json/list`);
   } catch (error) {
     throw new Error(`Chrome DevTools did not become ready (exit=${browser.exitCode ?? 'running'}): ${browserStderr.trim() || '<no stderr>'}`, { cause: error });
   }
+  t.diagnostic(`Chrome DevTools ready after ${Date.now() - debugStarted} ms`);
   const target = targets.find(entry => entry.type === 'page');
   assert.ok(target?.webSocketDebuggerUrl, 'browser page target must be available');
   const cdp = await connectCdp(target.webSocketDebuggerUrl);
   t.after(() => cdp.close());
   await cdp.send('Runtime.enable');
-  await waitFor(cdp, `document.querySelectorAll('[data-result-row]').length === 12`);
+  await waitFor(cdp, `document.querySelectorAll('[data-result-row]').length === ${latestRowCount}`);
 
   assert.equal(await evaluate(cdp, `location.pathname`), prefix);
   assert.equal(await evaluate(cdp, `location.search`), '');
   assert.equal(await evaluate(cdp, `document.documentElement.dataset.theme`), 'light');
   assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-chart]:not([hidden])').length`), 1);
-  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-run-details]:not([hidden])').length`), 4);
+  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-run-details]:not([hidden])').length`), memberCount);
   assert.equal(await evaluate(cdp, `document.querySelector('[data-history-select]').value`), '');
   assert.equal(
     await evaluate(cdp, `document.querySelector('[data-result-json]').href`),
@@ -197,21 +207,21 @@ test('Pages dashboard works in a real browser under the project subpath', { time
   await evaluate(cdp, `document.querySelector('[data-endpoint="/cpu"]').click(); document.querySelector('[data-metric="mean"]').click();`);
   assert.equal(await evaluate(cdp, `document.querySelector('[data-endpoint="/cpu"]').getAttribute('aria-selected')`), 'true');
   assert.equal(await evaluate(cdp, `document.querySelector('[data-metric="mean"]').getAttribute('aria-pressed')`), 'true');
-  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-run-details]:not([hidden])').length`), 4);
+  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-run-details]:not([hidden])').length`), memberCount);
   assert.equal(await evaluate(cdp, `[...document.querySelectorAll('[data-run-details]:not([hidden])')].every(node => node.dataset.rowEndpoint === '/cpu')`), true);
   await evaluate(cdp, `document.querySelector('[data-run-details]:not([hidden])').open = true;`);
   assert.equal(await evaluate(cdp, `document.querySelector('[data-run-details]:not([hidden])').querySelectorAll('[data-run-row]').length`), 3);
   assert.equal(await evaluate(cdp, `document.querySelector('[data-run-details]:not([hidden])').querySelectorAll('[data-selected-run="true"]').length`), 1);
 
   await evaluate(cdp, `document.querySelector('[data-implementation-filter]').click();`);
-  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-chart]:not([hidden]) [data-chart-implementation]:not([hidden])').length`), 3);
-  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-run-details]:not([hidden])').length`), 3);
+  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-chart]:not([hidden]) [data-chart-implementation]:not([hidden])').length`), memberCount - 1);
+  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-run-details]:not([hidden])').length`), memberCount - 1);
   await evaluate(cdp, `document.querySelector('[data-implementation-filter]').click(); document.querySelector('[data-language-filter="Go"]').click();`);
-  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-chart]:not([hidden]) [data-chart-implementation]:not([hidden])').length`), 3);
-  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-run-details]:not([hidden])').length`), 3);
+  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-chart]:not([hidden]) [data-chart-implementation]:not([hidden])').length`), memberCount - goCount);
+  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-run-details]:not([hidden])').length`), memberCount - goCount);
   await evaluate(cdp, `document.querySelector('[data-language-filter="Go"]').click();`);
-  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-chart]:not([hidden]) [data-chart-implementation]:not([hidden])').length`), 4);
-  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-run-details]:not([hidden])').length`), 4);
+  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-chart]:not([hidden]) [data-chart-implementation]:not([hidden])').length`), memberCount);
+  assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-run-details]:not([hidden])').length`), memberCount);
 
   await evaluate(cdp, `document.getElementById('theme-toggle').click();`);
   assert.equal(await evaluate(cdp, `document.documentElement.dataset.theme`), 'dark');
@@ -231,7 +241,7 @@ test('Pages dashboard works in a real browser under the project subpath', { time
   assert.equal(await evaluate(cdp, `[...document.querySelectorAll('[data-run-details]:not([hidden])')].every(node => node.dataset.rowEndpoint === '/json')`), true);
 
   await evaluate(cdp, `location.href = ${JSON.stringify(`${page}?run=${historical.id}`)}`);
-  await waitFor(cdp, `location.search === ${JSON.stringify(`?run=${historical.id}`)} && document.querySelectorAll('[data-result-row]').length === 12`);
+  await waitFor(cdp, `location.search === ${JSON.stringify(`?run=${historical.id}`)} && document.querySelectorAll('[data-result-row]').length === ${historicalRowCount}`);
   assert.equal(await evaluate(cdp, `document.querySelector('[data-history-select]').value`), historical.id);
   assert.equal(await evaluate(cdp, `document.querySelector('[data-history-view]') !== null`), true);
   assert.equal(await evaluate(cdp, `document.getElementById('results').textContent.includes(${JSON.stringify(historicalReport.metadata.github.source_commit)})`), true);
@@ -244,7 +254,7 @@ test('Pages dashboard works in a real browser under the project subpath', { time
   assert.equal(await evaluate(cdp, `document.documentElement.scrollWidth <= window.innerWidth`), true);
 
   await evaluate(cdp, `document.querySelector('[data-history-select]').value = ''; document.querySelector('[data-history-select]').dispatchEvent(new Event('change', { bubbles: true }));`);
-  await waitFor(cdp, `location.search === '' && document.querySelectorAll('[data-result-row]').length === 12`);
+  await waitFor(cdp, `location.search === '' && document.querySelectorAll('[data-result-row]').length === ${latestRowCount}`);
   assert.equal(await evaluate(cdp, `document.querySelector('[data-history-select]').value`), '');
 
   await evaluate(cdp, `location.href = ${JSON.stringify(`${page}?run=999999999-1`)}`);
@@ -261,7 +271,7 @@ test('Pages dashboard works in a real browser under the project subpath', { time
 
   await testThemeStorage(t, {
     cdp, evaluate, waitFor, page, historical, historicalReport,
-    latestReport: JSON.parse(await readFile(join(output, 'results/latest.json'), 'utf8')),
+    latestReport,
     setReportMode: mode => { reportMode = mode; },
   });
   await testEightStackBrowser(t, { cdp, evaluate, waitFor, page, historical, setReportMode: mode => { reportMode = mode; } });

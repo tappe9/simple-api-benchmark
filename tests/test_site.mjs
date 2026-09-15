@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
-import { registerEightStackTests } from './eight_stack_cases.mjs';
+import { registerEightStackTests, realCohortFixtures } from './eight_stack_cases.mjs';
 
 const reportPath = new URL('../results/latest.json', import.meta.url);
 const report = async () => JSON.parse(await readFile(reportPath, 'utf8'));
@@ -25,12 +25,12 @@ async function subject() {
   }
 }
 
-test('the view uses all 12 selected whole-run records without recomputing measurements', async () => {
+test('the view uses every published selected whole-run record without recomputing measurements', async () => {
   const { viewModel } = await subject();
   const source = await report();
   const before = JSON.stringify(source);
   const model = viewModel(source);
-  assert.equal(model.rows.length, 12);
+  assert.equal(model.rows.length, source.implementations.length * 3);
   for (const backend of source.implementations) {
     for (const endpoint of backend.endpoints) {
       const row = model.rows.find(r => r.id === backend.implementation && r.endpoint === endpoint.endpoint);
@@ -50,12 +50,12 @@ test('bars compare one endpoint and one metric; exact ties share the run-specifi
   const rows = model.rows.filter(r => r.endpoint === '/json');
   rows.forEach((row, index) => { row.rps = index < 2 ? 10 : 5; row.memory = index < 2 ? 1 : 2; });
   const throughput = chartRows(model, '/json', 'rps');
-  assert.equal(throughput.length, 4);
-  assert.deepEqual(throughput.map(r => r.best), [true, true, false, false]);
-  assert.deepEqual(throughput.map(r => r.percent), [100, 100, 50, 50]);
+  assert.equal(throughput.length, model.implementations.length);
+  assert.deepEqual(throughput.map(r => r.best), [true, true, ...Array(model.implementations.length - 2).fill(false)]);
+  assert.deepEqual(throughput.map(r => r.percent), [100, 100, ...Array(model.implementations.length - 2).fill(50)]);
   const memory = chartRows(model, '/json', 'memory');
-  assert.deepEqual(memory.map(r => r.best), [true, true, false, false]);
-  assert.deepEqual(memory.map(r => r.percent), [50, 50, 100, 100]);
+  assert.deepEqual(memory.map(r => r.best), [true, true, ...Array(model.implementations.length - 2).fill(false)]);
+  assert.deepEqual(memory.map(r => r.percent), [50, 50, ...Array(model.implementations.length - 2).fill(100)]);
   assert.throws(() => chartRows(model, '/health', 'rps'));
   assert.throws(() => chartRows(model, '/json', 'score'));
 });
@@ -65,8 +65,8 @@ test('table and bars render the same selected values, date, source and stack ver
   const source = await report();
   const html = renderReport(source);
   assert.match(html, /<caption>/);
-  assert.equal((html.match(/data-result-row/g) || []).length, 12);
-  assert.equal((html.match(/<meter /g) || []).length, 24);
+  assert.equal((html.match(/data-result-row/g) || []).length, source.implementations.length * 3);
+  assert.equal((html.match(/<meter /g) || []).length, source.implementations.length * 6);
   for (const backend of source.implementations) {
     assert.ok(html.includes(`/tree/${source.metadata.source_commit}/apps/${backend.implementation}`));
     for (const endpoint of backend.endpoints) {
@@ -273,7 +273,7 @@ for (const previous of ['missing', 'older']) {
     const model = viewModel(linked);
     assert.equal(model.source, sourceSha);
     assert.equal(model.completedAt, published.completed_at);
-    assert.equal(model.rows.length, 12);
+    assert.equal(model.rows.length, linked.implementations.length * 3);
     for (const backend of linked.implementations) {
       assert.ok(state.html.includes(`/tree/${sourceSha}/apps/${backend.implementation}`));
       for (const endpoint of backend.endpoints) {
@@ -287,12 +287,13 @@ for (const previous of ['missing', 'older']) {
   });
 }
 
-test("explicit versioned current cohort renders the same legacy measurements", async () => {
+test("explicit versioned legacy cohort renders the same frozen measurements", async () => {
   const { viewModel, renderReport } = await subject();
-  const legacy = await report();
+  const { legacy } = await realCohortFixtures();
   const explicit = structuredClone(legacy);
   explicit.schema_version = 2;
   explicit.benchmark = { definition: "simple-api-v1", cohort: "four-stack-v1" };
+  explicit.metadata.api_health_policy = "container-healthcheck";
   assert.deepEqual(viewModel(explicit).rows, viewModel(legacy).rows);
   assert.match(renderReport(explicit), /href="\.\/results\/latest\.json"/);
   for (const mutation of [

@@ -25,6 +25,39 @@ LEGACY_MEMBERS = ("go-gin", "rust-actix", "node-fastify", "python-fastapi")
 
 
 class EightStackRegistryTests(unittest.TestCase):
+    def test_active_cohort_and_version_projection_use_all_eight_registered_stacks(self):
+        self.assertEqual(
+            registry.active_benchmark(),
+            {"definition": "simple-api-v1", "cohort": "eight-stack-v1"},
+        )
+        self.assertEqual(registry.active_members(), EIGHT_MEMBERS)
+        self.assertEqual(tuple(environment.pinned_versions()), EIGHT_MEMBERS)
+
+    def test_default_runner_measures_the_approved_cohort_without_registry_overrides(self):
+        subject = Environment()
+        with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):
+            output = Path(directory) / "candidate.json"
+            result = run.run_benchmark(
+                subject,
+                run.load_config(),
+                output,
+                metadata={},
+                contract=subject.contract,
+                health_policy=EXTERNAL_READINESS,
+            )
+            self.assertEqual(
+                result["benchmark"], {"definition": "simple-api-v1", "cohort": "eight-stack-v1"}
+            )
+            self.assertEqual(
+                tuple(backend["implementation"] for backend in result["implementations"]),
+                EIGHT_MEMBERS,
+            )
+            self.assertEqual(subject.measures, 72)
+            self.assertEqual(subject.events.count("cleanup"), 8)
+            self.assertIsNone(subject.active)
+            self.assertEqual(json.loads(output.read_bytes()), result)
+            self.assertIs(result["official"], False)
+
     def test_real_eight_stack_cohort_is_registered_in_frozen_order(self):
         data = registry.load_registry()
         self.assertIn("eight-stack-v1", data["cohorts"])

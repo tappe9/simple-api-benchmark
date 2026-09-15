@@ -44,8 +44,8 @@ not by itself activate a benchmark cohort or create measured results.
 
 | Cohort | Ordered members | Current role |
 | --- | --- | --- |
-| `four-stack-v1` | `go-gin`, `rust-actix`, `node-fastify`, `python-fastapi` | Active official cohort; existing published results |
-| `eight-stack-v1` | `go-gin`, `go-echo`, `rust-actix`, `rust-axum`, `node-fastify`, `node-express`, `python-fastapi`, `python-flask` | Registered and compatibility-tested; activation and first official publication pending |
+| `four-stack-v1` | `go-gin`, `rust-actix`, `node-fastify`, `python-fastapi` | Frozen historical cohort; existing reports remain readable |
+| `eight-stack-v1` | `go-gin`, `go-echo`, `rust-actix`, `rust-axum`, `node-fastify`, `node-express`, `python-fastapi`, `python-flask` | Active official cohort; complete verified runs are eligible for publication |
 
 `registered_pinned_versions()` in `benchmark/environment.py` extracts all eight
 stacks, while `pinned_versions()` includes only the active cohort's metadata.
@@ -55,27 +55,31 @@ does not introduce partial official reports.
 
 ### Eight-stack rollout boundary (#50)
 
-The preparation change retains `active_cohort: four-stack-v1`. Both readers accept
+The approved activation sets `active_cohort: eight-stack-v1`. Both readers accept
 complete four/eight-stack reports, but no synthetic fixture is published and the
-existence of `eight-stack-v1` is not evidence of a real eight-stack measurement.
+active pointer is not evidence of a real eight-stack measurement.
 README and Pages identify the selected report's cohort, definition and API
 readiness policy; historical views never fill absent frameworks with zero.
 Runtime, framework/driver versions, source SHA and runner metadata remain tied to
 that one report. Do not combine separate runs into a single ranking.
 
-Activation requires explicit maintainer approval. Changing `active_cohort` also
-changes the next scheduled official run, even without manual dispatch. After that
-approval, change only the active pointer in a reviewed follow-up, rerun all gates,
-and merge before running the existing official workflow on its exact latest-main
-SHA. This is not permission to dispatch or publish during preparation.
+The maintainer approved activation and one full official run with existing
+validated automatic publication. Activation also changes the next scheduled
+official run, even without manual dispatch. Merge the reviewed activation only
+after all gates pass, then run the existing official workflow on that exact
+latest-main SHA. Keep main unchanged during measurement; retain stale-main
+rejection rather than rebasing old measurements onto unrelated source.
 
 The unchanged profile requires 8 x 3 x 3 = **72 measured samples**, plus 24 five-second
 warm-ups, sequentially on one runner. Test doubles verify that execution sequence
 and late failure/cleanup rejection, not actual throughput or elapsed runtime.
-The current 60-minute measurement timeout is retained until real execution
-provides build, startup, measurement and cleanup timings. Validate that budget
-before rollout; justify any change from recorded evidence without parallelizing
-official measurements or changing per-stack settings.
+The existing 60-minute measurement timeout is unchanged for this rollout. The
+nominal load windows alone total 38 minutes (72 x 30 seconds + 24 x 5 seconds),
+excluding request drain, builds, startup, checks, sampling and cleanup. This is
+not a measured elapsed-time claim. Record the full job and per-stack elapsed
+times from the official run logs, including that overhead. A timeout must fail
+without publication; any later budget change needs recorded evidence, never
+parallelized official measurements or changed per-stack settings.
 
 Keep #50 open until an authorized full run and atomic JSON/history/README/SVG
 publication succeed, followed by downstream Pages and result-link checks. Record
@@ -145,8 +149,8 @@ is added to the otherwise unchanged report structure; it is not a complete repor
 
 The definition and cohort IDs are versioned. The validator accepts only a known
 pair from trusted source configuration; the report cannot declare its own member
-set. The current active cohort remains `four-stack-v1`; `eight-stack-v1` is registered
-but not yet activated.
+set. The active cohort is `eight-stack-v1`; `four-stack-v1` remains frozen for
+historical reports, including untagged schema-v1.
 `conditions.schema_version` remains `1`: CPU, memory, worker/pool limits, endpoints,
 warm-up/duration/concurrency, run count, units, and middle-throughput whole-run
 selection have **not** changed.
