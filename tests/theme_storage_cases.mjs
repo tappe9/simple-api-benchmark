@@ -137,20 +137,23 @@ export async function testThemeStorage(t, {
         const before = await evaluate(cdp, `document.getElementById('results').innerHTML`);
         await evaluate(cdp, `document.getElementById('theme-toggle').focus();`);
 
-        // Real keyboard activation must still work, including when writes fail.
+        // Enter needs its text payload to trigger native button activation in CDP.
         for (const theme of [initial === 'dark' ? 'light' : 'dark', initial]) {
-          await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+          await cdp.send('Input.dispatchKeyEvent', {
+            type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13,
+            text: '\r', unmodifiedText: '\r',
+          });
           await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+          assert.deepEqual(await evaluate(cdp, `window.__themeStorageTest.errors`), [], 'optional storage must not escape through event handlers');
           await assertTheme(cdp, evaluate, theme);
           assert.equal(await evaluate(cdp, `document.activeElement.id`), 'theme-toggle');
           assert.equal(await evaluate(cdp, `document.getElementById('results').innerHTML`), before, 'theme changes must not rerender or reset the selected result');
+          if (mode === 'saved-light' || mode === 'saved-dark') {
+            assert.equal(await evaluate(cdp, `localStorage.getItem('sab-theme')`), theme);
+          }
         }
         assert.equal(await evaluate(cdp, `location.search`), `?run=${historical.id}`);
-        assert.deepEqual(await evaluate(cdp, `window.__themeStorageTest.errors`), [], 'optional storage must not escape through event handlers');
         assert.deepEqual(await evaluate(cdp, `[...new Set(window.__themeStorageTest.failures)].sort()`), [...failures].sort(), 'the intended failure path must actually execute');
-        if (mode === 'saved-light' || mode === 'saved-dark') {
-          assert.equal(await evaluate(cdp, `localStorage.getItem('sab-theme')`), initial);
-        }
       });
     });
   }
@@ -161,11 +164,13 @@ export async function testThemeStorage(t, {
       try {
         await withStorage('getter-throws', async () => {
           await cdp.send('Page.navigate', { url: page });
+          // The initial loading shell also has role=status; wait for the final message.
           await waitFor(cdp, `location.href === ${JSON.stringify(page)} && window.__themeStorageTest &&
-            (window.__themeStorageTest.errors.length > 0 || document.getElementById('results')?.getAttribute('role') === 'status')`);
+            (window.__themeStorageTest.errors.length > 0 || document.getElementById('results')?.textContent.includes('temporarily unavailable') === true)`);
           assert.deepEqual(await evaluate(cdp, `window.__themeStorageTest.errors`), []);
+          assert.equal(await evaluate(cdp, `document.getElementById('results').getAttribute('role')`), 'status');
           const message = await evaluate(cdp, `document.getElementById('results').textContent`);
-          assert.match(message, /temporarily unavailable|could not be verified/i);
+          assert.match(message, /temporarily unavailable/i);
           assert.doesNotMatch(message, /0\.000/);
           assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-result-row]').length`), 0);
           await evaluate(cdp, `document.getElementById('theme-toggle').click();`);
