@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { registerEightStackTests } from './eight_stack_cases.mjs';
 
 const reportPath = new URL('../results/latest.json', import.meta.url);
 const report = async () => JSON.parse(await readFile(reportPath, 'utf8'));
@@ -361,3 +362,6 @@ print(json.dumps({"legacy": legacy, "expanded": expanded}))
     await rm(temporary, { recursive: true, force: true });
   }
 });
+
+// Exercise real cohort IDs without substituting the production viewer registry.
+registerEightStackTests();

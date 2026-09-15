@@ -21,13 +21,12 @@ class PythonFlaskCandidateTests(unittest.TestCase):
         self.assertIn("create_server", server)
         self.assertNotIn("gunicorn", server.lower())
 
-    def test_flask_is_registered_without_expanding_official_cohort(self):
+    def test_flask_is_registered_without_mutating_legacy_cohort(self):
         registry = json.loads((ROOT / "benchmark" / "implementations.json").read_text())
         by_id = {entry["id"]: entry for entry in registry["implementations"]}
         flask = by_id["python-flask"]
         self.assertEqual(flask["display_name"], "Python / Flask")
         self.assertEqual(flask["source_path"], "apps/python-flask")
-        self.assertEqual(registry["active_cohort"], "four-stack-v1")
         self.assertNotIn("python-flask", registry["cohorts"]["four-stack-v1"]["members"])
 
 

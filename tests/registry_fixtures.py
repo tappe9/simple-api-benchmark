@@ -48,3 +48,42 @@ def expanded_report(report, root=None):
                 target = directory / path.name.replace(original["implementation"], spec["id"], 1)
                 target.write_bytes(path.read_bytes())
     return result
+
+
+# Independent expectations: do not derive frozen cohort membership from the registry.
+EIGHT_MEMBERS = (
+    "go-gin",
+    "go-echo",
+    "rust-actix",
+    "rust-axum",
+    "node-fastify",
+    "node-express",
+    "python-fastapi",
+    "python-flask",
+)
+
+
+def real_eight_report(report, root=None):
+    """Expand synthetic data using real IDs; never read or write published results."""
+    from benchmark.environment import registered_pinned_versions
+    from benchmark.healthcheck import EXTERNAL_READINESS
+
+    result = explicit_report(report, "eight-stack-v1")
+    result["metadata"]["api_health_policy"] = EXTERNAL_READINESS
+    original = result["implementations"][0]
+    by_id = {backend["implementation"]: backend for backend in result["implementations"]}
+    result["implementations"] = []
+    versions = registered_pinned_versions()
+    result["metadata"]["versions"] = {
+        identifier: versions[identifier] for identifier in EIGHT_MEMBERS
+    }
+    for identifier in EIGHT_MEMBERS:
+        backend = copy.deepcopy(by_id.get(identifier, original))
+        backend["implementation"] = identifier
+        result["implementations"].append(backend)
+        if root is not None and identifier not in by_id:
+            directory = root / result["metadata"]["artifact_directory"]
+            for path in list(directory.glob(original["implementation"] + "-*")):
+                target = directory / path.name.replace(original["implementation"], identifier, 1)
+                target.write_bytes(path.read_bytes())
+    return result

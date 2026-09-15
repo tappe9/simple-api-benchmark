@@ -7,6 +7,7 @@ import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { testThemeStorage } from './theme_storage_cases.mjs';
+import { realCohortFixtures, testEightStackBrowser } from './eight_stack_cases.mjs';
 
 const root = dirname(fileURLToPath(new URL('../Makefile', import.meta.url)));
 const python = process.env.PYTHON || 'python3';
@@ -107,6 +108,7 @@ test('Pages dashboard works in a real browser under the project subpath', { time
     : null;
   assert.ok(historical && historicalReport, 'repository fixture must provide a historical run');
 
+  const { eight } = await realCohortFixtures();
   let reportMode = 'valid';
   const prefix = '/simple-api-benchmark/';
   const server = createServer(async (request, response) => {
@@ -124,6 +126,10 @@ test('Pages dashboard works in a real browser under the project subpath', { time
       }
       if (relative === 'results/latest.json' && reportMode === 'server-error') {
         response.writeHead(503).end('Unavailable');
+        return;
+      }
+      if (relative === 'results/latest.json' && reportMode === 'eight-stack') {
+        response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(eight));
         return;
       }
       const body = await readFile(join(output, relative));
@@ -258,4 +264,6 @@ test('Pages dashboard works in a real browser under the project subpath', { time
     latestReport: JSON.parse(await readFile(join(output, 'results/latest.json'), 'utf8')),
     setReportMode: mode => { reportMode = mode; },
   });
+  await testEightStackBrowser(t, { cdp, evaluate, waitFor, page, historical, setReportMode: mode => { reportMode = mode; } });
+
 });

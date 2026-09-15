@@ -8,12 +8,19 @@ Simple API Benchmark contains eight API implementations with the same endpoints,
 
 > **Project status:** v0.1.0 is released. CI, official benchmark automation, and the GitHub Pages results site are available. Go / Echo, Rust / Axum, Node.js / Express, and Python / Flask are implemented and CI-covered, while the published official benchmark remains on the frozen `four-stack-v1` cohort until a complete expanded cohort is enabled.
 
+`eight-stack-v1` is now registered and compatibility-tested, but activation and
+its first official publication remain pending under [Issue #50](https://github.com/tappe9/simple-api-benchmark/issues/50).
+The active official cohort and currently published results remain `four-stack-v1`.
+See the [cohort rollout guide](docs/IMPLEMENTATIONS.md#eight-stack-rollout-boundary-50)
+for the separate activation/publication approval and verification steps.
+
 ## Results
 
 <!-- benchmark-results:start -->
 
 Measured (UTC): `2026-09-09T07:25:22.908825+00:00`
 Source: `94500edc982a0cfb09be73262266e46eea1cde45` · [Actions run](https://github.com/tappe9/simple-api-benchmark/actions/runs/34321830470)
+Cohort: `four-stack-v1` · Definition: `simple-api-v1` · API readiness: `external-readiness`
 
 1 CPU · 512 MiB · 1 worker · DB pool 10 · HTTP/1.1 · 50 connections · 5 s warm-up · 3 × 30 s per endpoint. Middle-throughput whole run selected.
 

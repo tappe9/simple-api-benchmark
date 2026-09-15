@@ -95,6 +95,18 @@ function reportCohort(report) {
   return { id, members: REGISTRY.cohorts[id].members };
 }
 
+function reportHealthPolicy(report, metadata) {
+  // Missing legacy metadata means the original container healthcheck policy,
+  // never whichever policy happens to be active for a new measurement.
+  const value = metadata.api_health_policy;
+  if (report.schema_version === 1) {
+    assert(value == null || value === "container-healthcheck", "schema-v1 cannot claim a post-legacy API health policy");
+    return "container-healthcheck";
+  }
+  assert(value === "container-healthcheck" || value === "external-readiness", "schema-v2 API health policy provenance required");
+  return value;
+}
+
 function validateMeasuredRun(run, expectedRun) {
   object(run, `measured run ${expectedRun}`);
   integer(run.run, `measured run ${expectedRun} number`);
@@ -117,6 +129,7 @@ function validateReport(report) {
   validateConditions(report.conditions);
 
   const metadata = object(report.metadata, "metadata");
+  const apiHealthPolicy = reportHealthPolicy(report, metadata);
   assert(typeof metadata.source_commit === "string" && /^[0-9a-f]{40}$/.test(metadata.source_commit), "invalid source commit");
   const github = object(metadata.github, "GitHub metadata");
   assert(typeof github.run_url === "string" && /^https:\/\/github\.com\/tappe9\/simple-api-benchmark\/actions\/runs\/[1-9][0-9]*$/.test(github.run_url), "invalid Actions URL");
@@ -173,15 +186,16 @@ function validateReport(report) {
       });
     });
   });
-  return { rows, metadata, versions, cohort };
+  return { rows, metadata, versions, cohort, apiHealthPolicy };
 }
 
 export function viewModel(report) {
-  const { rows, metadata, versions, cohort } = validateReport(report);
+  const { rows, metadata, versions, cohort, apiHealthPolicy } = validateReport(report);
   return {
     rows,
     implementations: [...cohort.members],
     cohort: cohort.id,
+    apiHealthPolicy,
     versions,
     source: metadata.source_commit,
     completedAt: report.completed_at,
@@ -286,7 +300,7 @@ function versions(model) {
 
 function environment(model) {
   const runner = model.runner;
-  return `<dl class="environment"><div><dt>Runner</dt><dd>${escapeHtml(runner.environment)}</dd></div><div><dt>OS / architecture</dt><dd>${escapeHtml(runner.os)} / ${escapeHtml(runner.architecture)}</dd></div><div><dt>Runner image</dt><dd>${escapeHtml(runner.image_os)} ${escapeHtml(runner.image_version)}</dd></div><div><dt>CPU</dt><dd>${escapeHtml(runner.cpu_model)}</dd></div></dl>`;
+  return `<dl class="environment"><div><dt>API readiness</dt><dd>${escapeHtml(model.apiHealthPolicy)}</dd></div><div><dt>Runner</dt><dd>${escapeHtml(runner.environment)}</dd></div><div><dt>OS / architecture</dt><dd>${escapeHtml(runner.os)} / ${escapeHtml(runner.architecture)}</dd></div><div><dt>Runner image</dt><dd>${escapeHtml(runner.image_os)} ${escapeHtml(runner.image_version)}</dd></div><div><dt>CPU</dt><dd>${escapeHtml(runner.cpu_model)}</dd></div></dl>`;
 }
 
 function historyNavigation(historyIndex, selectedHistoryId) {
