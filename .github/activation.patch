@@ -1,0 +1,218 @@
+diff --git a/ARCHITECTURE.md b/ARCHITECTURE.md
+index bc75be8dd0cdf623f2623a2db9d6b0103923eee3..75912fbe114d766d8421d793fe669bc3d32b5dbf 100644
+--- a/ARCHITECTURE.md
++++ b/ARCHITECTURE.md
+@@ -34,4 +34,4 @@ flowchart LR
+-    R --> A1[Go / Gin]
+-    R --> A2[Rust / Actix Web]
+-    R --> A3[Node.js / Fastify]
+-    R --> A4[Python / FastAPI]
++    R --> A1[Go / Gin and Echo]
++    R --> A2[Rust / Actix Web and Axum]
++    R --> A3[Node.js / Fastify and Express]
++    R --> A4[Python / FastAPI and Flask]
+@@ -117 +117 @@ build-context agreement. Version extraction remains language-specific.
+-`registered_pinned_versions()` covers all six registered stacks; `pinned_versions()`
++`registered_pinned_versions()` covers all eight registered stacks; `pinned_versions()`
+@@ -240 +240 @@ Cleanup must run even when a build, contract test, or benchmark fails.
+-`ci.yml` builds and checks all six registered applications, runs the shared contract and focused tests, validates workflow syntax/security and generated README sections, validates the static Pages contracts, and executes a short non-publishing smoke benchmark. Repository permissions are read-only and checkout credentials are not persisted. The Axum matrix entry additionally runs its non-publishing diagnostic and uploads diagnostic evidence; failure blocks the existing required aggregate. The active-cohort smoke remains four-stack and sequential. The component diagram above depicts that official result path, not every registered candidate.
++`ci.yml` builds and checks all eight registered applications, runs the shared contract and focused tests, validates workflow syntax/security and generated README sections, validates the static Pages contracts, and executes a short non-publishing smoke benchmark. Repository permissions are read-only and checkout credentials are not persisted. The Axum matrix entry additionally runs its non-publishing diagnostic and uploads diagnostic evidence; failure blocks the existing required aggregate. The active-cohort smoke covers `eight-stack-v1` sequentially. The component diagram groups applications by language; the runner still starts and measures only one implementation at a time.
+@@ -244 +244 @@ Cleanup must run even when a build, contract test, or benchmark fails.
+-`benchmark.yml` runs weekly and through `workflow_dispatch`, only for trusted default-branch code. All four backends are measured sequentially in one GitHub Actions job so that they use the same runner.
++`benchmark.yml` runs weekly and through `workflow_dispatch`, only for trusted default-branch code. All eight active backends are measured sequentially in one GitHub Actions job so that they use the same runner. Historical four-stack reports retain their original membership and measured-source identity.
+@@ -246 +246 @@ Cleanup must run even when a build, contract test, or benchmark fails.
+-The read-only measurement job calls `benchmark/official.py`, which reuses the existing runner and audits raw results. A separate successful-run-only publishing job uses `benchmark/publish.py` and `benchmark/generate_readme.py` to create one fast-forward commit for latest JSON, unique dated history and both README sections. A failed, incomplete or stale-source run cannot replace the latest verified result. `benchmark/report.py` owns publication validation, not measurement. See [automation](docs/AUTOMATION.md) for trust and transaction boundaries.
++The read-only measurement job calls `benchmark/official.py`, which reuses the existing runner and audits raw results. A separate successful-run-only publishing job uses `benchmark/publish.py` and `benchmark/generate_readme.py` to create one fast-forward commit for latest JSON, unique dated history, both README sections and three SVG charts. A failed, incomplete or stale-source run cannot replace the latest verified result. `benchmark/report.py` owns publication validation, not measurement. See [automation](docs/AUTOMATION.md) for trust and transaction boundaries.
+@@ -250 +250 @@ The read-only measurement job calls `benchmark/official.py`, which reuses the ex
+-`pages.yml` deploys only trusted default-branch content. A successful main CI run can deploy an ordinary source change. Because verified result commits deliberately do not start CI, a successful official benchmark completion can also trigger Pages; `benchmark/pages.py` requires that the current commit be exactly the four-file publication commit produced for that upstream run. Pull-request, fork, failed, stale, malformed, and unrelated workflow events fail before a Pages artifact is uploaded. The build job has read-only repository access; only the dependent deploy job receives `pages: write` and OIDC permissions.
++`pages.yml` deploys only trusted default-branch content. A successful main CI run can deploy an ordinary source change. Because verified result commits deliberately do not start CI, a successful official benchmark completion can also trigger Pages; `benchmark/pages.py` requires that the current commit be exactly the seven-file publication commit produced for that upstream run. Pull-request, fork, failed, stale, malformed, and unrelated workflow events fail before a Pages artifact is uploaded. The build job has read-only repository access; only the dependent deploy job receives `pages: write` and OIDC permissions.
+diff --git a/CONTRIBUTING.md b/CONTRIBUTING.md
+index 831e81b7fdd078c70151e74bb918fbe6f028af0c..5afdf2f3264f11b7e71738b598b41b147f5dfd01 100644
+--- a/CONTRIBUTING.md
++++ b/CONTRIBUTING.md
+@@ -146 +146 @@ toolchains are not needed on the host for this target.
+-make test-contract                         # all six registered implementations, sequentially
++make test-contract                         # all eight registered implementations, sequentially
+@@ -150 +150,2 @@ make test-contract CONTRACT_IMPL=go-gin     # one implementation, same assertion
+-`CONTRACT_IMPL` also accepts `go-echo`, `rust-actix`, `rust-axum`, `node-fastify`, and `python-fastapi`.
++`CONTRACT_IMPL` also accepts `go-echo`, `rust-actix`, `rust-axum`, `node-fastify`,
++`node-express`, `python-fastapi`, and `python-flask`.
+diff --git a/README.ja.md b/README.ja.md
+index 420b3788b4ccafa8545a3981b5e4403b0743122b..fe438c230f840b73abbfa45b30b9a32d9b9955a7 100644
+--- a/README.ja.md
++++ b/README.ja.md
+@@ -9 +9 @@ Simple API Benchmarkには、同じエンドポイント、同じDockerリソー
+-> **現在の状態:** v0.1.0をリリース済みです。CI、公式benchmark自動化、GitHub Pagesの結果サイトを利用できます。Go / Echo、Rust / Axum、Node.js / Express、Python / Flaskは実装済みでCI対象ですが、完全な拡張cohortを有効化するまでは、公開中の公式benchmarkは凍結した`four-stack-v1`のままです。
++> **現在の状態:** v0.1.0をリリース済みです。8実装すべてがCI対象で、公式で有効な比較グループは`eight-stack-v1`です。CI、公式benchmark自動化、GitHub Pagesの結果サイトを利用できます。
+@@ -11,5 +11,5 @@ Simple API Benchmarkには、同じエンドポイント、同じDockerリソー
+-`eight-stack-v1`の登録と互換性テストは実装済みですが、有効化と最初の公式結果の公開は
+-[Issue #50](https://github.com/tappe9/simple-api-benchmark/issues/50)で引き続き管理します。
+-公式で有効な比較グループと現在の公開結果は、どちらも`four-stack-v1`のままです。
+-有効化は次回の定期計測にも影響するため、実装のmergeとは別に承認・検証を行います。
+-詳細は[比較グループの切替手順](docs/IMPLEMENTATIONS.md#eight-stack-rollout-boundary-50)を参照してください。
++「結果」には、最新の**検証済み公開結果**に含まれる比較グループを明示します。
++8構成を有効化しただけでは、計測結果を作成・置換しません。
++過去の`four-stack-v1`レポートは変更せず維持します。
++公開の検証手順は[比較グループの切替手順](docs/IMPLEMENTATIONS.md#eight-stack-rollout-boundary-50)、
++進捗と検証記録は[Issue #50](https://github.com/tappe9/simple-api-benchmark/issues/50)を参照してください。
+@@ -84 +84 @@ Source: `94500edc982a0cfb09be73262266e46eea1cde45` · [Actions run](https://gith
+-下の公開結果は引き続き`four-stack-v1`、つまりGo / Gin、Rust / Actix Web、Node.js / Fastify、Python / FastAPIの4実装を表します。Go / Echo、Rust / Axum、Node.js / Express、Python / Flaskを既存のhistorical cohortへ暗黙に追加しません。
++有効な`eight-stack-v1`は上記8実装を比較します。過去の`four-stack-v1`はGo / Gin、Rust / Actix Web、Node.js / Fastify、Python / FastAPIの4実装だけを含みます。追加frameworkを過去の結果へ挿入したり、存在しない計測値をゼロ表示したりはしません。
+@@ -245,2 +245,2 @@ HTTP status、JSONの内容・型、規定のerror response、応答の再現性
+-active official cohortは引き続き`four-stack-v1`なので、Echo、Axum、Express、Flaskをimplementation registryへ追加しても
+-既存の公式結果を変更したり再公開したりはしません。
++active official cohortは`eight-stack-v1`です。8構成の結果を公開するには、新しい完全な公式計測と検証が必要です。
++過去の4構成のレポートは書き換えません。
+diff --git a/README.md b/README.md
+index 4c6d21dd72bd921bb485e6c591e6a829ac31225b..5c0b9a18a70ec5204dda39173e27426618a027ac 100644
+--- a/README.md
++++ b/README.md
+@@ -9 +9 @@ Simple API Benchmark contains eight API implementations with the same endpoints,
+-> **Project status:** v0.1.0 is released. CI, official benchmark automation, and the GitHub Pages results site are available. Go / Echo, Rust / Axum, Node.js / Express, and Python / Flask are implemented and CI-covered, while the published official benchmark remains on the frozen `four-stack-v1` cohort until a complete expanded cohort is enabled.
++> **Project status:** v0.1.0 is released. All eight API implementations are CI-covered, and `eight-stack-v1` is the active official cohort. CI, official benchmark automation, and the GitHub Pages results site are available.
+@@ -11,5 +11,5 @@ Simple API Benchmark contains eight API implementations with the same endpoints,
+-`eight-stack-v1` is now registered and compatibility-tested, but activation and
+-its first official publication remain pending under [Issue #50](https://github.com/tappe9/simple-api-benchmark/issues/50).
+-The active official cohort and currently published results remain `four-stack-v1`.
+-See the [cohort rollout guide](docs/IMPLEMENTATIONS.md#eight-stack-rollout-boundary-50)
+-for the separate activation/publication approval and verification steps.
++The Results section identifies the cohort of the latest **verified publication**;
++activating eight stacks does not itself create or replace measured results.
++Historical `four-stack-v1` reports remain unchanged. See the
++[cohort rollout guide](docs/IMPLEMENTATIONS.md#eight-stack-rollout-boundary-50)
++and [Issue #50](https://github.com/tappe9/simple-api-benchmark/issues/50) for rollout verification.
+@@ -84 +84 @@ A separate `GET /health` endpoint is used only to check readiness.
+-The published result below still represents `four-stack-v1`: Go / Gin, Rust / Actix Web, Node.js / Fastify, and Python / FastAPI. Go / Echo, Rust / Axum, Node.js / Express, and Python / Flask are not silently added to that historical cohort.
++The active `eight-stack-v1` cohort includes all eight implementations above. Historical `four-stack-v1` reports contain only Go / Gin, Rust / Actix Web, Node.js / Fastify, and Python / FastAPI; the other frameworks are never inserted into historical results or displayed as zero-valued measurements.
+@@ -246,2 +246,2 @@ Official results come only from the trusted-main [weekly/manual workflow](docs/A
+-The active official cohort remains `four-stack-v1`, so registering Echo, Axum, Express, and Flask
+-does not alter or republish the existing official result set.
++The active official cohort is `eight-stack-v1`. A new complete, verified official run
++is required to publish eight-stack results; historical four-stack reports are not rewritten.
+diff --git a/benchmark/implementations.json b/benchmark/implementations.json
+index a9101d258995251500e69ecd3609eb5adea84306..b9fe549b00aa59ea25597127c51b012f8942bd64 100644
+--- a/benchmark/implementations.json
++++ b/benchmark/implementations.json
+@@ -3 +3 @@
+-  "active_cohort": "four-stack-v1",
++  "active_cohort": "eight-stack-v1",
+diff --git a/docs/AUTOMATION.md b/docs/AUTOMATION.md
+index 0358275f844f66b26717435e68ef58db30faf291..8552b72e578bd07db012671471053c6868663af6 100644
+--- a/docs/AUTOMATION.md
++++ b/docs/AUTOMATION.md
+@@ -142 +142 @@ whole runs, and the exact source commit/tree. Symlinked, missing, oversized, and
+-escaping artifact paths are rejected. It prepares these four publication paths
++escaping artifact paths are rejected. It prepares these seven publication paths
+@@ -148 +148,3 @@ from the same report:
+-- the corresponding section in `README.ja.md`.
++- the corresponding section in `README.ja.md`;
++- all three `results/charts/*-throughput.svg` files (JSON, PostgreSQL and CPU),
++  using the exact shared publication manifest rather than a directory wildcard.
+diff --git a/docs/BENCHMARK.md b/docs/BENCHMARK.md
+index a855b665e3771f0f9abdf45bf64a55d510cafef6..7d596612827c5eec1dff7b01b4ae18518bfd3c77 100644
+--- a/docs/BENCHMARK.md
++++ b/docs/BENCHMARK.md
+@@ -17 +17 @@ make test-benchmark    # focused tests; no Docker and no performance claims
+-make benchmark         # full documented profile, all four APIs and endpoints
++make benchmark        # full documented profile, all eight APIs and endpoints
+@@ -31 +31 @@ connections, a 5-second warm-up per endpoint, and exactly three 30-second measur
+-runs for each of JSON, PostgreSQL and CPU. All four implementations run
++runs for each of JSON, PostgreSQL and CPU. All eight active implementations run
+@@ -42 +42 @@ The smoke profile uses one-second warm-ups, two-second runs and two connections,
+-still with three runs and all four APIs. It exercises the same
++still with three runs and all eight active APIs. It exercises the same
+@@ -180,2 +180,3 @@ Short spikes between samples can be missed. See the
+-`results/latest.json` is an ignored local output generated only after **all 36
+-measured runs and all four teardowns** succeed. No fabricated result file is
++A local `make benchmark` writes `results/latest.json` only after **all 72
++measured runs and all eight teardowns** succeed. This local output is not an
++official publication and must not be committed over verified official results. No fabricated result file is
+diff --git a/docs/IMPLEMENTATIONS.md b/docs/IMPLEMENTATIONS.md
+index 81aa1a83c2fbf74432efaca78b1c9d82f7682f3c..10054fd11a8c3d4ba8328bfab42f03311a6007ed 100644
+--- a/docs/IMPLEMENTATIONS.md
++++ b/docs/IMPLEMENTATIONS.md
+@@ -47,2 +47,2 @@ not by itself activate a benchmark cohort or create measured results.
+-| `four-stack-v1` | `go-gin`, `rust-actix`, `node-fastify`, `python-fastapi` | Active official cohort; existing published results |
+-| `eight-stack-v1` | `go-gin`, `go-echo`, `rust-actix`, `rust-axum`, `node-fastify`, `node-express`, `python-fastapi`, `python-flask` | Registered and compatibility-tested; activation and first official publication pending |
++| `four-stack-v1` | `go-gin`, `rust-actix`, `node-fastify`, `python-fastapi` | Frozen historical cohort; existing reports remain readable |
++| `eight-stack-v1` | `go-gin`, `go-echo`, `rust-actix`, `rust-axum`, `node-fastify`, `node-express`, `python-fastapi`, `python-flask` | Active official cohort; complete verified runs are eligible for publication |
+@@ -58 +58 @@ does not introduce partial official reports.
+-The preparation change retains `active_cohort: four-stack-v1`. Both readers accept
++The approved activation sets `active_cohort: eight-stack-v1`. Both readers accept
+@@ -60 +60 @@ complete four/eight-stack reports, but no synthetic fixture is published and the
+-existence of `eight-stack-v1` is not evidence of a real eight-stack measurement.
++active pointer is not evidence of a real eight-stack measurement.
+@@ -66,5 +66,6 @@ that one report. Do not combine separate runs into a single ranking.
+-Activation requires explicit maintainer approval. Changing `active_cohort` also
+-changes the next scheduled official run, even without manual dispatch. After that
+-approval, change only the active pointer in a reviewed follow-up, rerun all gates,
+-and merge before running the existing official workflow on its exact latest-main
+-SHA. This is not permission to dispatch or publish during preparation.
++The maintainer approved activation and one full official run with existing
++validated automatic publication. Activation also changes the next scheduled
++official run, even without manual dispatch. Merge the reviewed activation only
++after all gates pass, then run the existing official workflow on that exact
++latest-main SHA. Keep main unchanged during measurement; retain stale-main
++rejection rather than rebasing old measurements onto unrelated source.
+@@ -75,4 +76,7 @@ and late failure/cleanup rejection, not actual throughput or elapsed runtime.
+-The current 60-minute measurement timeout is retained until real execution
+-provides build, startup, measurement and cleanup timings. Validate that budget
+-before rollout; justify any change from recorded evidence without parallelizing
+-official measurements or changing per-stack settings.
++The existing 60-minute measurement timeout is unchanged for this rollout. The
++nominal load windows alone total 38 minutes (72 x 30 seconds + 24 x 5 seconds),
++excluding request drain, builds, startup, checks, sampling and cleanup. This is
++not a measured elapsed-time claim. Record the full job and per-stack elapsed
++times from the official run logs, including that overhead. A timeout must fail
++without publication; any later budget change needs recorded evidence, never
++parallelized official measurements or changed per-stack settings.
+@@ -148,2 +152,2 @@ pair from trusted source configuration; the report cannot declare its own member
+-set. The current active cohort remains `four-stack-v1`; `eight-stack-v1` is registered
+-but not yet activated.
++set. The active cohort is `eight-stack-v1`; `four-stack-v1` remains frozen for
++historical reports, including untagged schema-v1.
+diff --git a/docs/METHODOLOGY.md b/docs/METHODOLOGY.md
+index b720bd0a7852beb6928daaaad58f3c0bd36d9f63..9760db4406fd62a7b8c2d4fb51f1bfbd738ca7bb 100644
+--- a/docs/METHODOLOGY.md
++++ b/docs/METHODOLOGY.md
+@@ -208 +208 @@ This target checks the committed source with rustfmt, locked Rust tests, and Cli
+-All four implementations can now be checked against the same documented contract:
++All eight registered implementations can be checked against the same documented contract:
+diff --git a/tests/test_benchmark_eight_stack.py b/tests/test_benchmark_eight_stack.py
+index 7444336ebb40bbb0f0181856c4f2c3ae92b9e8be..fb9a4e9c9f4665b3da5af233a706be7a11c2f1ce 100644
+--- a/tests/test_benchmark_eight_stack.py
++++ b/tests/test_benchmark_eight_stack.py
+@@ -27,0 +28,33 @@ class EightStackRegistryTests(unittest.TestCase):
++    def test_active_cohort_and_version_projection_use_all_eight_registered_stacks(self):
++        self.assertEqual(
++            registry.active_benchmark(),
++            {"definition": "simple-api-v1", "cohort": "eight-stack-v1"},
++        )
++        self.assertEqual(registry.active_members(), EIGHT_MEMBERS)
++        self.assertEqual(tuple(environment.pinned_versions()), EIGHT_MEMBERS)
++
++    def test_default_runner_measures_the_approved_cohort_without_registry_overrides(self):
++        subject = Environment()
++        with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):
++            output = Path(directory) / "candidate.json"
++            result = run.run_benchmark(
++                subject,
++                run.load_config(),
++                output,
++                metadata={},
++                contract=subject.contract,
++                health_policy=EXTERNAL_READINESS,
++            )
++            self.assertEqual(
++                result["benchmark"], {"definition": "simple-api-v1", "cohort": "eight-stack-v1"}
++            )
++            self.assertEqual(
++                tuple(backend["implementation"] for backend in result["implementations"]),
++                EIGHT_MEMBERS,
++            )
++            self.assertEqual(subject.measures, 72)
++            self.assertEqual(subject.events.count("cleanup"), 8)
++            self.assertIsNone(subject.active)
++            self.assertEqual(json.loads(output.read_bytes()), result)
++            self.assertIs(result["official"], False)
++
