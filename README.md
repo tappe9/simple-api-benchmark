@@ -6,13 +6,13 @@
 
 Simple API Benchmark contains eight API implementations with the same endpoints, Docker resource limits, and validation rules. The goal is not to declare a universal winner. The goal is to make a small, repeatable comparison that anyone can understand.
 
-> **Project status:** v0.1.0 is released. CI, official benchmark automation, and the GitHub Pages results site are available. Go / Echo, Rust / Axum, Node.js / Express, and Python / Flask are implemented and CI-covered, while the published official benchmark remains on the frozen `four-stack-v1` cohort until a complete expanded cohort is enabled.
+> **Project status:** v0.1.0 is released. All eight API implementations are CI-covered, and `eight-stack-v1` is the active official cohort. CI, official benchmark automation, and the GitHub Pages results site are available.
 
-`eight-stack-v1` is now registered and compatibility-tested, but activation and
-its first official publication remain pending under [Issue #50](https://github.com/tappe9/simple-api-benchmark/issues/50).
-The active official cohort and currently published results remain `four-stack-v1`.
-See the [cohort rollout guide](docs/IMPLEMENTATIONS.md#eight-stack-rollout-boundary-50)
-for the separate activation/publication approval and verification steps.
+The Results section identifies the cohort of the latest **verified publication**;
+activating eight stacks does not itself create or replace measured results.
+Historical `four-stack-v1` reports remain unchanged. See the
+[cohort rollout guide](docs/IMPLEMENTATIONS.md#eight-stack-rollout-boundary-50)
+and [Issue #50](https://github.com/tappe9/simple-api-benchmark/issues/50) for rollout verification.
 
 ## Results
 
@@ -81,7 +81,7 @@ Each implementation provides the same three benchmark endpoints:
 
 A separate `GET /health` endpoint is used only to check readiness.
 
-The published result below still represents `four-stack-v1`: Go / Gin, Rust / Actix Web, Node.js / Fastify, and Python / FastAPI. Go / Echo, Rust / Axum, Node.js / Express, and Python / Flask are not silently added to that historical cohort.
+The active `eight-stack-v1` cohort includes all eight implementations above. Historical `four-stack-v1` reports contain only Go / Gin, Rust / Actix Web, Node.js / Fastify, and Python / FastAPI; the other frameworks are never inserted into historical results or displayed as zero-valued measurements.
 
 ## Same conditions
 
@@ -243,8 +243,8 @@ See [the shared contract guide](CONTRIBUTING.md#shared-contract-checks) for
 requirements, standalone base-URL checks, and cleanup limits. The local benchmark runner
 is available, and pull requests run the same checks plus a non-publishing smoke benchmark.
 Official results come only from the trusted-main [weekly/manual workflow](docs/AUTOMATION.md).
-The active official cohort remains `four-stack-v1`, so registering Echo, Axum, Express, and Flask
-does not alter or republish the existing official result set.
+The active official cohort is `eight-stack-v1`. A new complete, verified official run
+is required to publish eight-stack results; historical four-stack reports are not rewritten.
 
 ## Run the local benchmark
 

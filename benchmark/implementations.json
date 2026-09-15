@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_cohort": "four-stack-v1",
+  "active_cohort": "eight-stack-v1",
   "implementations": [
     {"id":"go-gin","language":"Go","framework":"Gin","display_name":"Go / Gin","source_path":"apps/go-gin","version_fields":["go","gin","pgx"],"acceptance_test":"tests/test_go_gin_service.py","failure_test":null},
     {"id":"go-echo","language":"Go","framework":"Echo","display_name":"Go / Echo","source_path":"apps/go-echo","version_fields":["go","echo","pgx"],"acceptance_test":"tests/test_go_echo_service.py","failure_test":null},

@@ -31,10 +31,10 @@ flowchart LR
     G[GitHub Actions] --> M
     M --> R[Python benchmark runner]
     R --> O[oha load generator]
-    R --> A1[Go / Gin]
-    R --> A2[Rust / Actix Web]
-    R --> A3[Node.js / Fastify]
-    R --> A4[Python / FastAPI]
+    R --> A1[Go / Gin and Echo]
+    R --> A2[Rust / Actix Web and Axum]
+    R --> A3[Node.js / Fastify and Express]
+    R --> A4[Python / FastAPI and Flask]
     A1 --> P[(PostgreSQL)]
     A2 --> P
     A3 --> P
@@ -114,7 +114,7 @@ required version fields and acceptance entry points. Python reads it directly;
 `benchmark/registry.py` generates and checks the Make and JavaScript projections.
 CI invokes registry-backed sequential acceptance targets and verifies Compose
 build-context agreement. Version extraction remains language-specific.
-`registered_pinned_versions()` covers all six registered stacks; `pinned_versions()`
+`registered_pinned_versions()` covers all eight registered stacks; `pinned_versions()`
 filters that metadata to the active official cohort. Diagnostic metadata records
 only the selected Axum stack, without expanding official reports.
 
@@ -237,17 +237,17 @@ Cleanup must run even when a build, contract test, or benchmark fails.
 
 ### Pull requests
 
-`ci.yml` builds and checks all six registered applications, runs the shared contract and focused tests, validates workflow syntax/security and generated README sections, validates the static Pages contracts, and executes a short non-publishing smoke benchmark. Repository permissions are read-only and checkout credentials are not persisted. The Axum matrix entry additionally runs its non-publishing diagnostic and uploads diagnostic evidence; failure blocks the existing required aggregate. The active-cohort smoke remains four-stack and sequential. The component diagram above depicts that official result path, not every registered candidate.
+`ci.yml` builds and checks all eight registered applications, runs the shared contract and focused tests, validates workflow syntax/security and generated README sections, validates the static Pages contracts, and executes a short non-publishing smoke benchmark. Repository permissions are read-only and checkout credentials are not persisted. The Axum matrix entry additionally runs its non-publishing diagnostic and uploads diagnostic evidence; failure blocks the existing required aggregate. The active-cohort smoke covers `eight-stack-v1` sequentially. The component diagram groups applications by language; the runner still starts and measures only one implementation at a time.
 
 ### Scheduled and manual benchmarks
 
-`benchmark.yml` runs weekly and through `workflow_dispatch`, only for trusted default-branch code. All four backends are measured sequentially in one GitHub Actions job so that they use the same runner.
+`benchmark.yml` runs weekly and through `workflow_dispatch`, only for trusted default-branch code. All eight active backends are measured sequentially in one GitHub Actions job so that they use the same runner. Historical four-stack reports retain their original membership and measured-source identity.
 
-The read-only measurement job calls `benchmark/official.py`, which reuses the existing runner and audits raw results. A separate successful-run-only publishing job uses `benchmark/publish.py` and `benchmark/generate_readme.py` to create one fast-forward commit for latest JSON, unique dated history and both README sections. A failed, incomplete or stale-source run cannot replace the latest verified result. `benchmark/report.py` owns publication validation, not measurement. See [automation](docs/AUTOMATION.md) for trust and transaction boundaries.
+The read-only measurement job calls `benchmark/official.py`, which reuses the existing runner and audits raw results. A separate successful-run-only publishing job uses `benchmark/publish.py` and `benchmark/generate_readme.py` to create one fast-forward commit for latest JSON, unique dated history, both README sections and three SVG charts. A failed, incomplete or stale-source run cannot replace the latest verified result. `benchmark/report.py` owns publication validation, not measurement. See [automation](docs/AUTOMATION.md) for trust and transaction boundaries.
 
 ### GitHub Pages
 
-`pages.yml` deploys only trusted default-branch content. A successful main CI run can deploy an ordinary source change. Because verified result commits deliberately do not start CI, a successful official benchmark completion can also trigger Pages; `benchmark/pages.py` requires that the current commit be exactly the four-file publication commit produced for that upstream run. Pull-request, fork, failed, stale, malformed, and unrelated workflow events fail before a Pages artifact is uploaded. The build job has read-only repository access; only the dependent deploy job receives `pages: write` and OIDC permissions.
+`pages.yml` deploys only trusted default-branch content. A successful main CI run can deploy an ordinary source change. Because verified result commits deliberately do not start CI, a successful official benchmark completion can also trigger Pages; `benchmark/pages.py` requires that the current commit be exactly the seven-file publication commit produced for that upstream run. Pull-request, fork, failed, stale, malformed, and unrelated workflow events fail before a Pages artifact is uploaded. The build job has read-only repository access; only the dependent deploy job receives `pages: write` and OIDC permissions.
 
 ## Resource limits
 

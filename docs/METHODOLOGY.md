@@ -205,7 +205,7 @@ make test-rust-actix
 
 This target checks the committed source with rustfmt, locked Rust tests, and Clippy, then builds and verifies the pinned production container. Real DB updates and errors, exact numeric JSON, BIGINT boundaries, startup failure, SIGTERM exit, and DB connection/container/network cleanup are included. Run all available DB/API targets after shared Compose changes. These are implementation acceptance checks, not performance measurements.
 
-All four implementations can now be checked against the same documented contract:
+All eight registered implementations can be checked against the same documented contract:
 
 ```bash
 make test-contract

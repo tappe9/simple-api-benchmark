@@ -6,13 +6,13 @@
 
 Simple API Benchmarkには、同じエンドポイント、同じDockerリソース制限、同じ検証ルールを使う8つのAPI実装があります。普遍的な最速言語を決めることではなく、誰でも理解できて、自分でも再実行できる小さな比較を目指します。
 
-> **現在の状態:** v0.1.0をリリース済みです。CI、公式benchmark自動化、GitHub Pagesの結果サイトを利用できます。Go / Echo、Rust / Axum、Node.js / Express、Python / Flaskは実装済みでCI対象ですが、完全な拡張cohortを有効化するまでは、公開中の公式benchmarkは凍結した`four-stack-v1`のままです。
+> **現在の状態:** v0.1.0をリリース済みです。8実装すべてがCI対象で、公式で有効な比較グループは`eight-stack-v1`です。CI、公式benchmark自動化、GitHub Pagesの結果サイトを利用できます。
 
-`eight-stack-v1`の登録と互換性テストは実装済みですが、有効化と最初の公式結果の公開は
-[Issue #50](https://github.com/tappe9/simple-api-benchmark/issues/50)で引き続き管理します。
-公式で有効な比較グループと現在の公開結果は、どちらも`four-stack-v1`のままです。
-有効化は次回の定期計測にも影響するため、実装のmergeとは別に承認・検証を行います。
-詳細は[比較グループの切替手順](docs/IMPLEMENTATIONS.md#eight-stack-rollout-boundary-50)を参照してください。
+「結果」には、最新の**検証済み公開結果**に含まれる比較グループを明示します。
+8構成を有効化しただけでは、計測結果を作成・置換しません。
+過去の`four-stack-v1`レポートは変更せず維持します。
+公開の検証手順は[比較グループの切替手順](docs/IMPLEMENTATIONS.md#eight-stack-rollout-boundary-50)、
+進捗と検証記録は[Issue #50](https://github.com/tappe9/simple-api-benchmark/issues/50)を参照してください。
 
 ## 結果
 
@@ -81,7 +81,7 @@ Source: `94500edc982a0cfb09be73262266e46eea1cde45` · [Actions run](https://gith
 
 `GET /health`は起動確認だけに使用します。
 
-下の公開結果は引き続き`four-stack-v1`、つまりGo / Gin、Rust / Actix Web、Node.js / Fastify、Python / FastAPIの4実装を表します。Go / Echo、Rust / Axum、Node.js / Express、Python / Flaskを既存のhistorical cohortへ暗黙に追加しません。
+有効な`eight-stack-v1`は上記8実装を比較します。過去の`four-stack-v1`はGo / Gin、Rust / Actix Web、Node.js / Fastify、Python / FastAPIの4実装だけを含みます。追加frameworkを過去の結果へ挿入したり、存在しない計測値をゼロ表示したりはしません。
 
 ## 同じ条件
 
@@ -242,8 +242,8 @@ HTTP status、JSONの内容・型、規定のerror response、応答の再現性
 方法、cleanupの制約は[共通contractの実行ガイド](CONTRIBUTING.md#shared-contract-checks)を
 参照してください。ローカルのbenchmark runnerは利用可能です。PRでは同じ検証と公開しない短縮benchmarkを実行します。
 公式結果はtrusted mainの[週次・手動workflow](docs/AUTOMATION.md)だけから公開します。
-active official cohortは引き続き`four-stack-v1`なので、Echo、Axum、Express、Flaskをimplementation registryへ追加しても
-既存の公式結果を変更したり再公開したりはしません。
+active official cohortは`eight-stack-v1`です。8構成の結果を公開するには、新しい完全な公式計測と検証が必要です。
+過去の4構成のレポートは書き換えません。
 
 ## ローカルでの計測
 
