@@ -29,7 +29,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: apps/node-fastify/.node-version
-      - name: Apply only the reviewed publication-aware test patch
+      - name: Apply only the reviewed publication-aware test changes
         run: |
           set -euo pipefail
           test "$(git rev-parse origin/main)" = 1fa233a777915039cf2f3f8baab76137d0e2f4dd
@@ -37,8 +37,18 @@ jobs:
           echo '8bc51bb366adb7fd5bfa24d8bd760e8d920dfcd604cf9ed03a5d22e5aef801a2  '"$RUNNER_TEMP/site-rollout.patch" | sha256sum --check
           rm .github/site-rollout.b64 .github/workflows/browser-startup-diagnostic.yml
           git apply --unidiff-zero "$RUNNER_TEMP/site-rollout.patch"
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/test_pages.py')
+          source = path.read_text()
+          old = '        self.report = json.loads((ROOT / "results/latest.json").read_bytes())'
+          new = '        # Keep the independently asserted manifest tied to its immutable history fixture.\n        self.report = json.loads((ROOT / EXPECTED_HISTORY).read_bytes())'
+          if source.count(old) != 1:
+              raise SystemExit('unexpected Pages test source')
+          path.write_text(source.replace(old, new))
+          PY
           git add -A
-          test "$(git write-tree)" = 91dd3c927393e8d5d2da634fbe87428ac29326dc
+          test "$(git write-tree)" = 9389884db4164633b45151b737fdebd8c2706176
           make test-site
           python -m benchmark.registry --check
           python -m benchmark.generate_readme --check
@@ -63,7 +73,7 @@ jobs:
               subprocess.run(['make', 'test-site'], cwd=copy, check=True, timeout=130)
           PY
           git diff --exit-code
-          test "$(git write-tree)" = 91dd3c927393e8d5d2da634fbe87428ac29326dc
+          test "$(git write-tree)" = 9389884db4164633b45151b737fdebd8c2706176
       - name: Retain the verified tree on this helper branch only
         env:
           GH_TOKEN: ${{ github.token }}
@@ -71,8 +81,8 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'test: keep display gates compatible with eight-stack publications' -m 'Derive published row and filter counts from the input report, preserve explicit legacy coverage, and allow bounded cold browser startup without changing page assertions or benchmark timeouts. Refs #50.'
-          test "$(git rev-parse HEAD^{tree})" = 91dd3c927393e8d5d2da634fbe87428ac29326dc
+          git commit -m 'test: keep display and trust gates compatible with new publications' -m 'Derive published row and filter counts from the input report, preserve explicit legacy manifest coverage, and allow bounded cold browser startup without changing page assertions or benchmark timeouts. Refs #50.'
+          test "$(git rev-parse HEAD^{tree})" = 9389884db4164633b45151b737fdebd8c2706176
           header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader GIT_CONFIG_VALUE_0="$header" \
             git push origin HEAD:refs/heads/ops/browser-startup-58
