@@ -18,7 +18,7 @@ def load_pages():
 class PagesWorkflowEligibilityTests(unittest.TestCase):
     def test_build_filters_ineligible_upstream_runs_before_privileged_work(self):
         workflow = load_pages()
-        condition = workflow["jobs"]["build"]["if"]
+        condition = workflow["jobs"]["deploy"]["if"]
 
         for expected in (
             "github.repository == 'tappe9/simple-api-benchmark'",
@@ -33,22 +33,22 @@ class PagesWorkflowEligibilityTests(unittest.TestCase):
             "github.event.workflow_run.path == '.github/workflows/ci.yml'",
             "github.event.workflow_run.event == 'push'",
             "github.event.workflow_run.head_sha == github.sha",
-            "github.event.workflow_run.name == 'Official benchmark'",
-            "github.event.workflow_run.path == '.github/workflows/benchmark.yml'",
-            "github.event.workflow_run.event == 'workflow_dispatch'",
-            "github.event.workflow_run.event == 'schedule'",
         ):
             self.assertIn(expected, condition)
 
     def test_only_an_eligible_deploy_job_acquires_pages_concurrency(self):
         workflow = load_pages()
         self.assertNotIn("concurrency", workflow)
+        self.assertNotIn("concurrency", workflow["jobs"]["deploy"])
+        workflow = yaml.load(
+            (ROOT / ".github/workflows/pages-deploy.yml").read_text(), Loader=yaml.BaseLoader
+        )
         self.assertNotIn("concurrency", workflow["jobs"]["build"])
 
         deploy = workflow["jobs"]["deploy"]
         self.assertEqual(
             deploy["concurrency"],
-            {"group": "pages", "cancel-in-progress": "true"},
+            {"group": "pages", "cancel-in-progress": "false"},
         )
         self.assertEqual(deploy["needs"], "build")
 

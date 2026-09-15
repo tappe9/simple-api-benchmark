@@ -22,12 +22,19 @@ def load(name):
 
 
 class WorkflowTests(unittest.TestCase):
-    def test_only_three_permanent_workflows_use_pinned_actions_and_safe_checkouts(self):
+    def test_only_four_permanent_workflows_use_pinned_actions_and_safe_checkouts(self):
         paths = list((ROOT / ".github/workflows").glob("*.yml"))
-        self.assertEqual({p.name for p in paths}, {"ci.yml", "benchmark.yml", "pages.yml"})
+        self.assertEqual(
+            {p.name for p in paths}, {"ci.yml", "benchmark.yml", "pages.yml", "pages-deploy.yml"}
+        )
         for path in paths:
             workflow = load(path.name)
             for job in workflow["jobs"].values():
+                if "uses" in job:
+                    self.assertEqual(job["uses"], "./.github/workflows/pages-deploy.yml")
+                    self.assertNotIn("steps", job)
+                    self.assertNotIn("secrets", job)
+                    continue
                 self.assertEqual(job["runs-on"], "ubuntu-24.04")
                 self.assertGreater(int(job["timeout-minutes"]), 0)
                 for step in job["steps"]:
@@ -239,11 +246,14 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(workflow["on"]["schedule"], [{"cron": "27 14 * * 6"}])
         self.assertIn(workflow["on"]["workflow_dispatch"], ("", {}))
         self.assertEqual(workflow["concurrency"]["cancel-in-progress"], "false")
-        self.assertEqual(set(workflow["jobs"]), {"measure", "publish"})
+        self.assertEqual(set(workflow["jobs"]), {"measure", "publish", "pages"})
         for job in workflow["jobs"].values():
             self.assertIn("github.event.repository.default_branch", job["if"])
             self.assertIn("github.ref", job["if"])
             self.assertIn("tappe9/simple-api-benchmark", job["if"])
+            if "uses" in job:
+                self.assertEqual(job["uses"], "./.github/workflows/pages-deploy.yml")
+                continue
             checkout = next(
                 s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout@")
             )
@@ -295,25 +305,26 @@ class WorkflowTests(unittest.TestCase):
     def test_pages_deploys_only_after_trusted_main_validation(self):
         workflow = load("pages.yml")
         self.assertEqual(set(workflow.get("on", {})), {"workflow_run", "workflow_dispatch"})
-        self.assertEqual(
-            set(workflow["on"]["workflow_run"]["workflows"]), {"CI", "Official benchmark"}
-        )
+        self.assertEqual(set(workflow["on"]["workflow_run"]["workflows"]), {"CI"})
         self.assertEqual(workflow["on"]["workflow_run"]["types"], ["completed"])
         self.assertEqual(workflow["permissions"], {"contents": "read"})
-        self.assertEqual(set(workflow["jobs"]), {"build", "deploy", "release"})
-        build = workflow["jobs"]["build"]
+        self.assertEqual(set(workflow["jobs"]), {"deploy", "release"})
+        self.assertEqual(workflow["jobs"]["deploy"]["uses"], "./.github/workflows/pages-deploy.yml")
+        common = load("pages-deploy.yml")
+        build = common["jobs"]["build"]
         self.assertEqual(build.get("permissions", {"contents": "read"}), {"contents": "read"})
-        self.assertIn("python -m benchmark.pages", str(build))
-        self.assertIn("python -m benchmark.site", str(build))
+        self.assertIn("python -m benchmark.pages_handoff build", str(build))
         upload = next(
             step
             for step in build["steps"]
             if step.get("uses", "").startswith("actions/upload-pages-artifact@")
         )
-        self.assertEqual(upload["with"]["path"], ".cache/site")
-        deploy = workflow["jobs"]["deploy"]
+        self.assertEqual(upload["with"]["path"], ".cache/pages-source/.cache/site")
+        deploy = common["jobs"]["deploy"]
         self.assertEqual(deploy["needs"], "build")
-        self.assertEqual(deploy["permissions"], {"pages": "write", "id-token": "write"})
+        self.assertEqual(
+            deploy["permissions"], {"contents": "read", "pages": "write", "id-token": "write"}
+        )
         self.assertEqual(deploy["environment"]["name"], "github-pages")
         self.assertTrue(
             any(
@@ -348,6 +359,113 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn('--target "$GITHUB_SHA"', command)
         self.assertIn("GitHub-hosted runners are shared", command)
         self.assertNotIn("${{", command)
+
+
+class ReusablePagesWorkflowTests(unittest.TestCase):
+    def test_official_publication_calls_same_revision_reusable_workflow_after_success(self):
+        workflow = load("benchmark.yml")
+        self.assertIn("pages", workflow["jobs"], "publish must have a direct dependent Pages call")
+        call = workflow["jobs"]["pages"]
+        self.assertEqual(call["needs"], "publish")
+        self.assertIn("needs.publish.result == 'success'", call["if"])
+        self.assertEqual(call["uses"], "./.github/workflows/pages-deploy.yml")
+        self.assertEqual(
+            call["with"],
+            {
+                "caller": "official",
+                "target_sha": "${{ needs.publish.outputs.publication_sha }}",
+                "source_sha": "${{ needs.publish.outputs.source_sha }}",
+                "producer_run_id": "${{ needs.publish.outputs.producer_run_id }}",
+                "producer_run_attempt": "${{ needs.publish.outputs.producer_run_attempt }}",
+                "producer_result": "${{ needs.publish.result }}",
+            },
+        )
+        producer = workflow["jobs"]["publish"]
+        self.assertEqual(producer["steps"][-1]["id"], "publication")
+        self.assertEqual(
+            producer["outputs"],
+            {
+                name: "${{ steps.publication.outputs." + name + " }}"
+                for name in (
+                    "publication_sha",
+                    "source_sha",
+                    "producer_run_id",
+                    "producer_run_attempt",
+                )
+            },
+        )
+
+    def test_ci_and_recovery_use_same_reusable_workflow_without_double_official_route(self):
+        pages = load("pages.yml")
+        self.assertEqual(pages["on"]["workflow_run"]["workflows"], ["CI"])
+        self.assertEqual(set(pages["jobs"]), {"deploy", "release"})
+        call = pages["jobs"]["deploy"]
+        self.assertEqual(call["uses"], "./.github/workflows/pages-deploy.yml")
+        self.assertEqual(call["with"], {"caller": "pages", "target_sha": "${{ github.sha }}"})
+        self.assertNotIn("Official benchmark", call["if"])
+        self.assertNotIn("concurrency", pages)
+        self.assertNotIn("concurrency", call)
+
+    def test_reusable_build_and_deploy_reduce_permissions_and_recheck_freshness(self):
+        workflow = load("pages-deploy.yml")
+        self.assertEqual(set(workflow.get("on", {})), {"workflow_call"})
+        self.assertEqual(workflow["permissions"], {"contents": "read"})
+        self.assertEqual(set(workflow["jobs"]), {"build", "deploy"})
+        for filename in ("benchmark.yml", "pages.yml"):
+            caller = load(filename)["jobs"]["pages" if filename == "benchmark.yml" else "deploy"]
+            self.assertEqual(
+                caller["permissions"], {"contents": "read", "pages": "write", "id-token": "write"}
+            )
+            self.assertNotIn("secrets", caller)
+        build = workflow["jobs"]["build"]
+        self.assertEqual(build["permissions"], {"contents": "read"})
+        self.assertNotIn("concurrency", build)
+        self.assertEqual(
+            build["outputs"], {"artifact_name": "${{ steps.build.outputs.artifact_name }}"}
+        )
+        for name, job in workflow["jobs"].items():
+            checkout = next(
+                s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout@")
+            )
+            self.assertEqual(
+                checkout["with"]["ref"],
+                "${{ github.sha }}",
+                "execute only the trusted caller revision",
+            )
+            self.assertEqual(checkout["with"]["persist-credentials"], "false")
+            self.assertIn("PAGES_TARGET_SHA", job["env"])
+            self.assertFalse(any(key.startswith("GITHUB_") for key in job["env"]))
+        deploy = workflow["jobs"]["deploy"]
+        self.assertEqual(deploy["needs"], "build")
+        self.assertEqual(
+            deploy["permissions"], {"contents": "read", "pages": "write", "id-token": "write"}
+        )
+        self.assertEqual(deploy["concurrency"], {"group": "pages", "cancel-in-progress": "false"})
+        self.assertEqual(deploy["steps"][-2]["run"], "python -m benchmark.pages_handoff verify")
+        self.assertTrue(deploy["steps"][-1]["uses"].startswith("actions/deploy-pages@"))
+        self.assertEqual(
+            deploy["steps"][-1]["with"]["artifact_name"], "${{ needs.build.outputs.artifact_name }}"
+        )
+        upload = next(
+            s
+            for s in build["steps"]
+            if s.get("uses", "").startswith("actions/upload-pages-artifact@")
+        )
+        self.assertEqual(
+            upload["with"],
+            {
+                "path": ".cache/pages-source/.cache/site",
+                "name": "${{ steps.build.outputs.artifact_name }}",
+            },
+        )
+        for forbidden in (
+            "actions: write",
+            "secrets.",
+            "release create",
+            "benchmark.official",
+            "benchmark.publish",
+        ):
+            self.assertNotIn(forbidden, str(workflow))
 
 
 if __name__ == "__main__":

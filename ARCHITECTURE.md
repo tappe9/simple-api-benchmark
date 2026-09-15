@@ -247,7 +247,23 @@ The read-only measurement job calls `benchmark/official.py`, which reuses the ex
 
 ### GitHub Pages
 
-`pages.yml` deploys only trusted default-branch content. A successful main CI run can deploy an ordinary source change. Because verified result commits deliberately do not start CI, a successful official benchmark completion can also trigger Pages; `benchmark/pages.py` requires that the current commit be exactly the seven-file publication commit produced for that upstream run. Pull-request, fork, failed, stale, malformed, and unrelated workflow events fail before a Pages artifact is uploaded. The build job has read-only repository access; only the dependent deploy job receives `pages: write` and OIDC permissions.
+`pages.yml` accepts successful current-main push CI and explicit main-only recovery.
+Official publication instead calls the same local `pages-deploy.yml` directly as a
+job dependent on successful `publish`; there is no second completion-event route.
+The publisher emits verified publication/source/run/producer-attempt outputs only
+after the audited atomic push.
+
+`benchmark/pages_handoff.py` executes from the trusted caller revision and verifies
+the separate deployment target against current main. The official route requires
+the exact producer context, measured-source tree, sole-parent relationship and
+seven-path transaction, including deterministic README/SVG and history content.
+Builds use the verified target; deployment-only retries retain the original
+producer and build-artifact identities without changing GitHub context. A shared
+serialized deploy job rechecks main immediately before deployment. Build is
+contents-read-only; deployment adds only Pages/OIDC permissions and read access
+for revalidation. PR, fork, failed, stale and malformed calls cannot deploy.
+The ordinary entry point retains its release bootstrap separately for Issue #53.
+See [automation and safe recovery](docs/AUTOMATION.md#github-pages-and-v010-release).
 
 ## Resource limits
 

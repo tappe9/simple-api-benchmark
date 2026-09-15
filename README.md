@@ -258,6 +258,8 @@ Official results come only from the trusted-main [weekly/manual workflow](docs/A
 The active official cohort is `eight-stack-v1`. A new complete, verified official run
 is required to publish eight-stack results; historical four-stack reports are not rewritten.
 
+Official publication calls the shared Pages deployment directly after a successful audited push. See [deployment authorization and recovery](docs/AUTOMATION.md#github-pages-and-v010-release); presentation recovery does not require another benchmark.
+
 ## Run the local benchmark
 
 With a clean committed source tree, Python 3.10+, curl and local Docker Compose v2:

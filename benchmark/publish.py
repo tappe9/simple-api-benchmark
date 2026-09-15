@@ -3,6 +3,7 @@
 import base64
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -128,7 +129,23 @@ def main() -> int:
             GIT_CONFIG_VALUE_0="AUTHORIZATION: basic " + authorization,
         )
         report = strict_json(read_regular(ROOT / ".cache/official/selected.json", ROOT))
-        publish(report, ROOT, expected_context=context, environment=environment)
+        output = Path(os.environ.get("GITHUB_OUTPUT", ""))
+        require(output.is_file() and not output.is_symlink(), "publishing output file required")
+        commit = publish(report, ROOT, expected_context=context, environment=environment)
+        require(re.fullmatch(r"[0-9a-f]{40}", commit) is not None, "invalid publication SHA")
+        # These outputs are emitted only after the audited fast-forward push succeeds.
+        # A failed output write does not undo publication: recover Pages, not measurement.
+        try:
+            with output.open("a", encoding="utf-8") as stream:
+                stream.write(
+                    f"publication_sha={commit}\nsource_sha={context['source_commit']}\n"
+                    f"producer_run_id={context['run_id']}\n"
+                    f"producer_run_attempt={context['run_attempt']}\n"
+                )
+        except OSError as error:
+            raise BenchmarkFailure(
+                "results published, but Pages outputs failed; use Pages recovery"
+            ) from error
         return 0
     except (BenchmarkFailure, OSError, ValueError) as error:
         print(f"Result publication failed: {error}", file=sys.stderr)
