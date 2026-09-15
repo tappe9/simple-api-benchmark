@@ -93,10 +93,10 @@ class RunnerTests(unittest.TestCase):
         environment = Environment()
         report = self.call(environment)
         self.assertIsNone(environment.active)
-        self.assertEqual(environment.measures, 36)
-        self.assertEqual(environment.events.count("cleanup"), 4)
+        self.assertEqual(environment.measures, len(run.IMPLEMENTATIONS) * 9)
+        self.assertEqual(environment.events.count("cleanup"), len(run.IMPLEMENTATIONS))
         measured = [event for event in environment.events if type(event) is tuple]
-        self.assertEqual(len(measured), 48)
+        self.assertEqual(len(measured), len(run.IMPLEMENTATIONS) * 12)
         self.assertEqual(
             [event for event in measured if event[3] == 0],
             [
@@ -148,14 +148,14 @@ class RunnerTests(unittest.TestCase):
         original = environment.measure
 
         def fail_late(endpoint, duration, index):
-            if environment.measures == 35:
+            if environment.measures == len(run.IMPLEMENTATIONS) * 9 - 1:
                 raise BenchmarkFailure("last run failed")
             return original(endpoint, duration, index)
 
         with patch.object(environment, "measure", side_effect=fail_late):
             with self.assertRaisesRegex(BenchmarkFailure, "last run failed"):
                 self.call(environment)
-        self.assertEqual(environment.measures, 35)
+        self.assertEqual(environment.measures, len(run.IMPLEMENTATIONS) * 9 - 1)
         self.assertIsNone(environment.active)
         self.assertEqual(self.output.read_bytes(), b"previous verified result")
 

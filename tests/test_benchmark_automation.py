@@ -10,6 +10,7 @@ from contextlib import ExitStack, redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
+from registry_fixtures import real_eight_report
 from test_benchmark_publication import context_env, synthetic_report
 
 from benchmark import official, run
@@ -22,6 +23,8 @@ class OfficialWrapperTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
             root = Path(directory)
             report = synthetic_report(root)
+            if "python-flask" in run.IMPLEMENTATIONS:
+                report = real_eight_report(report, root)
             latest = root / "results/latest.json"
             latest.parent.mkdir()
             latest.write_bytes(b"previous verified bytes")
@@ -46,7 +49,12 @@ class OfficialWrapperTests(unittest.TestCase):
 
                 def measure(self, endpoint, duration, index):
                     measured.append((self.backend["implementation"], endpoint, duration, index))
-                    if failure == "late" and measured[-1] == ("python-fastapi", "/cpu", 30, 3):
+                    if failure == "late" and measured[-1] == (
+                        run.IMPLEMENTATIONS[-1],
+                        "/cpu",
+                        30,
+                        3,
+                    ):
                         raise BenchmarkFailure("injected last-run failure")
                     if index:
                         entry = next(
@@ -56,7 +64,7 @@ class OfficialWrapperTests(unittest.TestCase):
 
                 def cleanup(self):
                     cleaned.append(self.backend["implementation"])
-                    if failure == "cleanup" and len(cleaned) == 4:
+                    if failure == "cleanup" and len(cleaned) == len(run.IMPLEMENTATIONS):
                         raise BenchmarkFailure("injected final cleanup failure")
 
             if failure == "raw":
@@ -97,7 +105,9 @@ class OfficialWrapperTests(unittest.TestCase):
                 self.assertEqual(actual["mode"], "official")
                 self.assertEqual(actual["conditions"], run.PROFILE)
                 self.assertEqual(actual["implementations"], report["implementations"])
-                self.assertEqual(len([m for m in measured if m[-1] != 0]), 36)
+                self.assertEqual(
+                    len([m for m in measured if m[-1] != 0]), len(run.IMPLEMENTATIONS) * 9
+                )
                 candidate = json.loads(selected.with_name("candidate.json").read_text())
                 self.assertIs(candidate["official"], False)
                 self.assertEqual(candidate["mode"], "local")

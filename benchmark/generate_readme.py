@@ -6,9 +6,10 @@ import re
 import sys
 from pathlib import Path
 
+from .definition import DEFINITION_ID
 from .readme_charts import render_charts
-from .registry import implementation
-from .report import validate_report
+from .registry import LEGACY_COHORT, implementation
+from .report import api_health_policy, validate_report
 from .results import BenchmarkFailure, require, strict_json
 
 START = "<!-- benchmark-results:start -->"
@@ -46,12 +47,21 @@ def render(report: dict | None, locale: str) -> str:
         )
     validate_report(report)
     context = report["metadata"]["github"]
+    identity = report.get("benchmark", {"definition": DEFINITION_ID, "cohort": LEGACY_COHORT})
+    policy = api_health_policy(report)
     lines = [
         ("Measured (UTC)" if locale == "en" else "計測完了（UTC）")
         + ": `"
         + report["completed_at"]
         + "`",
         f"Source: `{report['metadata']['source_commit']}` · [Actions run]({context['run_url']})",
+        (
+            f"Cohort: `{identity['cohort']}` · Definition: `{identity['definition']}` · "
+            f"API readiness: `{policy}`"
+            if locale == "en"
+            else f"比較グループ: `{identity['cohort']}` · 測定定義: `{identity['definition']}` · "
+            f"API readiness: `{policy}`"
+        ),
         "",
         (
             "1 CPU · 512 MiB · 1 worker · DB pool 10 · HTTP/1.1 · 50 connections · "

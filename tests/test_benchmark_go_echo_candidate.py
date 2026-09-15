@@ -1,4 +1,4 @@
-"""Issue #29 boundary: implement Go / Echo without changing the active cohort."""
+"""Go / Echo source and registration preserve the frozen legacy cohort."""
 
 import json
 import subprocess
@@ -43,7 +43,6 @@ class GoEchoCandidateTests(unittest.TestCase):
         self.assertEqual(echo["acceptance_test"], "tests/test_go_echo_service.py")
         self.assertIsNone(echo["failure_test"])
 
-        self.assertEqual(registry["active_cohort"], "four-stack-v1")
         self.assertEqual(
             registry["cohorts"]["four-stack-v1"]["members"],
             ["go-gin", "rust-actix", "node-fastify", "python-fastapi"],

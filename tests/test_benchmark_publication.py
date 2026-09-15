@@ -10,11 +10,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from benchmark.environment import pinned_versions
+from benchmark.definition import PROFILE
+from benchmark.environment import registered_pinned_versions
 from benchmark.results import BenchmarkFailure, parse_oha, select_run
-from benchmark.run import IMPLEMENTATIONS, PROFILE
 
 ROOT = Path(__file__).resolve().parents[1]
+# This schema-v1 fixture is historical, independent of today's active cohort.
+LEGACY_MEMBERS = ("go-gin", "rust-actix", "node-fastify", "python-fastapi")
 SOURCE = "a" * 40
 TREE = "b" * 40
 REPOSITORY = "tappe9/simple-api-benchmark"
@@ -67,7 +69,7 @@ def synthetic_report(root, *, source=SOURCE):
             "source_commit": source,
             "source_tree": TREE,
             "artifact_directory": str(artifact.relative_to(root)),
-            "versions": pinned_versions(),
+            "versions": {key: registered_pinned_versions()[key] for key in LEGACY_MEMBERS},
             "github": context(source),
             "runner": {
                 "name": "synthetic-test-runner",
@@ -90,7 +92,7 @@ def synthetic_report(root, *, source=SOURCE):
     raw["summary"]["requestsPerSec"] = count / 30.5
     raw["summary"]["sizePerSec"] = raw["summary"]["totalData"] / 30.5
     raw["metrics"]["requests_per_sec"] = count / 30.5
-    for implementation in IMPLEMENTATIONS:
+    for implementation in LEGACY_MEMBERS:
         backend = {
             "implementation": implementation,
             "contract_checks": 14,
