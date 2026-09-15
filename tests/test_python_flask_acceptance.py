@@ -30,9 +30,15 @@ class PythonFlaskAcceptanceTests(unittest.TestCase):
         self.assertIn("USER 10001:10001", dockerfile)
         self.assertIn('ENTRYPOINT ["python", "-m", "benchmark_api.server"]', dockerfile)
 
-    def test_registration_does_not_change_official_cohort(self):
+    def test_registration_preserves_the_frozen_legacy_cohort(self):
         registry = json.loads((ROOT / "benchmark" / "implementations.json").read_text())
-        self.assertEqual(registry["active_cohort"], "four-stack-v1")
+        self.assertEqual(
+            registry["cohorts"]["four-stack-v1"],
+            {
+                "definition": "simple-api-v1",
+                "members": ["go-gin", "rust-actix", "node-fastify", "python-fastapi"],
+            },
+        )
         self.assertNotIn(
             "python-flask", registry["cohorts"]["four-stack-v1"]["members"]
         )
