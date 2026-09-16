@@ -107,6 +107,50 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(cleanup["if"], "always()")
         self.assertIn('docker compose -p "$COMPOSE_PROJECT_NAME" down', cleanup["run"])
 
+    def test_implementation_setup_is_selected_and_all_host_gates_are_isolated(self):
+        job = load("ci.yml")["jobs"]["implementation"]
+        self.assertEqual(job.get("name"), "implementation (${{ matrix.implementation }})")
+        steps = job["steps"]
+        for action, condition in (
+            ("actions/setup-python@", None),
+            ("actions/setup-go@", "matrix.toolchain == 'go'"),
+            ("actions/setup-node@", "matrix.toolchain == 'node'"),
+        ):
+            matching = [step for step in steps if step.get("uses", "").startswith(action)]
+            self.assertEqual(len(matching), 1)
+            self.assertEqual(matching[0].get("if"), condition)
+        rust = next(step for step in steps if step.get("name") == "Install pinned Rust toolchain")
+        self.assertEqual(rust["if"], "matrix.toolchain == 'rust'")
+        self.assertEqual(
+            rust["run"],
+            "rustup toolchain install 1.98.1 --profile minimal --component rustfmt,clippy",
+        )
+        for command in (
+            'make "test-$IMPLEMENTATION_ID"',
+            'make test-contract CONTRACT_IMPL="$IMPLEMENTATION_ID"',
+            "make axum-diagnostic",
+        ):
+            matching = [step for step in steps if command in step.get("run", "")]
+            self.assertEqual(len(matching), 1)
+            self.assertIn(
+                'python -m benchmark.ci run-isolated --implementation "$IMPLEMENTATION_ID" -- '
+                + command,
+                matching[0]["run"],
+            )
+            self.assertNotIn("continue-on-error", matching[0])
+        self.assertEqual(
+            next(step for step in steps if step.get("uses", "").startswith("actions/setup-go@"))[
+                "with"
+            ],
+            {"go-version": "1.27.1", "cache": "false"},
+        )
+        self.assertEqual(
+            next(step for step in steps if step.get("uses", "").startswith("actions/setup-node@"))[
+                "with"
+            ],
+            {"node-version-file": "apps/node-fastify/.node-version"},
+        )
+
     def test_axum_diagnostic_is_required_in_its_read_only_implementation_job(self):
         job = load("ci.yml")["jobs"]["implementation"]
         diagnostic = [
@@ -169,14 +213,26 @@ class WorkflowTests(unittest.TestCase):
         current = json.loads((ROOT / "benchmark/implementations.json").read_text())
         self.assertEqual(
             ci_support.matrix_payload(),
-            {"implementation": [spec["id"] for spec in current["implementations"]]},
+            {
+                "include": [
+                    {
+                        "implementation": spec["id"],
+                        "toolchain": {
+                            "Go": "go",
+                            "Rust": "rust",
+                            "Node.js": "node",
+                            "Python": "python",
+                        }[spec["language"]],
+                    }
+                    for spec in current["implementations"]
+                ]
+            },
         )
         extended = extended_registry()
         with patch.object(registry, "REGISTRY", extended):
-            self.assertEqual(
-                ci_support.matrix_payload(),
-                {"implementation": [spec["id"] for spec in extended["implementations"]]},
-            )
+            # Synthetic display languages are not declared CI toolchains.
+            with self.assertRaisesRegex(RuntimeError, "unsupported CI language"):
+                ci_support.matrix_payload()
         valid = {
             "plan": "success",
             "shared": "success",

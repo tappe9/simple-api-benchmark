@@ -10,9 +10,9 @@ artifact is accepted as an official-result or Pages publication input.
 
 Correctness CI is split into five logical jobs:
 
-1. `plan` validates `benchmark/implementations.json` and emits the active
-   implementation matrix in registry order. The workflow YAML does not maintain a
-   second list of implementation IDs.
+1. `plan` validates `benchmark/implementations.json` and emits the full registered
+   implementation/toolchain matrix in registry order. The workflow YAML does not
+   maintain a second list of implementation IDs.
 2. `shared` runs checks independent of one API implementation: Python 3.10
    benchmark/contract-unit compatibility, actionlint and workflow security tests,
    pinned Ruff format/lint, registry/projection drift, README generation checks,
@@ -33,6 +33,44 @@ Correctness CI is split into five logical jobs:
    each report the literal result `success`. Failure, cancellation, or unexpected
    skip is rejected by `benchmark.ci` rather than being hidden by an aggregate
    job skip.
+
+### Implementation host toolchains
+
+The matrix's `toolchain` value is derived from the registry's `language`, not an
+implementation-ID prefix or a second framework list. Unsupported languages and
+invalid registry data fail planning before any partial matrix is emitted. All
+registered implementations are tested, even when outside the active measurement
+cohort. The `implementation (<ID>)` job names and `required` aggregate stay stable.
+
+Every implementation runner explicitly installs the pinned Python harness. Only
+Go jobs additionally run `setup-go`, only Node.js jobs run `setup-node`, and only
+Rust jobs install Rust with rustfmt/Clippy. Python implementation jobs need no
+additional language setup. The existing versions, action SHAs, acceptance/failure
+targets, shared contracts, cleanup and Axum diagnostic are unchanged. The shared
+job still explicitly installs Go for actionlint/Go-related tests and Node.js for
+site tests; its Python 3.10 compatibility gate is retained.
+
+CI invokes the host acceptance, contract and Axum diagnostic commands through
+`python -m benchmark.ci run-isolated --implementation <ID> -- <command>`. This
+prepends temporary failing executables for unrelated host Go/Node/Rust tools to
+the child PATH, so a preinstalled runner tool cannot silently satisfy an
+undeclared dependency. Actual tool use fails the gate even if its immediate
+caller ignores the exit status. The exact `rustc --version` probe is the one
+exception: it returns 127 without executing Rust or reporting a version, allowing
+pip's optional User-Agent metadata lookup to treat the compiler as absent.
+Compilation, additional arguments, and other tool invocations remain fatal.
+Common Python, Make, Git, Docker and shell tools remain available. The parent environment is not changed; guards are removed when
+the command returns, including ordinary command failures. These are dependency
+checks, not a security sandbox: absolute executable paths, deliberate PATH resets
+and container-internal toolchains are not intercepted. Actions' own runtimes are
+unaffected. Do not add host-tool bypasses to acceptance commands.
+
+When assessing setup changes, compare the per-step setup timestamps separately
+from per-implementation duration and total workflow elapsed time, recording run
+ID, attempt, head SHA and runner-image identity. Matrix durations overlap; their
+sum is not wall-clock CI latency. Hosted-runner/network/cache variation can
+outweigh setup savings. Do not change measured binaries, caches, benchmark
+conditions or gates just to obtain a faster CI result.
 
 Each implementation matrix job owns a Compose project named from the run ID, run
 attempt, and implementation ID, for example
@@ -299,9 +337,10 @@ and [skip instructions](https://docs.github.com/en/actions/how-tos/manage-workfl
 ## Registry and methodology compatibility
 
 The implementation list comes from `benchmark/implementations.json`, not a
-CI-specific list. The `plan` job derives the matrix from that registry, and
-workflow tests use the same registry plus an isolated eight-member synthetic
-fixture to prove future additions expand the matrix without editing the workflow
+CI-specific list. The `plan` job derives the matrix from that registry. Planning
+regressions verify supported-language registrations under unfamiliar IDs, registry
+order, inactive cohort members, and rejection of undeclared synthetic languages.
+Future supported implementations expand the matrix without editing the workflow
 ID list. The production registry still enables only implemented stacks.
 
 The `required` job is the stable aggregate intended for repository policy. This

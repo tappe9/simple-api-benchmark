@@ -226,6 +226,14 @@ workflow checks, active-cohort smoke, and the separate Axum-only diagnostic. Ins
 [automation](docs/AUTOMATION.md). PR CI runs all gates with read-only permissions.
 Official publication is reserved for complete trusted-main Actions runs.
 
+For focused implementation acceptance, install the common Python/Make/Docker
+prerequisites plus that implementation's pinned language toolchain, not every
+language used by the repository. CI derives the language setup from the registry
+and guards unrelated host executables during acceptance, contracts and the Axum
+diagnostic. Local `make test-<ID>` commands are unchanged; `make test` still needs
+all toolchains and shared workflow/site dependencies. See the
+[host-toolchain contract](docs/AUTOMATION.md#implementation-host-toolchains).
+
 A pull request must pass the available checks for the area it changes.
 
 ## Adding or updating an implementation
