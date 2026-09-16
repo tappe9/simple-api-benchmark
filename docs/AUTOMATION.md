@@ -416,3 +416,22 @@ go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 The focused publication tests use synthetic reports and temporary local bare Git
 repositories. They never publish to GitHub. Official publication remains reserved
 for complete trusted-main Actions runs.
+
+
+## Staged protected publication (#52)
+
+The result-only PR controller is preparation code and is not activated by merging
+its implementation. The unset/`legacy` publication mode keeps the existing direct
+publisher during the staged rollout. Explicit `pull-request-v1` mode instead uses
+an audited proposal, a read-only full-CI wait and a new scoped App token for an
+exact-head squash merge. Its successful merge feeds the existing Pages call; it
+never falls back to direct push when a PR, CI, policy or API operation fails.
+
+See [protected result-PR publishing](PUBLISHING.md) for approved boundaries,
+restricted App/Environment setup, the disabled ruleset template, required live
+stale-base race validation, paused cutover and rollback. Main protection, App
+credentials and live publication are separate owner-approved operations, not
+side effects of code preparation. Ordinary PR CI and Pages remain read-only with
+respect to repository contents. Issue #52 stays open until effective-policy and
+real-publication evidence is recorded; #59 still needs its real producer/deploy
+proof, not just synthetic tests.

@@ -302,7 +302,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(workflow["on"]["schedule"], [{"cron": "27 14 * * 6"}])
         self.assertIn(workflow["on"]["workflow_dispatch"], ("", {}))
         self.assertEqual(workflow["concurrency"]["cancel-in-progress"], "false")
-        self.assertEqual(set(workflow["jobs"]), {"measure", "publish", "pages"})
+        self.assertEqual(
+            set(workflow["jobs"]), {"measure", "publish", "propose", "wait", "merge", "pages"}
+        )
         for job in workflow["jobs"].values():
             self.assertIn("github.event.repository.default_branch", job["if"])
             self.assertIn("github.ref", job["if"])
@@ -448,18 +450,18 @@ class ReusablePagesWorkflowTests(unittest.TestCase):
         workflow = load("benchmark.yml")
         self.assertIn("pages", workflow["jobs"], "publish must have a direct dependent Pages call")
         call = workflow["jobs"]["pages"]
-        self.assertEqual(call["needs"], "publish")
+        self.assertEqual(set(call["needs"]), {"publish", "merge"})
         self.assertIn("needs.publish.result == 'success'", call["if"])
         self.assertEqual(call["uses"], "./.github/workflows/pages-deploy.yml")
         self.assertEqual(
             call["with"],
             {
                 "caller": "official",
-                "target_sha": "${{ needs.publish.outputs.publication_sha }}",
-                "source_sha": "${{ needs.publish.outputs.source_sha }}",
-                "producer_run_id": "${{ needs.publish.outputs.producer_run_id }}",
-                "producer_run_attempt": "${{ needs.publish.outputs.producer_run_attempt }}",
-                "producer_result": "${{ needs.publish.result }}",
+                "target_sha": "${{ needs.publish.outputs.publication_sha || needs.merge.outputs.publication_sha }}",
+                "source_sha": "${{ needs.publish.outputs.source_sha || needs.merge.outputs.source_sha }}",
+                "producer_run_id": "${{ needs.publish.outputs.producer_run_id || needs.merge.outputs.producer_run_id }}",
+                "producer_run_attempt": "${{ needs.publish.outputs.producer_run_attempt || needs.merge.outputs.producer_run_attempt }}",
+                "producer_result": "${{ needs.publish.result == 'success' && needs.publish.result || needs.merge.result }}",
             },
         )
         producer = workflow["jobs"]["publish"]
@@ -548,6 +550,116 @@ class ReusablePagesWorkflowTests(unittest.TestCase):
             "benchmark.publish",
         ):
             self.assertNotIn(forbidden, str(workflow))
+
+
+class ResultPRWorkflowTests(unittest.TestCase):
+    def test_new_mode_is_frozen_at_measurement_and_never_falls_back(self):
+        workflow = load("benchmark.yml")
+        jobs = workflow["jobs"]
+        self.assertIn("propose", jobs, "result PR proposal job is required")
+        self.assertEqual(set(jobs), {"measure", "publish", "propose", "wait", "merge", "pages"})
+        mode = jobs["measure"]["outputs"]["publication_mode"]
+        self.assertEqual(mode, "${{ steps.policy.outputs.mode }}")
+        policy = next(step for step in jobs["measure"]["steps"] if step.get("id") == "policy")
+        self.assertEqual(policy["run"], "python -m benchmark.result_pr preflight")
+        self.assertIn("needs.measure.outputs.publication_mode == 'legacy'", jobs["publish"]["if"])
+        for name in ("propose", "wait", "merge"):
+            self.assertIn(
+                "needs.measure.outputs.publication_mode == 'pull-request-v1'", jobs[name]["if"]
+            )
+        self.assertEqual(set(jobs["wait"]["needs"]), {"measure", "propose"})
+        self.assertEqual(set(jobs["merge"]["needs"]), {"measure", "propose", "wait"})
+        self.assertIn("needs.wait.result == 'success'", jobs["merge"]["if"])
+        self.assertEqual(set(jobs["pages"]["needs"]), {"publish", "merge"})
+        self.assertIn("always()", jobs["pages"]["if"])
+        self.assertIn("needs.publish.result == 'skipped'", jobs["pages"]["if"])
+        self.assertIn("needs.merge.result == 'skipped'", jobs["pages"]["if"])
+
+    def test_app_tokens_exist_only_in_main_environment_write_jobs(self):
+        jobs = load("benchmark.yml")["jobs"]
+        self.assertIn("propose", jobs, "result PR proposal job is required")
+        for name in ("propose", "merge"):
+            job = jobs[name]
+            self.assertEqual(job["environment"], "benchmark-publisher")
+            self.assertTrue(all(level == "read" for level in job["permissions"].values()))
+            tokens = [
+                s
+                for s in job["steps"]
+                if s.get("uses", "").startswith("actions/create-github-app-token@")
+            ]
+            self.assertEqual(len(tokens), 1)
+            token = tokens[0]
+            self.assertEqual(
+                token["uses"],
+                "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
+            )
+            self.assertEqual(token["with"]["owner"], "tappe9")
+            self.assertEqual(token["with"]["repositories"], "simple-api-benchmark")
+            self.assertEqual(token["with"]["skip-token-revoke"], "false")
+            self.assertEqual(
+                {k: v for k, v in token["with"].items() if k.startswith("permission-")},
+                {"permission-contents": "write", "permission-pull-requests": "write"},
+            )
+            self.assertNotIn("token", str(job.get("outputs", {})).lower())
+            for step in job["steps"]:
+                if step.get("uses", "").startswith("actions/checkout@"):
+                    self.assertEqual(step["with"]["ref"], "${{ github.sha }}")
+                    self.assertEqual(step["with"]["persist-credentials"], "false")
+            text = str(job)
+            self.assertNotIn("refs/pull/", text)
+            self.assertNotIn("secrets: inherit", text)
+        for name in ("measure", "wait", "pages"):
+            text = str(jobs[name])
+            self.assertNotIn("secrets.", text)
+            self.assertNotIn("PUBLISHER_TOKEN", text)
+            self.assertNotIn("create-github-app-token", text)
+        self.assertTrue(all(v == "read" for v in jobs["wait"]["permissions"].values()))
+
+    def test_original_artifact_attempt_is_carried_to_every_pr_stage(self):
+        jobs = load("benchmark.yml")["jobs"]
+        self.assertIn("propose", jobs, "result PR proposal job is required")
+        for name in ("propose", "wait", "merge"):
+            job = jobs[name]
+            self.assertEqual(
+                job["env"]["PUBLICATION_ATTEMPT"],
+                "${{ needs.measure.outputs.producer_run_attempt }}",
+            )
+            download = next(
+                s
+                for s in job["steps"]
+                if s.get("uses", "").startswith("actions/download-artifact@")
+            )
+            self.assertEqual(
+                download["with"]["name"],
+                "official-benchmark-${{ github.run_id }}-${{ needs.measure.outputs.producer_run_attempt }}",
+            )
+        self.assertEqual(
+            jobs["merge"]["env"]["RESULT_PR_NUMBER"], "${{ needs.propose.outputs.pr_number }}"
+        )
+
+    def test_rule_template_is_inactive_and_has_no_bypass(self):
+        path = ROOT / "docs/main-ruleset.json"
+        self.assertTrue(path.is_file(), "inactive rollout rule template is required")
+        rule = json.loads(path.read_text())
+        self.assertEqual(rule["enforcement"], "disabled")
+        self.assertEqual(rule["bypass_actors"], [])
+        self.assertEqual(
+            rule["conditions"], {"ref_name": {"include": ["refs/heads/main"], "exclude": []}}
+        )
+        from benchmark.result_pr_checks import validate_rules
+
+        validate_rules(
+            [
+                {
+                    **entry,
+                    "ruleset_id": 99,
+                    "ruleset_source": "tappe9/simple-api-benchmark",
+                    "ruleset_source_type": "Repository",
+                }
+                for entry in rule["rules"]
+            ],
+            99,
+        )
 
 
 if __name__ == "__main__":

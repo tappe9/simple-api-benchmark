@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from .generate_readme import render, replace_section
@@ -37,7 +38,31 @@ def git(root: Path, *args: str, data: bytes | None = None, environment=None) -> 
     return result.stdout.decode("utf-8").strip()
 
 
-def publish(report: dict, root: Path, *, expected_context: dict, environment=None) -> str:
+@dataclass(frozen=True)
+class Candidate:
+    """Locally audited immutable transaction, not proof of remote publication."""
+
+    source: str
+    source_tree: str
+    sha: str
+    tree: str
+    run_id: str
+    run_attempt: str
+
+    @property
+    def branch(self) -> str:
+        return f"benchmark/results/{self.run_id}-{self.run_attempt}-{self.source[:12]}"
+
+
+def prepare_candidate(
+    report: dict,
+    root: Path,
+    *,
+    expected_context: dict,
+    environment=None,
+    skip_ci: bool = False,
+) -> Candidate:
+    """Audit and generate a deterministic commit without updating any remote ref."""
     validate_report(report, expected_context=expected_context)
     audit_raw(report, root)
     source = report["metadata"]["source_commit"]
@@ -53,10 +78,6 @@ def publish(report: dict, root: Path, *, expected_context: dict, environment=Non
         not git(root, "status", "--porcelain", "--untracked-files=normal"),
         "publication needs clean source",
     )
-    remote = git(
-        root, "ls-remote", "--exit-code", "origin", "refs/heads/main", environment=environment
-    )
-    require(remote.split()[0] == source, "main advanced; leave verified results unchanged")
     history = history_path(report)
     require(not git(root, "ls-tree", "HEAD", "--", history), "history already exists")
     encoded = (json.dumps(report, ensure_ascii=False, allow_nan=False, indent=2) + "\n").encode()
@@ -77,6 +98,9 @@ def publish(report: dict, root: Path, *, expected_context: dict, environment=Non
             GIT_COMMITTER_NAME="github-actions[bot]",
             GIT_AUTHOR_EMAIL="41898282+github-actions[bot]@users.noreply.github.com",
             GIT_COMMITTER_EMAIL="41898282+github-actions[bot]@users.noreply.github.com",
+            # Reconstructing an attempt must yield the same candidate after lost responses.
+            GIT_AUTHOR_DATE=report["completed_at"],
+            GIT_COMMITTER_DATE=report["completed_at"],
         )
         git(root, "read-tree", source, environment=env)
         for filename, content in updates.items():
@@ -98,16 +122,40 @@ def publish(report: dict, root: Path, *, expected_context: dict, environment=Non
             tree,
             "-p",
             source,
-            data=b"chore: publish verified benchmark results [skip ci]\n",
+            data=(
+                "chore: publish verified benchmark results"
+                + (" [skip ci]" if skip_ci else "")
+                + "\n"
+            ).encode(),
             environment=env,
         )
         changed = git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", commit).splitlines()
         require(set(changed) == allowed, "publication changed an unexpected path")
-        # The remote ref update is the only publication commit point. A concurrent main
-        # update makes this ordinary push non-fast-forward; it is never rebased or forced.
-        git(root, "push", "origin", f"{commit}:refs/heads/main", environment=env)
-    print(f"Published verified results atomically: {commit}")
-    return commit
+    return Candidate(
+        source,
+        report["metadata"]["source_tree"],
+        commit,
+        tree,
+        expected_context["run_id"],
+        expected_context["run_attempt"],
+    )
+
+
+def publish(report: dict, root: Path, *, expected_context: dict, environment=None) -> str:
+    """Legacy direct publisher retained only for the pre-cutover workflow mode."""
+    candidate = prepare_candidate(
+        report, root, expected_context=expected_context, environment=environment, skip_ci=True
+    )
+    remote = git(
+        root, "ls-remote", "--exit-code", "origin", "refs/heads/main", environment=environment
+    )
+    require(
+        remote.split()[0] == candidate.source, "main advanced; leave verified results unchanged"
+    )
+    # This ordinary fast-forward update is never forced or rebased.
+    git(root, "push", "origin", f"{candidate.sha}:refs/heads/main", environment=environment)
+    print(f"Published verified results atomically: {candidate.sha}")
+    return candidate.sha
 
 
 def main() -> int:

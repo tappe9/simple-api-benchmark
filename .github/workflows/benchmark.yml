@@ -10,6 +10,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   measure:
+    outputs:
+      publication_mode: ${{ steps.policy.outputs.mode }}
+      producer_run_attempt: ${{ steps.policy.outputs.producer_run_attempt }}
     if: >-
       github.repository == 'tappe9/simple-api-benchmark' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
@@ -27,6 +30,14 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version-file: apps/python-fastapi/.python-version
+      - name: Validate publication mode before measuring
+        id: policy
+        env:
+          RESULT_PUBLICATION_MODE: ${{ vars.RESULT_PUBLICATION_MODE }}
+          RESULT_PR_ROLLOUT_APPROVED: ${{ vars.RESULT_PR_ROLLOUT_APPROVED }}
+          RESULT_PR_RULESET_ID: ${{ vars.RESULT_PR_RULESET_ID }}
+          GH_READ_TOKEN: ${{ github.token }}
+        run: python -m benchmark.result_pr preflight
       - name: Full fixed profile, every active cohort member sequentially
         run: python -m benchmark.official
       - name: Retain raw diagnostics and complete selected JSON
@@ -47,6 +58,7 @@ jobs:
       producer_run_attempt: ${{ steps.publication.outputs.producer_run_attempt }}
     if: >-
       needs.measure.result == 'success' &&
+      needs.measure.outputs.publication_mode == 'legacy' &&
       github.repository == 'tappe9/simple-api-benchmark' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
       (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
@@ -75,10 +87,169 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python -m benchmark.publish
 
-  pages:
-    needs: publish
+  propose:
+    needs: [measure]
+    outputs:
+      pr_number: ${{ steps.proposal.outputs.pr_number }}
     if: >-
-      needs.publish.result == 'success' &&
+      needs.measure.result == 'success' &&
+      needs.measure.outputs.publication_mode == 'pull-request-v1' &&
+      github.repository == 'tappe9/simple-api-benchmark' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    environment: benchmark-publisher
+    permissions:
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      RESULT_PUBLICATION_MODE: ${{ needs.measure.outputs.publication_mode }}
+      RESULT_PR_ROLLOUT_APPROVED: ${{ vars.RESULT_PR_ROLLOUT_APPROVED }}
+      RESULT_PR_RULESET_ID: ${{ vars.RESULT_PR_RULESET_ID }}
+      PUBLICATION_ATTEMPT: ${{ needs.measure.outputs.producer_run_attempt }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version-file: apps/python-fastapi/.python-version
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: official-benchmark-${{ github.run_id }}-${{ needs.measure.outputs.producer_run_attempt }}
+          path: .cache/official/
+      - name: Mint a fresh repository-scoped publisher token
+        id: publisher
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.RESULT_PUBLISHER_CLIENT_ID }}
+          private-key: ${{ secrets.RESULT_PUBLISHER_PRIVATE_KEY }}
+          owner: tappe9
+          repositories: simple-api-benchmark
+          permission-contents: write
+          permission-pull-requests: write
+          skip-token-revoke: false
+      - name: Propose only the audited result transaction
+        id: proposal
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+          PUBLISHER_TOKEN: ${{ steps.publisher.outputs.token }}
+        run: python -m benchmark.result_pr propose
+
+  wait:
+    needs: [measure, propose]
+    if: >-
+      needs.measure.result == 'success' &&
+      needs.measure.outputs.publication_mode == 'pull-request-v1' &&
+      needs.propose.result == 'success' &&
+      github.repository == 'tappe9/simple-api-benchmark' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+      checks: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      RESULT_PUBLICATION_MODE: ${{ needs.measure.outputs.publication_mode }}
+      RESULT_PR_ROLLOUT_APPROVED: ${{ vars.RESULT_PR_ROLLOUT_APPROVED }}
+      RESULT_PR_RULESET_ID: ${{ vars.RESULT_PR_RULESET_ID }}
+      PUBLICATION_ATTEMPT: ${{ needs.measure.outputs.producer_run_attempt }}
+      RESULT_PR_NUMBER: ${{ needs.propose.outputs.pr_number }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version-file: apps/python-fastapi/.python-version
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: official-benchmark-${{ github.run_id }}-${{ needs.measure.outputs.producer_run_attempt }}
+          path: .cache/official/
+      - name: Wait for complete exact-head CI with read-only credentials
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+        run: python -m benchmark.result_pr wait
+
+  merge:
+    needs: [measure, propose, wait]
+    outputs:
+      publication_sha: ${{ steps.publication.outputs.publication_sha }}
+      source_sha: ${{ steps.publication.outputs.source_sha }}
+      producer_run_id: ${{ steps.publication.outputs.producer_run_id }}
+      producer_run_attempt: ${{ steps.publication.outputs.producer_run_attempt }}
+    if: >-
+      needs.measure.result == 'success' &&
+      needs.measure.outputs.publication_mode == 'pull-request-v1' &&
+      needs.propose.result == 'success' &&
+      needs.wait.result == 'success' &&
+      github.repository == 'tappe9/simple-api-benchmark' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    environment: benchmark-publisher
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+      checks: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      RESULT_PUBLICATION_MODE: ${{ needs.measure.outputs.publication_mode }}
+      RESULT_PR_ROLLOUT_APPROVED: ${{ vars.RESULT_PR_ROLLOUT_APPROVED }}
+      RESULT_PR_RULESET_ID: ${{ vars.RESULT_PR_RULESET_ID }}
+      PUBLICATION_ATTEMPT: ${{ needs.measure.outputs.producer_run_attempt }}
+      RESULT_PR_NUMBER: ${{ needs.propose.outputs.pr_number }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version-file: apps/python-fastapi/.python-version
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: official-benchmark-${{ github.run_id }}-${{ needs.measure.outputs.producer_run_attempt }}
+          path: .cache/official/
+      - name: Mint a fresh repository-scoped publisher token
+        id: publisher
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.RESULT_PUBLISHER_CLIENT_ID }}
+          private-key: ${{ secrets.RESULT_PUBLISHER_PRIVATE_KEY }}
+          owner: tappe9
+          repositories: simple-api-benchmark
+          permission-contents: write
+          permission-pull-requests: write
+          skip-token-revoke: false
+      - name: Revalidate and squash only the audited result PR
+        id: publication
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+          PUBLISHER_TOKEN: ${{ steps.publisher.outputs.token }}
+        run: python -m benchmark.result_pr merge
+
+  pages:
+    needs: [publish, merge]
+    if: >-
+      always() &&
+      (
+        (needs.publish.result == 'success' && needs.merge.result == 'skipped') ||
+        (needs.publish.result == 'skipped' && needs.merge.result == 'success')
+      ) &&
       github.repository == 'tappe9/simple-api-benchmark' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
       (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
@@ -89,8 +260,8 @@ jobs:
     uses: ./.github/workflows/pages-deploy.yml
     with:
       caller: official
-      target_sha: ${{ needs.publish.outputs.publication_sha }}
-      source_sha: ${{ needs.publish.outputs.source_sha }}
-      producer_run_id: ${{ needs.publish.outputs.producer_run_id }}
-      producer_run_attempt: ${{ needs.publish.outputs.producer_run_attempt }}
-      producer_result: ${{ needs.publish.result }}
+      target_sha: ${{ needs.publish.outputs.publication_sha || needs.merge.outputs.publication_sha }}
+      source_sha: ${{ needs.publish.outputs.source_sha || needs.merge.outputs.source_sha }}
+      producer_run_id: ${{ needs.publish.outputs.producer_run_id || needs.merge.outputs.producer_run_id }}
+      producer_run_attempt: ${{ needs.publish.outputs.producer_run_attempt || needs.merge.outputs.producer_run_attempt }}
+      producer_result: ${{ needs.publish.result == 'success' && needs.publish.result || needs.merge.result }}
