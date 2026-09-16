@@ -54,9 +54,12 @@ CI invokes the host acceptance, contract and Axum diagnostic commands through
 `python -m benchmark.ci run-isolated --implementation <ID> -- <command>`. This
 prepends temporary failing executables for unrelated host Go/Node/Rust tools to
 the child PATH, so a preinstalled runner tool cannot silently satisfy an
-undeclared dependency. A blocked invocation fails the gate even if its immediate
-caller ignores the exit status. Common Python, Make, Git, Docker and shell tools
-remain available. The parent environment is not changed; guards are removed when
+undeclared dependency. Actual tool use fails the gate even if its immediate
+caller ignores the exit status. The exact `rustc --version` probe is the one
+exception: it returns 127 without executing Rust or reporting a version, allowing
+pip's optional User-Agent metadata lookup to treat the compiler as absent.
+Compilation, additional arguments, and other tool invocations remain fatal.
+Common Python, Make, Git, Docker and shell tools remain available. The parent environment is not changed; guards are removed when
 the command returns, including ordinary command failures. These are dependency
 checks, not a security sandbox: absolute executable paths, deliberate PATH resets
 and container-internal toolchains are not intercepted. Actions' own runtimes are

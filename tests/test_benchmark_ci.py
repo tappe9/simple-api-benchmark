@@ -154,6 +154,34 @@ class ToolchainIsolationTests(unittest.TestCase):
                     json.loads(evidence.read_text()), [[name, 127] for name in blocked]
                 )
 
+    def test_optional_rust_version_probe_reports_absent_without_using_host_compiler(self):
+        # pip's User-Agent probe catches this failure; wheel installs do not need Rust.
+        for entry in EXPECTED:
+            if entry["toolchain"] == "rust":
+                continue
+            evidence = self.directory / "probe.json"
+            script = (
+                "import json, subprocess; from pathlib import Path; "
+                "r = subprocess.run(['rustc', '--version'], capture_output=True, text=True); "
+                f"Path({str(evidence)!r}).write_text(json.dumps([r.returncode, r.stdout]))"
+            )
+            with self.subTest(implementation=entry["implementation"]):
+                with patch.dict(os.environ, {"PATH": str(self.bin)}):
+                    self.assertEqual(
+                        ci.run_isolated(entry["implementation"], [sys.executable, "-c", script]), 0
+                    )
+                self.assertEqual(json.loads(evidence.read_text()), [127, ""])
+
+    def test_optional_probe_cannot_allow_compilation_or_additional_arguments(self):
+        for arguments in (["input.rs"], ["--version", "input.rs"], ["-V"], []):
+            script = (
+                f"import subprocess; subprocess.run({['rustc', *arguments]!r}, capture_output=True)"
+            )
+            with self.subTest(arguments=arguments):
+                with patch.dict(os.environ, {"PATH": str(self.bin)}):
+                    with self.assertRaisesRegex(RuntimeError, "undeclared host toolchain.*rustc"):
+                        ci.run_isolated("python-flask", [sys.executable, "-c", script])
+
     def test_guard_exit_and_diagnostics_identify_the_undeclared_command(self):
         evidence = self.directory / "guard.json"
         script = (

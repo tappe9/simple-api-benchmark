@@ -61,7 +61,8 @@ def run_isolated(identifier: str, command: list[str]) -> int:
     """Reject incidental host-toolchain use during a CI gate, without changing local Make.
 
     PATH guards are dependency checks, not a security sandbox. Docker builders and
-    Actions' own runtimes remain unaffected. Even ignored guard failures are fatal.
+    Actions' own runtimes remain unaffected. A version-only rustc probe reports
+    absence; actual tool use is fatal even when the child ignores its failure.
     """
     toolchain = toolchain_for(identifier)
     if not command:
@@ -74,9 +75,17 @@ def run_isolated(identifier: str, command: list[str]) -> int:
                 continue
             for name in names:
                 guard = root / name
+                # pip probes rustc for its User-Agent, even for binary-only installs.
+                # Report absence without executing a host compiler or inventing a version.
+                optional_probe = (
+                    'if [ "$#" -eq 1 ] && [ "$1" = "--version" ]; then exit 127; fi\n'
+                    if name == "rustc"
+                    else ""
+                )
                 guard.write_text(
                     "#!/bin/sh\n"
-                    f"printf '%s\\n' {shlex.quote(name)} >> {shlex.quote(str(marker))}\n"
+                    + optional_probe
+                    + f"printf '%s\\n' {shlex.quote(name)} >> {shlex.quote(str(marker))}\n"
                     f"printf '%s\\n' 'undeclared host toolchain: {name}' >&2\n"
                     "exit 127\n",
                     encoding="utf-8",
