@@ -19,20 +19,37 @@ Simple API Benchmark is developed in small stages. The v0.1 goal is a complete, 
 
 The completed work and acceptance criteria are recorded in the `v0.1.0` GitHub milestone.
 
-## After v0.1
+## Current main (after v0.1.0)
 
-Go / Echo, Rust / Axum, Node.js / Express, and Python / Flask are implemented,
-registered and covered by normal CI. Axum also has a required, non-publishing load
-diagnostic. The official benchmark still uses the frozen `four-stack-v1` cohort;
-activation of a complete expanded cohort and new official measurements remain separate work.
+These changes are implemented on `main`; they do not retag or change the original
+v0.1.0 release. A next release version remains an explicit maintainer decision.
 
-Further possible additions are evaluated one at a time:
+| Milestone | Status and evidence |
+| --- | --- |
+| Eight API implementations | Complete: Gin, Echo, Actix Web, Axum, Fastify, Express, FastAPI and Flask are registered and CI-covered. Axum retains its required non-publishing diagnostic. |
+| Versioned eight-stack cohort | Active: `eight-stack-v1`; the historical `four-stack-v1` remains frozen. [#50](https://github.com/tappe9/simple-api-benchmark/issues/50), [#57](https://github.com/tappe9/simple-api-benchmark/pull/57), [#58](https://github.com/tappe9/simple-api-benchmark/pull/58). |
+| Verified eight-stack publication | Complete: the first full result was published on September 15, 2026, by [run 34925168324](https://github.com/tappe9/simple-api-benchmark/actions/runs/34925168324). See [#50](https://github.com/tappe9/simple-api-benchmark/issues/50) for measured-source, publication and Pages identities. Activation alone is not measurement evidence. |
+| Result presentation | Complete: README charts, the filterable light/dark Pages dashboard and historical-run navigation. History was delivered in [#28 / #46](https://github.com/tappe9/simple-api-benchmark/pull/46); old reports retain their own cohort and provenance. |
+| Focused CI toolchains | Complete: registry-derived setup with all existing gates retained. [#51 / #61](https://github.com/tappe9/simple-api-benchmark/pull/61). |
+| Pages/release separation | Routine Pages deployment cannot create a product release. Use the explicit [release procedure](docs/RELEASING.md), tracked in [#53](https://github.com/tappe9/simple-api-benchmark/issues/53). |
 
-- Java / Spring Boot;
-- C# / ASP.NET Core;
-- a simple historical result view.
+## Remaining tracked work
 
-These are candidates, not commitments.
+- [#59](https://github.com/tappe9/simple-api-benchmark/issues/59): the direct
+  official-publication-to-Pages dependency was implemented by
+  [#60](https://github.com/tappe9/simple-api-benchmark/pull/60). Ordinary Pages and
+  live-file verification passed, but a new real official producer followed by its
+  dependent deployment still needs end-to-end evidence. Fixture tests and manual
+  recovery do not close that boundary; do not rerun measurement just for display.
+- [#52](https://github.com/tappe9/simple-api-benchmark/issues/52): design and obtain
+  maintainer approval for main protection compatible with trusted result
+  publication before changing settings, credentials or result storage.
+
+## Future candidates
+
+Java / Spring Boot and C# / ASP.NET Core may be evaluated one at a time. These are
+candidates, not commitments or implemented benchmark entries. Historical-result
+navigation is already available, not a future candidate.
 
 ## Features intentionally deferred
 

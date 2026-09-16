@@ -6,11 +6,13 @@
 
 Simple API Benchmarkには、同じエンドポイント、同じDockerリソース制限、同じ検証ルールを使う8つのAPI実装があります。普遍的な最速言語を決めることではなく、誰でも理解できて、自分でも再実行できる小さな比較を目指します。
 
-> **現在の状態:** v0.1.0をリリース済みです。8実装すべてがCI対象で、公式で有効な比較グループは`eight-stack-v1`です。CI、公式benchmark自動化、GitHub Pagesの結果サイトを利用できます。
+> **現在の状態:** v0.1.0は初期の4構成を収録したリリースです。現在の`main`は8実装すべてがCI対象で、有効な`eight-stack-v1`の検証済み結果を公開しています。Pagesではダッシュボードと過去の結果を閲覧できます。
 
+8構成の最初の完全な公式結果は、2026年9月15日に
+[Issue #50 / PR #58](https://github.com/tappe9/simple-api-benchmark/pull/58)で公開しました。
 「結果」には、最新の**検証済み公開結果**に含まれる比較グループを明示します。
-8構成を有効化しただけでは、計測結果を作成・置換しません。
-過去の`four-stack-v1`レポートは変更せず維持します。
+実装完了・比較グループ有効化・結果公開は、それぞれ別の到達点です。
+過去の`four-stack-v1`レポートとv0.1.0のリリースは変更せず維持します。
 公開の検証手順は[比較グループの切替手順](docs/IMPLEMENTATIONS.md#eight-stack-rollout-boundary-50)、
 進捗と検証記録は[Issue #50](https://github.com/tappe9/simple-api-benchmark/issues/50)を参照してください。
 
@@ -254,10 +256,11 @@ HTTP status、JSONの内容・型、規定のerror response、応答の再現性
 方法、cleanupの制約は[共通contractの実行ガイド](CONTRIBUTING.md#shared-contract-checks)を
 参照してください。ローカルのbenchmark runnerは利用可能です。PRでは同じ検証と公開しない短縮benchmarkを実行します。
 公式結果はtrusted mainの[週次・手動workflow](docs/AUTOMATION.md)だけから公開します。
-active official cohortは`eight-stack-v1`です。8構成の結果を公開するには、新しい完全な公式計測と検証が必要です。
+active official cohortは`eight-stack-v1`で、Issue #50で最初の検証済み結果を公開済みです。その後の結果更新にも、新しい完全な公式計測と検証が必要です。
 過去の4構成のレポートは書き換えません。
 
-公式結果の監査・push成功後に、共通Pages workflowを直接呼び出します。[認可と復旧手順](docs/AUTOMATION.md#github-pages-and-v010-release)を参照してください。表示の復旧だけのために再計測する必要はありません。
+公式結果の監査・push成功後に、共通Pages workflowを直接呼び出します。[認可と復旧手順](docs/AUTOMATION.md#github-pages)を参照してください。表示の復旧だけのために再計測する必要はありません。製品リリースは
+[maintainerが明示的に実施する別の操作](docs/RELEASING.md)であり、Pagesの副作用として作成しません。
 
 ## ローカルでの計測
 

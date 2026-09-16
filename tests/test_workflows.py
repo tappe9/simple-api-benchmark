@@ -364,7 +364,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(set(workflow["on"]["workflow_run"]["workflows"]), {"CI"})
         self.assertEqual(workflow["on"]["workflow_run"]["types"], ["completed"])
         self.assertEqual(workflow["permissions"], {"contents": "read"})
-        self.assertEqual(set(workflow["jobs"]), {"deploy", "release"})
+        self.assertEqual(set(workflow["jobs"]), {"deploy"})
         self.assertEqual(workflow["jobs"]["deploy"]["uses"], "./.github/workflows/pages-deploy.yml")
         common = load("pages-deploy.yml")
         build = common["jobs"]["build"]
@@ -391,30 +391,56 @@ class WorkflowTests(unittest.TestCase):
         for forbidden in ("pull_request:", "pull_request_target", "secrets."):
             self.assertNotIn(forbidden, content)
 
-    def test_v0_1_0_release_is_after_pages_and_only_from_successful_main_ci(self):
-        workflow = load("pages.yml")
-        release = workflow["jobs"]["release"]
-        self.assertEqual(release["needs"], "deploy")
-        self.assertEqual(release["permissions"], {"contents": "write"})
-        condition = release["if"]
-        for expected in (
-            "github.event_name == 'workflow_run'",
-            "github.event.workflow_run.name == 'CI'",
-            "github.event.workflow_run.event == 'push'",
-            "github.event.workflow_run.conclusion == 'success'",
-            "github.event.workflow_run.head_sha == github.sha",
-            "github.event.workflow_run.head_repository.full_name == github.repository",
-        ):
-            self.assertIn(expected, condition)
-        self.assertEqual(len(release["steps"]), 1)
-        step = release["steps"][0]
-        self.assertEqual(step["env"], {"GH_TOKEN": "${{ github.token }}"})
-        command = step["run"]
-        self.assertIn("gh release view v0.1.0", command)
-        self.assertIn("gh release create v0.1.0", command)
-        self.assertIn('--target "$GITHUB_SHA"', command)
-        self.assertIn("GitHub-hosted runners are shared", command)
-        self.assertNotIn("${{", command)
+    def test_pages_paths_cannot_create_releases_or_write_repository_contents(self):
+        for filename in ("pages.yml", "pages-deploy.yml"):
+            with self.subTest(workflow=filename):
+                workflow = load(filename)
+                self.assertEqual(workflow["permissions"], {"contents": "read"})
+                for job in workflow["jobs"].values():
+                    permissions = job.get("permissions", workflow["permissions"])
+                    self.assertEqual(permissions.get("contents"), "read")
+                    self.assertLessEqual(set(permissions), {"contents", "pages", "id-token"})
+                    self.assertNotIn("secrets", job)
+                text = (ROOT / ".github/workflows" / filename).read_text()
+                for forbidden in ("gh release", "v0.1.0", "GH_TOKEN", "contents: write"):
+                    self.assertNotIn(forbidden, text)
+
+    def test_release_guidance_is_linked_separately_from_pages(self):
+        guide = ROOT / "docs/RELEASING.md"
+        self.assertTrue(guide.is_file(), "explicit maintainer release guide is required")
+        for name in ("README.md", "README.ja.md", "CONTRIBUTING.md", "ARCHITECTURE.md"):
+            with self.subTest(document=name):
+                self.assertIn("docs/RELEASING.md", (ROOT / name).read_text())
+        automation = (ROOT / "docs/AUTOMATION.md").read_text()
+        self.assertIn("[release procedure](RELEASING.md)", automation)
+        self.assertIn("## GitHub Pages\n", automation)
+        # Preserve incoming links from published discussions and historical docs.
+        self.assertIn('<a id="github-pages-and-v010-release"></a>', automation)
+
+    def test_architecture_inventory_includes_current_implementations_and_pages_paths(self):
+        architecture = (ROOT / "ARCHITECTURE.md").read_text()
+        layout = architecture.split("## Repository layout", 1)[1].split("```", 2)[1]
+        registry = json.loads((ROOT / "benchmark/implementations.json").read_text())
+        for spec in registry["implementations"]:
+            self.assertIn(Path(spec["source_path"]).name + "/", layout)
+        for name in ("pages-deploy.yml", "pages_handoff.py", "RELEASING.md"):
+            self.assertIn(name, layout)
+        self.assertNotIn(
+            "Axum is registered for acceptance and shared contracts but is not", architecture
+        )
+
+    def test_release_runbook_uses_explicit_tag_and_draft_with_valid_shell_syntax(self):
+        guide = ROOT / "docs/RELEASING.md"
+        self.assertTrue(guide.is_file(), "explicit maintainer release guide is required")
+        text = guide.read_text()
+        for required in ("RELEASE_SHA", "RELEASE_TAG", "--verify-tag", "--draft", "make test"):
+            self.assertIn(required, text)
+        for forbidden in ("gh release create v0.1.0", "git push --force", "git tag -f"):
+            self.assertNotIn(forbidden, text)
+        snippets = re.findall(r"```bash\n(.*?)\n```", text, flags=re.DOTALL)
+        self.assertTrue(snippets, "release commands must be documented")
+        for snippet in snippets:
+            subprocess.run(["bash", "-n"], input=snippet, text=True, check=True)
 
 
 class ReusablePagesWorkflowTests(unittest.TestCase):
@@ -454,7 +480,7 @@ class ReusablePagesWorkflowTests(unittest.TestCase):
     def test_ci_and_recovery_use_same_reusable_workflow_without_double_official_route(self):
         pages = load("pages.yml")
         self.assertEqual(pages["on"]["workflow_run"]["workflows"], ["CI"])
-        self.assertEqual(set(pages["jobs"]), {"deploy", "release"})
+        self.assertEqual(set(pages["jobs"]), {"deploy"})
         call = pages["jobs"]["deploy"]
         self.assertEqual(call["uses"], "./.github/workflows/pages-deploy.yml")
         self.assertEqual(call["with"], {"caller": "pages", "target_sha": "${{ github.sha }}"})

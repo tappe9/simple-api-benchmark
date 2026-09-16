@@ -236,6 +236,15 @@ all toolchains and shared workflow/site dependencies. See the
 
 A pull request must pass the available checks for the area it changes.
 
+## Product releases
+
+Follow the [maintainer release procedure](docs/RELEASING.md) to choose a version,
+review an exact CI-validated commit, push a new tag and review a draft release.
+Pages deployments and official benchmark result publication do not create product
+releases. Preserve published tags/releases, including v0.1.0; API/authentication
+failures are not proof that a release is absent. No new release, credential or
+repository-protection change is implicit in a normal code or documentation PR.
+
 ## Adding or updating an implementation
 
 Follow [the registry and cohort guide](docs/IMPLEMENTATIONS.md) when registering a

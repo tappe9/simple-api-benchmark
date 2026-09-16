@@ -1,6 +1,7 @@
 # Architecture
 
-This document describes the v0.1 structure of Simple API Benchmark.
+This document describes the current structure of Simple API Benchmark while
+preserving the v0.1 measurement definition and historical report identities.
 
 ## Design goals
 
@@ -81,7 +82,7 @@ Rust tests use in-memory configuration lookups rather than mutating process-glob
 
 The independent `apps/rust-axum/` application uses Axum 0.8.9 and Tokio 1.53.1 with the same Rust compiler, SQLx/Serde versions, fixture, SQL and Docker base pins as Actix. `src/api.rs` owns native response DTOs and direct recursive CPU work; `src/item.rs` owns bound BIGINT queries; `src/database.rs` validates configuration and caps the pool at 10. The main process explicitly selects Tokio's `current_thread` executor, installs SIGINT/SIGTERM handlers before accepting connections, drains in-flight requests with Axum's graceful server shutdown, and then closes the pool. CPU work is not offloaded to a thread pool.
 
-Axum is registered for acceptance and shared contracts but is not a member of the active official cohort. `benchmark/axum_diagnostic.py` reuses the load generator, container lifecycle, external-readiness checks, measurement parser and whole-run selection for an Axum-only short diagnostic. It writes only below its dedicated cache after successful cleanup, never to published results. See [Axum implementation and diagnostic](docs/AXUM.md) for the runtime distinction from Actix, commands and evidence format.
+Axum is registered for acceptance and shared contracts and is a member of the active `eight-stack-v1` official cohort. `benchmark/axum_diagnostic.py` reuses the load generator, container lifecycle, external-readiness checks, measurement parser and whole-run selection for an Axum-only short diagnostic. It writes only below its dedicated cache after successful cleanup, never to published results. See [Axum implementation and diagnostic](docs/AXUM.md) for the runtime distinction from Actix, commands and evidence format.
 
 #### Node.js / Fastify
 
@@ -178,14 +179,17 @@ simple-api-benchmark/
 ├── .github/workflows/
 │   ├── ci.yml
 │   ├── benchmark.yml
-│   └── pages.yml
+│   ├── pages.yml
+│   └── pages-deploy.yml
 ├── apps/
 │   ├── go-gin/
 │   ├── go-echo/
 │   ├── rust-actix/
 │   ├── rust-axum/
 │   ├── node-fastify/
-│   └── python-fastapi/
+│   ├── node-express/
+│   ├── python-fastapi/
+│   └── python-flask/
 ├── benchmark/
 │   ├── config.json
 │   ├── definition.py
@@ -197,13 +201,16 @@ simple-api-benchmark/
 │   ├── axum_diagnostic.py
 │   ├── generate_readme.py
 │   ├── pages.py
+│   ├── pages_handoff.py
 │   ├── site.py
 │   └── run.py
 ├── database/
 │   └── init.sql
 ├── docs/
 │   ├── API-CONTRACT.md
-│   └── METHODOLOGY.md
+│   ├── AUTOMATION.md
+│   ├── METHODOLOGY.md
+│   └── RELEASING.md
 ├── results/
 │   ├── latest.json
 │   └── history/
@@ -262,8 +269,10 @@ producer and build-artifact identities without changing GitHub context. A shared
 serialized deploy job rechecks main immediately before deployment. Build is
 contents-read-only; deployment adds only Pages/OIDC permissions and read access
 for revalidation. PR, fork, failed, stale and malformed calls cannot deploy.
-The ordinary entry point retains its release bootstrap separately for Issue #53.
-See [automation and safe recovery](docs/AUTOMATION.md#github-pages-and-v010-release).
+Pages entry and reusable workflows cannot write repository contents or create
+product releases. Product releases use a separate, explicit
+[maintainer procedure](docs/RELEASING.md); no release automation is added.
+See [automation and safe recovery](docs/AUTOMATION.md#github-pages).
 
 ## Resource limits
 

@@ -229,7 +229,9 @@ Those numbers describe that same-runner investigation only. They are not univers
 speedups, do not mean the API implementations were optimized, and do not imply
 that every memory metric improves.
 
-## GitHub Pages and v0.1.0 release
+<a id="github-pages-and-v010-release"></a>
+
+## GitHub Pages
 
 The automatic official route is now a job dependency, not another completion event:
 
@@ -291,10 +293,13 @@ is safe. The artifact content SHA is the validated target; Actions/Pages run
 metadata can still identify the caller's measured-source SHA on official calls.
 Record these identities separately.
 
-The existing one-time `v0.1.0` release bootstrap remains **only in `pages.yml`**,
-after the reusable call, and only for successful same-SHA main push CI. Manual
-recovery and the official reusable route cannot create a release. Removing that
-bootstrap remains Issue #53; this change does not retag or recreate a release.
+Pages deployment never creates, edits or looks up product releases. Both the
+ordinary entry point and reusable deployment have only `contents: read` plus the
+existing job-scoped Pages/OIDC permissions; neither has repository-write access.
+The one-time release bootstrap was removed under Issue #53. The existing `v0.1.0`
+tag and release remain unchanged. New product releases use the explicit maintainer
+[release procedure](RELEASING.md), independently of Pages and official result
+publication. A failed release API lookup must never trigger release recreation.
 
 ### Recovery and validation status (#59)
 
