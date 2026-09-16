@@ -1,6 +1,7 @@
 """Publish verified results and generated presentation assets in one fast-forward Git update."""
 
 import base64
+import hashlib
 import json
 import os
 import re
@@ -12,8 +13,9 @@ from pathlib import Path
 from .generate_readme import render, replace_section
 from .official import trusted_context
 from .publication import CHART_PUBLICATION_PATHS, expected_publication_paths, history_path
+from .publication_candidate import PublicationCandidate
 from .readme_charts import render_charts
-from .report import REPOSITORY, audit_raw, read_regular, validate_report
+from .report import REPOSITORY, audit_raw, read_regular, timestamp, validate_report
 from .results import BenchmarkFailure, require, strict_json
 from .run import ROOT
 
@@ -37,7 +39,21 @@ def git(root: Path, *args: str, data: bytes | None = None, environment=None) -> 
     return result.stdout.decode("utf-8").strip()
 
 
-def publish(report: dict, root: Path, *, expected_context: dict, environment=None) -> str:
+def prepare_publication(
+    report: dict,
+    root: Path,
+    *,
+    expected_context: dict,
+    for_pr: bool = False,
+    environment=None,
+) -> PublicationCandidate:
+    """Audit and create Git objects only; never update a ref, index, worktree or remote.
+
+    PR candidates use stable dates and a CI-enabled message. Rebuilding the same
+    trusted source/report yields the same identity for lost-response reconciliation.
+    Remote freshness remains a separate check at the actual publication boundary.
+    """
+    require(type(for_pr) is bool, "invalid publication candidate mode")
     validate_report(report, expected_context=expected_context)
     audit_raw(report, root)
     source = report["metadata"]["source_commit"]
@@ -53,10 +69,6 @@ def publish(report: dict, root: Path, *, expected_context: dict, environment=Non
         not git(root, "status", "--porcelain", "--untracked-files=normal"),
         "publication needs clean source",
     )
-    remote = git(
-        root, "ls-remote", "--exit-code", "origin", "refs/heads/main", environment=environment
-    )
-    require(remote.split()[0] == source, "main advanced; leave verified results unchanged")
     history = history_path(report)
     require(not git(root, "ls-tree", "HEAD", "--", history), "history already exists")
     encoded = (json.dumps(report, ensure_ascii=False, allow_nan=False, indent=2) + "\n").encode()
@@ -78,6 +90,10 @@ def publish(report: dict, root: Path, *, expected_context: dict, environment=Non
             GIT_AUTHOR_EMAIL="41898282+github-actions[bot]@users.noreply.github.com",
             GIT_COMMITTER_EMAIL="41898282+github-actions[bot]@users.noreply.github.com",
         )
+        if for_pr:
+            # A fixed UTC date is independent of runner wall time and ambient Git dates.
+            date = str(int(timestamp(report["completed_at"]).timestamp())) + " +0000"
+            env.update(GIT_AUTHOR_DATE=date, GIT_COMMITTER_DATE=date)
         git(root, "read-tree", source, environment=env)
         for filename, content in updates.items():
             blob = git(root, "hash-object", "-w", "--stdin", data=content, environment=env)
@@ -98,16 +114,53 @@ def publish(report: dict, root: Path, *, expected_context: dict, environment=Non
             tree,
             "-p",
             source,
-            data=b"chore: publish verified benchmark results [skip ci]\n",
+            data=(
+                b"chore: propose verified benchmark results\n"
+                if for_pr
+                else b"chore: publish verified benchmark results [skip ci]\n"
+            ),
             environment=env,
         )
         changed = git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", commit).splitlines()
         require(set(changed) == allowed, "publication changed an unexpected path")
-        # The remote ref update is the only publication commit point. A concurrent main
-        # update makes this ordinary push non-fast-forward; it is never rebased or forced.
-        git(root, "push", "origin", f"{commit}:refs/heads/main", environment=env)
-    print(f"Published verified results atomically: {commit}")
-    return commit
+    return PublicationCandidate(
+        source=source,
+        source_tree=report["metadata"]["source_tree"],
+        commit=commit,
+        tree=tree,
+        run_id=expected_context["run_id"],
+        run_attempt=expected_context["run_attempt"],
+        report_sha256=hashlib.sha256(encoded).hexdigest(),
+    )
+
+
+def verify_candidate(
+    candidate: PublicationCandidate,
+    report: dict,
+    root: Path,
+    *,
+    expected_context: dict,
+) -> None:
+    """Do not authenticate a proposed transaction from serialized metadata alone."""
+    rebuilt = prepare_publication(report, root, expected_context=expected_context, for_pr=True)
+    require(candidate == rebuilt, "publication candidate differs from audited source/evidence")
+
+
+def publish(report: dict, root: Path, *, expected_context: dict, environment=None) -> str:
+    candidate = prepare_publication(
+        report, root, expected_context=expected_context, environment=environment
+    )
+    remote = git(
+        root, "ls-remote", "--exit-code", "origin", "refs/heads/main", environment=environment
+    )
+    require(
+        remote.split()[0] == candidate.source, "main advanced; leave verified results unchanged"
+    )
+    # This ordinary push is still the only publication commit point. A concurrent
+    # main update is non-fast-forward; never rebase, force, or fall back to another ref.
+    git(root, "push", "origin", f"{candidate.commit}:refs/heads/main", environment=environment)
+    print(f"Published verified results atomically: {candidate.commit}")
+    return candidate.commit
 
 
 def main() -> int:

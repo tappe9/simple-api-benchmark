@@ -41,9 +41,12 @@ v0.1.0 release. A next release version remains an explicit maintainer decision.
   live-file verification passed, but a new real official producer followed by its
   dependent deployment still needs end-to-end evidence. Fixture tests and manual
   recovery do not close that boundary; do not rerun measurement just for display.
-- [#52](https://github.com/tappe9/simple-api-benchmark/issues/52): design and obtain
-  maintainer approval for main protection compatible with trusted result
-  publication before changing settings, credentials or result storage.
+- [#52](https://github.com/tappe9/simple-api-benchmark/issues/52): implement the
+  approved result-only PR design with complete CI and no publisher bypass. Live
+  settings, credentials and result updates remain a separate controlled rollout.
+  The [result-PR foundation and cutover guide](docs/RESULT-PUBLICATION.md)
+  separates audited candidate/preflight/reconciliation helpers from the still
+  pending live App/API integration, policy inspection and activation evidence.
 
 ## Future candidates
 
