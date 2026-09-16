@@ -6,11 +6,13 @@
 
 Simple API Benchmark contains eight API implementations with the same endpoints, Docker resource limits, and validation rules. The goal is not to declare a universal winner. The goal is to make a small, repeatable comparison that anyone can understand.
 
-> **Project status:** v0.1.0 is released. All eight API implementations are CI-covered, and `eight-stack-v1` is the active official cohort. CI, official benchmark automation, and the GitHub Pages results site are available.
+> **Project status:** v0.1.0 is released as the original four-stack snapshot. Current `main` includes all eight CI-covered implementations, the active `eight-stack-v1` cohort with verified published results, and a Pages dashboard with history navigation.
 
-The Results section identifies the cohort of the latest **verified publication**;
-activating eight stacks does not itself create or replace measured results.
-Historical `four-stack-v1` reports remain unchanged. See the
+The first complete eight-stack official result was published on September 15, 2026
+under [Issue #50 / PR #58](https://github.com/tappe9/simple-api-benchmark/pull/58).
+The Results section identifies the latest **verified publication**; implementation,
+cohort activation and result publication are separate milestones. Historical
+`four-stack-v1` reports and the v0.1.0 release remain unchanged. See the
 [cohort rollout guide](docs/IMPLEMENTATIONS.md#eight-stack-rollout-boundary-50)
 and [Issue #50](https://github.com/tappe9/simple-api-benchmark/issues/50) for rollout verification.
 
@@ -255,10 +257,12 @@ See [the shared contract guide](CONTRIBUTING.md#shared-contract-checks) for
 requirements, standalone base-URL checks, and cleanup limits. The local benchmark runner
 is available, and pull requests run the same checks plus a non-publishing smoke benchmark.
 Official results come only from the trusted-main [weekly/manual workflow](docs/AUTOMATION.md).
-The active official cohort is `eight-stack-v1`. A new complete, verified official run
-is required to publish eight-stack results; historical four-stack reports are not rewritten.
+The active official cohort is `eight-stack-v1`, with its first verified publication
+completed under Issue #50. Each subsequent result update still requires a new,
+complete, verified official run; historical four-stack reports are not rewritten.
 
-Official publication calls the shared Pages deployment directly after a successful audited push. See [deployment authorization and recovery](docs/AUTOMATION.md#github-pages-and-v010-release); presentation recovery does not require another benchmark.
+Official publication calls the shared Pages deployment directly after a successful audited push. See [deployment authorization and recovery](docs/AUTOMATION.md#github-pages); presentation recovery does not require another benchmark. Product releases are
+separate [maintainer-initiated operations](docs/RELEASING.md), never a Pages side effect.
 
 ## Run the local benchmark
 
