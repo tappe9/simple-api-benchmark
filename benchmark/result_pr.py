@@ -146,11 +146,19 @@ def _validate_ci(candidate, pull_number: int, value, jobs, checks) -> tuple[int,
         "head_branch": candidate.branch,
     }
     for key, required in expected.items():
-        _require(run.get(key) == required, "invalid_ci", "CI run does not identify this candidate")
+        _require(
+            _same_json(run.get(key), required),
+            "invalid_ci",
+            "CI run does not identify this candidate",
+        )
     associated = _array(run.get("pull_requests"), "invalid_ci")
     _require(len(associated) == 1, "invalid_ci", "ambiguous or missing CI pull-request association")
     link = _object(associated[0], "invalid_ci")
-    _require(link.get("number") == pull_number, "invalid_ci", "CI belongs to another pull request")
+    _require(
+        _positive_id(link.get("number"), "invalid_ci") == pull_number,
+        "invalid_ci",
+        "CI belongs to another pull request",
+    )
     for side, ref, sha in (
         ("head", candidate.branch, candidate.commit),
         ("base", "main", candidate.source),
@@ -159,7 +167,8 @@ def _validate_ci(candidate, pull_number: int, value, jobs, checks) -> tuple[int,
         _require(
             branch.get("sha") == sha
             and branch.get("ref") == ref
-            and _object(branch.get("repo"), "invalid_ci").get("id") == REPOSITORY_ID,
+            and _positive_id(_object(branch.get("repo"), "invalid_ci").get("id"), "invalid_ci")
+            == REPOSITORY_ID,
             "invalid_ci",
             "CI pull-request source changed",
         )
@@ -186,8 +195,12 @@ def _validate_ci(candidate, pull_number: int, value, jobs, checks) -> tuple[int,
         _require(
             check["id"] == job["id"]
             and check.get("head_sha") == candidate.commit
-            and _object(check.get("check_suite"), "invalid_ci").get("id") == suite
-            and _object(check.get("app"), "invalid_ci").get("id") == ACTIONS_APP_ID,
+            and _positive_id(
+                _object(check.get("check_suite"), "invalid_ci").get("id"), "invalid_ci"
+            )
+            == suite
+            and _positive_id(_object(check.get("app"), "invalid_ci").get("id"), "invalid_ci")
+            == ACTIONS_APP_ID,
             "invalid_ci",
             "check issuer, suite, job or head mismatch",
         )
@@ -258,8 +271,10 @@ def validate_policy(ruleset, effective_rules) -> int:
     _require(
         checks.get("strict_required_status_checks_policy") is True
         and checks.get("do_not_enforce_on_create") is False
-        and checks.get("required_status_checks")
-        == [{"context": "required", "integration_id": ACTIONS_APP_ID}],
+        and _same_json(
+            checks.get("required_status_checks"),
+            [{"context": "required", "integration_id": ACTIONS_APP_ID}],
+        ),
         code,
         "strict required check from GitHub Actions is not enforced",
     )
