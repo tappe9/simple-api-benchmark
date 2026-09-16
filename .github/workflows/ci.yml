@@ -105,6 +105,7 @@ jobs:
           if-no-files-found: ignore
 
   implementation:
+    name: implementation (${{ matrix.implementation }})
     needs: plan
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -127,22 +128,25 @@ jobs:
         with:
           python-version-file: apps/python-fastapi/.python-version
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        if: matrix.toolchain == 'go'
         with:
           go-version: '1.27.1'
           cache: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        if: matrix.toolchain == 'node'
         with:
           node-version-file: apps/node-fastify/.node-version
       - name: Install pinned Rust toolchain
+        if: matrix.toolchain == 'rust'
         run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt,clippy
       - name: Run implementation acceptance and failure gates
-        run: make "test-$IMPLEMENTATION_ID"
+        run: python -m benchmark.ci run-isolated --implementation "$IMPLEMENTATION_ID" -- make "test-$IMPLEMENTATION_ID"
       - name: Run focused shared contract against implementation
-        run: make test-contract CONTRACT_IMPL="$IMPLEMENTATION_ID"
+        run: python -m benchmark.ci run-isolated --implementation "$IMPLEMENTATION_ID" -- make test-contract CONTRACT_IMPL="$IMPLEMENTATION_ID"
       - name: Axum-only load diagnostic (never publish)
         if: matrix.implementation == 'rust-axum'
         run: |
-          make axum-diagnostic
+          python -m benchmark.ci run-isolated --implementation "$IMPLEMENTATION_ID" -- make axum-diagnostic
           git diff --exit-code HEAD
           test -z "$(git ls-files --others --exclude-standard)"
       - name: Axum diagnostic evidence
