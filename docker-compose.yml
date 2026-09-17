@@ -177,6 +177,26 @@ services:
       retries: 30
       start_period: 5s
 
+  java-spring-boot:
+    <<: *api-defaults
+    build:
+      context: ./apps/java-spring-boot
+    environment:
+      <<: *database-environment
+    healthcheck:
+      test:
+        - CMD
+        - java
+        - -Xmx16m
+        - -XX:+UseSerialGC
+        - -cp
+        - /app/lib/*
+        - dev.simpleapibenchmark.Healthcheck
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
 networks:
   benchmark:
     driver: bridge

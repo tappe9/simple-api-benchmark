@@ -150,6 +150,22 @@ export const REGISTRY = {
         "psycopg-binary",
         "psycopg-pool"
       ]
+    },
+    {
+      "display_name": "Java / Spring Boot",
+      "framework": "Spring Boot",
+      "id": "java-spring-boot",
+      "language": "Java",
+      "source_path": "apps/java-spring-boot",
+      "version_fields": [
+        "java",
+        "spring-boot",
+        "tomcat",
+        "postgresql",
+        "hikaricp",
+        "jackson",
+        "gradle"
+      ]
     }
   ],
   "legacy_cohort": "four-stack-v1"

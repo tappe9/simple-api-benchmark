@@ -24,6 +24,7 @@ EXPECTED = [
     {"implementation": "node-express", "toolchain": "node"},
     {"implementation": "python-fastapi", "toolchain": "python"},
     {"implementation": "python-flask", "toolchain": "python"},
+    {"implementation": "java-spring-boot", "toolchain": "java"},
 ]
 COMMANDS = {
     "go": ("go", "gofmt"),
@@ -39,6 +40,7 @@ COMMANDS = {
     ),
     "node": ("node", "nodejs", "npm", "npx", "corepack"),
     "python": (),
+    "java": ("java", "javac", "jar", "javadoc", "gradle"),
 }
 
 
@@ -120,7 +122,7 @@ class ToolchainIsolationTests(unittest.TestCase):
             path.write_text("#!/bin/sh\nexit 0\n")
             path.chmod(0o700)
 
-    def test_required_toolchain_and_common_harness_remain_available_for_all_eight(self):
+    def test_required_toolchain_and_common_harness_remain_available_for_all_registered(self):
         for entry in EXPECTED:
             commands = [*self.common, *COMMANDS[entry["toolchain"]]]
             script = (

@@ -36,9 +36,9 @@ plugin dependency is introduced.
 
 ## Registered and measured implementations
 
-The eight registered implementations, in deterministic registry order, are:
+The nine registered implementations, in deterministic registry order, are:
 Go / Gin, Go / Echo, Rust / Actix Web, Rust / Axum, Node.js / Fastify,
-Node.js / Express, Python / FastAPI, and Python / Flask. Registration enables
+Node.js / Express, Python / FastAPI, Python / Flask, and Java / Spring Boot. Registration enables
 source checks, real-container acceptance and unchanged shared contracts; it does
 not by itself activate a benchmark cohort or create measured results.
 
@@ -47,11 +47,25 @@ not by itself activate a benchmark cohort or create measured results.
 | `four-stack-v1` | `go-gin`, `rust-actix`, `node-fastify`, `python-fastapi` | Frozen historical cohort; existing reports remain readable |
 | `eight-stack-v1` | `go-gin`, `go-echo`, `rust-actix`, `rust-axum`, `node-fastify`, `node-express`, `python-fastapi`, `python-flask` | Active official cohort; complete verified runs are eligible for publication |
 
-`registered_pinned_versions()` in `benchmark/environment.py` extracts all eight
+`registered_pinned_versions()` in `benchmark/environment.py` extracts all nine
 stacks, while `pinned_versions()` includes only the active cohort's metadata.
 Axum additionally records its explicit Tokio version. The
 [Axum-only diagnostic](AXUM.md) consumes registered Axum metadata separately and
 does not introduce partial official reports.
+
+### Java registration boundary (#67)
+
+`java-spring-boot` is registered with a Java-only host toolchain, real-container
+acceptance and the unchanged shared contract. Its static version extractor reads
+the committed JDK build, Gradle Wrapper, strict lockfile and SHA-256 verification
+metadata without executing Java or Gradle. Other implementation jobs do not need
+a host JDK. See [Java / Spring Boot](JAVA-SPRING-BOOT.md).
+
+Neither cohort changes membership or order. Official metadata still contains
+only the eight active implementations; Java is not filled into old reports with
+zeroes or missing values. A future Java-inclusive cohort and any official run
+need a separate decision, including an assessment of JVM warm-up under the common
+profile. Registration and passing tests are not measured performance evidence.
 
 ### Eight-stack rollout boundary (#50)
 

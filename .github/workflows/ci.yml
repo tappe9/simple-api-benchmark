@@ -139,6 +139,15 @@ jobs:
       - name: Install pinned Rust toolchain
         if: matrix.toolchain == 'rust'
         run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt,clippy
+      - name: Install pinned Java toolchain
+        if: matrix.toolchain == 'java'
+        run: |
+          curl --fail --silent --show-error --location --max-time 180 'https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_x64_linux_hotspot_25.0.4.1_1.tar.gz' -o "$RUNNER_TEMP/java.tar.gz"
+          echo "dbb698396d478e7fa2b1e50f4103324b2a99b90569ee27c33f2261f9215cf41e  $RUNNER_TEMP/java.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/java"
+          tar -xzf "$RUNNER_TEMP/java.tar.gz" --strip-components=1 -C "$RUNNER_TEMP/java"
+          echo "JAVA_HOME=$RUNNER_TEMP/java" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/java/bin" >> "$GITHUB_PATH"
       - name: Run implementation acceptance and failure gates
         run: python -m benchmark.ci run-isolated --implementation "$IMPLEMENTATION_ID" -- make "test-$IMPLEMENTATION_ID"
       - name: Run focused shared contract against implementation

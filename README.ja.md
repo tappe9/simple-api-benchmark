@@ -4,9 +4,9 @@
 
 **Go・Rust・Node.js・Pythonを、同じAPI・同じ制限・同じ負荷で比較します。**
 
-Simple API Benchmarkには、同じエンドポイント、同じDockerリソース制限、同じ検証ルールを使う8つのAPI実装があります。普遍的な最速言語を決めることではなく、誰でも理解できて、自分でも再実行できる小さな比較を目指します。
+Simple API Benchmarkには、同じエンドポイント、同じDockerリソース制限、同じ検証ルールを使う9つのAPI実装があります。普遍的な最速言語を決めることではなく、誰でも理解できて、自分でも再実行できる小さな比較を目指します。
 
-> **現在の状態:** v0.1.0は初期の4構成を収録したリリースです。現在の`main`は8実装すべてがCI対象で、有効な`eight-stack-v1`の検証済み結果を公開しています。Pagesではダッシュボードと過去の結果を閲覧できます。
+> **現在の状態:** v0.1.0は初期の4構成を収録したリリースです。現在の`main`は9実装がCI対象です。公式比較は引き続き`eight-stack-v1`の8実装で、Pagesに検証済み結果と履歴を公開しています。Java / Spring Bootは検証対象として登録済みですが、公式測定・公開結果には含まれません。
 
 8構成の最初の完全な公式結果は、2026年9月15日に
 [Issue #50 / PR #58](https://github.com/tappe9/simple-api-benchmark/pull/58)で公開しました。
@@ -244,10 +244,28 @@ make test-python-fastapi PYTHON=python3.14
 
 acceptance targetにはPOSIX環境のPython 3.14.7、Docker Compose v2、Makeが必要です。一時virtual environmentへhash検証付きで開発用依存をinstallし、Ruff、focused pytest tests、実Dockerサービス、DB更新・異常系、資源制限、1 worker、起動失敗、SIGTERM終了、container・network削除を確認します。Dockerを使わないfocused testsは[Contributing](CONTRIBUTING.md)を参照してください。
 
-8つのAPI実装と共通contract suiteを利用できます。
+## Java / Spring Boot実装
+
+`apps/java-spring-boot/`はTemurin 25.0.4.1+1、Spring Boot 4.1.1、
+Spring MVC / Tomcat、JDBC / HikariCP、チェックサムを検証するGradle 9.7.1を使用します。
+共通のAPI、単一プロセス、1 CPU・512 MiB、DB接続上限10を維持します。
+**9番目の登録済み実装ですが、公式測定対象への追加ではありません。**
+`eight-stack-v1`と公開済みの測定値は変更しません。
 
 ```bash
-make test-contract                       # 8実装を1つずつ順番に検証
+make test-java-spring-boot
+make test-contract CONTRACT_IMPL=java-spring-boot
+```
+
+受入テストには、POSIXホスト上の固定JDK、Python 3.10以降、Make、Docker Compose v2が必要です。
+コンテナのみを使う共通契約テストには、ホストのJDKは不要です。
+固定依存関係、起動・終了の検証、公式測定と分ける理由は
+[Java実装ガイド](docs/JAVA-SPRING-BOOT.md)を参照してください。
+
+9実装すべてを、共通のAPI契約で検証できます。
+
+```bash
+make test-contract                       # 9実装を1つずつ順番に検証
 make test-contract CONTRACT_IMPL=go-echo # 1実装を同じ契約で検証
 ```
 

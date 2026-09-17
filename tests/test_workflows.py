@@ -119,6 +119,11 @@ class WorkflowTests(unittest.TestCase):
             matching = [step for step in steps if step.get("uses", "").startswith(action)]
             self.assertEqual(len(matching), 1)
             self.assertEqual(matching[0].get("if"), condition)
+        java = next(step for step in steps if step.get("name") == "Install pinned Java toolchain")
+        self.assertEqual(java["if"], "matrix.toolchain == 'java'")
+        self.assertIn("sha256sum -c -", java["run"])
+        self.assertIn("jdk-25.0.4.1%2B1", java["run"])
+        self.assertNotIn("continue-on-error", java)
         rust = next(step for step in steps if step.get("name") == "Install pinned Rust toolchain")
         self.assertEqual(rust["if"], "matrix.toolchain == 'rust'")
         self.assertEqual(
@@ -222,6 +227,7 @@ class WorkflowTests(unittest.TestCase):
                             "Rust": "rust",
                             "Node.js": "node",
                             "Python": "python",
+                            "Java": "java",
                         }[spec["language"]],
                     }
                     for spec in current["implementations"]
