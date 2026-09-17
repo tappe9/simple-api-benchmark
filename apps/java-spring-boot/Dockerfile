@@ -1,24 +1,22 @@
-FROM eclipse-temurin:25-jdk-noble@sha256:9db599e7cdf3f650ba93441ba84020808e9da4834cf079b877f8abea5888d9b7 AS build
+# BuildKit downloads only the selected architecture and verifies every archive.
+# No unpinned package installation or in-image network utility is needed.
+FROM scratch AS archives-amd64
+ADD --checksum=sha256:dbb698396d478e7fa2b1e50f4103324b2a99b90569ee27c33f2261f9215cf41e https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_x64_linux_hotspot_25.0.4.1_1.tar.gz /tmp/jdk.tar.gz
+ADD --checksum=sha256:1731a34baadec5479258ea0202e4d5d865d2efeee60cb0c7d7eb056fe96ca219 https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jre_x64_linux_hotspot_25.0.4.1_1.tar.gz /tmp/jre.tar.gz
 
-# The fixed base predates this JDK hotfix. Replace it with the exact verified
-# distribution instead of relying on a mutable tag or overlaying old JDK files.
-ARG TARGETARCH
-RUN set -eu; \
-    case "$TARGETARCH" in \
-      amd64) arch=x64; jdk_sha=dbb698396d478e7fa2b1e50f4103324b2a99b90569ee27c33f2261f9215cf41e; jre_sha=1731a34baadec5479258ea0202e4d5d865d2efeee60cb0c7d7eb056fe96ca219 ;; \
-      arm64) arch=aarch64; jdk_sha=69df11a02cfa3ef7d7ca645e03edce6778ec090e100f6ae2b42097865730ac52; jre_sha=34828cbb93ed31c281c84ecb31ddab655d11a802f263c1fc019d42e9e0230fed ;; \
-      *) echo 'unsupported Java container architecture' >&2; exit 1 ;; \
-    esac; \
-    base='https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1'; \
-    curl --fail --silent --show-error --location --max-time 180 "$base/OpenJDK25U-jdk_${arch}_linux_hotspot_25.0.4.1_1.tar.gz" -o /tmp/jdk.tar.gz; \
-    echo "$jdk_sha  /tmp/jdk.tar.gz" | sha256sum -c -; \
-    curl --fail --silent --show-error --location --max-time 180 "$base/OpenJDK25U-jre_${arch}_linux_hotspot_25.0.4.1_1.tar.gz" -o /tmp/jre.tar.gz; \
-    echo "$jre_sha  /tmp/jre.tar.gz" | sha256sum -c -; \
-    rm -rf /opt/java/openjdk; \
-    mkdir -p /opt/java/openjdk /opt/verified-jre; \
-    tar -xzf /tmp/jdk.tar.gz --strip-components=1 -C /opt/java/openjdk; \
-    tar -xzf /tmp/jre.tar.gz --strip-components=1 -C /opt/verified-jre; \
-    rm /tmp/jdk.tar.gz /tmp/jre.tar.gz
+FROM scratch AS archives-arm64
+ADD --checksum=sha256:69df11a02cfa3ef7d7ca645e03edce6778ec090e100f6ae2b42097865730ac52 https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.4.1_1.tar.gz /tmp/jdk.tar.gz
+ADD --checksum=sha256:34828cbb93ed31c281c84ecb31ddab655d11a802f263c1fc019d42e9e0230fed https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jre_aarch64_linux_hotspot_25.0.4.1_1.tar.gz /tmp/jre.tar.gz
+
+FROM archives-${TARGETARCH} AS archives
+
+FROM eclipse-temurin:25-jdk-noble@sha256:9db599e7cdf3f650ba93441ba84020808e9da4834cf079b877f8abea5888d9b7 AS build
+COPY --from=archives /tmp/ /tmp/
+RUN rm -rf /opt/java/openjdk \
+    && mkdir -p /opt/java/openjdk /opt/verified-jre \
+    && tar -xzf /tmp/jdk.tar.gz --strip-components=1 -C /opt/java/openjdk \
+    && tar -xzf /tmp/jre.tar.gz --strip-components=1 -C /opt/verified-jre \
+    && rm /tmp/jdk.tar.gz /tmp/jre.tar.gz
 
 WORKDIR /src
 COPY .java-version build.gradle settings.gradle gradle.properties gradle.lockfile gradlew ./

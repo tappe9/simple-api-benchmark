@@ -87,6 +87,49 @@ class AcceptanceFailureTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 validate_failed_startup(value, "application startup failed")
 
+class DistributionPinTests(unittest.TestCase):
+    @staticmethod
+    def valid_manifest():
+        lines = []
+        for platform, architecture, pins in (("amd64", "x64", "ab"), ("arm64", "aarch64", "cd")):
+            lines.append(f"FROM scratch AS archives-{platform}")
+            for kind, pin in zip(("jdk", "jre"), pins):
+                lines.append(
+                    f"ADD --checksum=sha256:{pin * 64} "
+                    "https://github.com/adoptium/temurin25-binaries/releases/download/"
+                    f"jdk-25.0.4.1%2B1/OpenJDK25U-{kind}_{architecture}_linux_hotspot_"
+                    f"25.0.4.1_1.tar.gz /tmp/{kind}.tar.gz"
+                )
+        lines.append("FROM archives-${TARGETARCH} AS archives")
+        return "\n".join(lines) + "\n"
+
+    def test_both_platforms_have_exactly_two_sha256_pins(self):
+        from test_java_spring_boot_service import validate_distribution_pins
+        validate_distribution_pins(self.valid_manifest())
+
+    def test_bad_length_non_hex_and_missing_platform_are_rejected(self):
+        from test_java_spring_boot_service import validate_distribution_pins
+        valid = self.valid_manifest()
+        for old in ("a", "b", "c", "d"):
+            for bad in (old * 63, old * 65, "g" * 64, ""):
+                with self.subTest(pin=old, value=bad):
+                    with self.assertRaises(RuntimeError):
+                        validate_distribution_pins(valid.replace(old * 64, bad))
+        for bad in (
+            valid.replace("FROM scratch AS archives-arm64", "FROM scratch AS missing"),
+            valid + valid,
+            valid.replace("_aarch64_", "_x64_"),
+            valid.replace("${TARGETARCH}", "amd64"),
+            valid.replace("github.com/adoptium/", "example.com/adoptium/"),
+            valid.replace("/tmp/jre.tar.gz", "/tmp/jdk.tar.gz"),
+        ):
+            with self.assertRaises(RuntimeError):
+                validate_distribution_pins(bad)
+
+    def test_repository_distribution_manifest_is_well_formed(self):
+        from test_java_spring_boot_service import APP, validate_distribution_pins
+        validate_distribution_pins((APP / "Dockerfile").read_text())
+
 
 if __name__ == "__main__":
     unittest.main()
