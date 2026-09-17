@@ -107,10 +107,57 @@ The temporary `axum-development.yml` workflow is removed; the repository retains
 `ci.yml`, `benchmark.yml`, `pages.yml`, and the local reusable `pages-deploy.yml`. Neither diagnostic evidence nor
 its upload grants publication permissions or changes official cohort membership.
 
+## When to request an official benchmark
+
+Official measurement is manual-only: run `benchmark.yml` through
+`workflow_dispatch` on `main` after an explicit maintainer request. A request may
+be made directly or through ChatGPT/Codex. Record the relevant change/Issue and
+measurement reason in the request. There is no weekly schedule, automatic
+push/path/label trigger, or replacement timer/recurring agent task.
+
+Request a complete run after incorporating a runtime/compiler, framework, HTTP
+server, DB driver, serialization or other measured runtime dependency update;
+a measured API/SQL change; a Docker image, PostgreSQL, resource/worker/pool setting,
+load-generator or measurement-method change; or a new comparison cohort.
+A justified repeatability or suspected measurement-regression investigation may
+also warrant an explicitly requested run with unchanged source. These are reasons
+to request measurement, not automatic triggers. Upstream releases do not change
+this repository's pinned versions until a reviewed update is incorporated.
+
+Documentation, presentation-only changes, Issue maintenance and test/format-tool
+updates normally need only ordinary CI. Assess whether CI/build changes affect
+the measured binary or environment. Do not rerun merely to refresh the result's
+date or repair Pages. Normal PR/main CI, contracts, non-publishing smoke and Axum
+diagnostics remain automatic and mandatory where already configured.
+
+After the change is merged and its CI succeeds, review current main and authorize
+both measurement and the existing audited result publication/Pages side effects.
+Only then dispatch, for example:
+
+```bash
+# Explicitly authorized measurement AND existing automatic publication/Pages.
+gh workflow run benchmark.yml --repo tappe9/simple-api-benchmark --ref main
+gh run list --repo tappe9/simple-api-benchmark --workflow benchmark.yml --limit 5
+```
+
+GitHub's Actions UI (`Official benchmark` -> `Run workflow`, branch `main`) is an
+alternative. This is not a measurement-only operation: valid results are still
+published automatically and passed to the dependent Pages workflow. Invocation
+policy does not redesign publishing, change main protection, require a publisher
+App/Environment, or authorize a real run simply because a code PR was merged.
+Publication/protection design remains deferred separately under Issue #52.
+
+Measure the full active cohort sequentially in one job, keeping all three samples
+per endpoint and the same-run selection rule. Do not mix one newly measured stack
+into an older comparison. Preserve historical results and their actual events,
+including `schedule`; live invocation policy does not relabel old provenance.
+Changes to measurement conditions must remain visible as different comparison
+conditions rather than apparent framework speedups.
+
 ## Official benchmark trust boundary
 
-`.github/workflows/benchmark.yml` runs Saturdays at 14:27 UTC (23:27 JST) and
-through `workflow_dispatch`, without caller-supplied inputs. The measurement, publication and dependent Pages call check the
+`.github/workflows/benchmark.yml` accepts only explicit `workflow_dispatch`,
+without caller-supplied inputs. The measurement, publication and dependent Pages call check the
 repository, event, and default-branch ref. The Python entry point additionally
 requires the exact `main` workflow ref and matching workflow/source SHA. A
 dispatch from a feature branch is skipped; a renamed default branch requires an
@@ -210,18 +257,21 @@ remain separate actions.
 
 ## Loop prevention and interpretation
 
-Official measurement has only schedule/manual triggers, never `push`. Result
+Official measurement has only a manual `workflow_dispatch` trigger, never
+`schedule`, `push`, PR or label triggers. Result
 commits use the repository `GITHUB_TOKEN`, include `[skip ci]`, and touch only
 paths excluded from the CI push trigger. These independent guards prevent result
 publication from repeatedly triggering measurement/CI. Do not replace this token
 with a PAT to work around publication failures.
 
-A successful manual trusted-main run validates the same path used by the weekly
-schedule; the configured cron is not evidence that a future scheduled run has
-already executed. GitHub may delay scheduled jobs, and shared hosted hardware can
-vary. Always read the run date, conditions, versions, and API health policy
-together. Local, fixture, PR smoke, and Issue #23 investigation reports are not
-official measurements.
+A successful explicit trusted-main run verifies that recorded source and run,
+not any future run. Shared hosted hardware can vary, so always read the run date,
+conditions, versions, and API health policy together. A repeated measurement of
+unchanged pins is not an updated dependency baseline or evidence of a speedup.
+Local, fixture, PR smoke, and Issue #23 investigation reports are not official
+measurements. Historical scheduled reports remain readable without rewriting
+their event, source or measured values; the shared provenance validators retain
+that compatibility even though the current workflow no longer schedules runs.
 
 The controlled Issue #23 run observed selected throughput differences of roughly
 +2.3% to +23.1% after recurring API probes were removed from the measured window.
@@ -243,8 +293,8 @@ pages.yml:     successful main CI / manual recovery -> pages-deploy.yml
 `pages.yml` subscribes only to successful, current-main push `CI` runs and retains
 explicit main-only `workflow_dispatch` recovery. `Official benchmark` is no longer
 in its `workflow_run` subscription: there is one automatic official-publication
-route, regardless of whether the producer was scheduled or dispatched by a
-maintainer or bot. An unsuccessful, cancelled or skipped `publish` cannot invoke
+route for an explicitly authorized dispatch, whether initiated by a maintainer
+or an instructed bot. An unsuccessful, cancelled or skipped `publish` cannot invoke
 that route. PR and smoke jobs remain read-only and cannot call deployment.
 
 After the raw audit and successful fast-forward push, `benchmark.publish` emits
@@ -330,9 +380,10 @@ Regression tests cover successful/rejected calls, real isolated Git publication,
 producer/build retry identities, and stale-target rejection. A normal post-merge
 Pages deployment exercises the shared workflow against existing verified data.
 The complete new **official producer -> dependent deployment** path is only live
-verified when an authorized or normally scheduled official run exercises it;
+verified when the next justified, explicitly authorized official run exercises it;
 track that evidence under Issue #59 rather than presenting fixture tests as a
-real measurement or a manual recovery as an automatic handoff.
+real measurement or a manual recovery as an automatic handoff. Do not restore
+scheduling or dispatch an otherwise unnecessary benchmark just to close #59.
 
 Platform references: [reusable workflow context and permissions](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations),
 [rerun identity](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs),

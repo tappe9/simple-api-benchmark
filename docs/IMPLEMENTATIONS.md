@@ -63,11 +63,14 @@ readiness policy; historical views never fill absent frameworks with zero.
 Runtime, framework/driver versions, source SHA and runner metadata remain tied to
 that one report. Do not combine separate runs into a single ranking.
 
-The maintainer approved activation and one full official run with existing
-validated automatic publication. Activation also changes the next scheduled
-official run, even without manual dispatch. Merge the reviewed activation only
-after all gates pass, then run the existing official workflow on that exact
-latest-main SHA. Keep main unchanged during measurement; retain stale-main
+The maintainer approved the original activation and one full official run with
+existing validated automatic publication; Issue #50's rollout is complete. Under
+[the current invocation policy](AUTOMATION.md#when-to-request-an-official-benchmark),
+future cohort changes require a new explicit measurement/publication request
+after the reviewed activation is merged and its CI succeeds. Activation affects
+the next explicitly dispatched run; it does not automatically start measurement.
+Run the complete cohort on that exact latest-main SHA. Keep main unchanged during
+measurement; retain stale-main
 rejection rather than rebasing old measurements onto unrelated source.
 
 The unchanged profile requires 8 x 3 x 3 = **72 measured samples**, plus 24 five-second
@@ -81,8 +84,9 @@ times from the official run logs, including that overhead. A timeout must fail
 without publication; any later budget change needs recorded evidence, never
 parallelized official measurements or changed per-stack settings.
 
-Keep #50 open until an authorized full run and atomic JSON/history/README/SVG
-publication succeed, followed by downstream Pages and result-link checks. Record
+For any future cohort rollout, keep its tracking issue open until an authorized
+full run and atomic JSON/history/README/SVG publication succeed, followed by
+dependent Pages and result-link checks. Record
 the measured source SHA, publication commit SHA, official run ID/attempt and Pages
 run ID separately. A partial run, invalid raw evidence, timeout, cleanup failure
 or stale main cannot publish. Leave previous verified results unchanged; obtain a

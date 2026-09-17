@@ -1,7 +1,5 @@
 name: Official benchmark
 on:
-  schedule:
-    - cron: '27 14 * * 6'
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,7 +11,7 @@ jobs:
     if: >-
       github.repository == 'tappe9/simple-api-benchmark' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -49,7 +47,7 @@ jobs:
       needs.measure.result == 'success' &&
       github.repository == 'tappe9/simple-api-benchmark' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
     runs-on: ubuntu-24.04
@@ -81,7 +79,7 @@ jobs:
       needs.publish.result == 'success' &&
       github.repository == 'tappe9/simple-api-benchmark' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       pages: write

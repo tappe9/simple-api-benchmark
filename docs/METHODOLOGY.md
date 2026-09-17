@@ -35,6 +35,23 @@ The Python / FastAPI baseline uses [Python 3.14.7](https://www.python.org/downlo
 
 Uvicorn uses one worker, standard asyncio, and h11 for HTTP/1.1, without optional uvloop or httptools acceleration. FastAPI serializes ordinary Python values using its normal response handling. The asyncpg pool is capped at 10, reads the shared database settings, and is checked before HTTP startup. Each async CPU route executes direct recursive Fibonacci(30) on the event loop, occupying the process until the calculation finishes; it does not offload work to a thread or process pool. The common 1 CPU / 512 MB limits remain unchanged. Focused validation is separate from performance measurement.
 
+## When to remeasure
+
+Official measurements are explicitly requested after performance-relevant updates
+are incorporated into this repository, or for justified reproducibility or
+measurement-regression investigations. There is no weekly or automatic
+change-triggered official run. Upstream releases alone do not change the pinned
+runtime, framework, dependency or image baseline. Documentation/presentation-only
+and test-tool changes normally need only correctness CI.
+
+Each requested comparison measures the complete active cohort on the same job,
+with all three samples per endpoint; do not update just one row using a different
+runner/date. Record changes to the load generator, resource limits or measurement
+method as changed conditions, not necessarily framework improvements. Repeated
+runs of unchanged source can investigate variability but do not imply a speedup.
+Historical results and scheduled-run provenance remain unchanged. See
+[invocation policy and publication side effects](AUTOMATION.md#when-to-request-an-official-benchmark).
+
 ## Tests
 
 ### JSON
@@ -151,7 +168,7 @@ A test result is invalid when any of its three measured runs has one of the foll
 - memory collection fails;
 - bounded cleanup fails.
 
-An invalid or incomplete scheduled benchmark must not replace the latest verified result. Failed runs are not retried until a preferred number appears.
+An invalid or incomplete official benchmark must not replace the latest verified result. Failed runs are not retried until a preferred number appears.
 
 ## GitHub Actions limitations
 
@@ -161,7 +178,7 @@ GitHub-hosted runners are not dedicated benchmark machines. Hardware and backgro
 - versions, health policy, and runner information are recorded;
 - each test is run three times;
 - results are presented as reference values, not universal facts;
-- large changes should be reproduced locally or in another scheduled run.
+- large changes should be reproduced locally or in a justified, explicitly requested repeat run.
 
 Comparisons within one run are more meaningful than small changes between different dates. Results produced under different API health policies are also different methodologies and must not be treated as directly compatible simply because their endpoint/profile values match.
 

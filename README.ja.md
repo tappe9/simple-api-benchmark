@@ -255,7 +255,11 @@ HTTP status、JSONの内容・型、規定のerror response、応答の再現性
 失敗時にも分離された検証環境を片付けます。必要な環境、起動済みAPIのbase URLを指定する
 方法、cleanupの制約は[共通contractの実行ガイド](CONTRIBUTING.md#shared-contract-checks)を
 参照してください。ローカルのbenchmark runnerは利用可能です。PRでは同じ検証と公開しない短縮benchmarkを実行します。
-公式結果はtrusted mainの[週次・手動workflow](docs/AUTOMATION.md)だけから公開します。
+公式benchmarkは、性能に関わる変更を取り込んだ後、または再現性などの調査が必要な場合に、
+[trusted mainで明示的に実行を依頼します](docs/AUTOMATION.md#when-to-request-an-official-benchmark)。
+週次実行や変更を検知しての自動計測は行いません。上流で新しいversionが公開されただけでは、
+このリポジトリの固定versionは更新されません。手動起動後も、既存の検証済み結果の自動公開と
+Pages反映まで実行するため、計測だけの操作ではありません。公開方式の見直しとmain保護は別途検討します。
 active official cohortは`eight-stack-v1`で、Issue #50で最初の検証済み結果を公開済みです。その後の結果更新にも、新しい完全な公式計測と検証が必要です。
 過去の4構成のレポートは書き換えません。
 
