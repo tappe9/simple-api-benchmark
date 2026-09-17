@@ -1,0 +1,49 @@
+name: Java development
+on:
+  push:
+    branches: [feat/add-java-spring-boot]
+permissions:
+  contents: read
+concurrency:
+  group: java-development-67
+  cancel-in-progress: false
+jobs:
+  inspect:
+    if: github.repository == 'tappe9/simple-api-benchmark' && github.ref == 'refs/heads/feat/add-java-spring-boot'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Export exact source and public upstream metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .cache/java-development
+          git bundle create .cache/java-development/source.bundle --all
+          git rev-parse HEAD HEAD^{tree} > .cache/java-development/source-identity.txt
+          curl --fail --silent --show-error --location --max-time 60 https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-dependencies/maven-metadata.xml -o .cache/java-development/spring-boot-metadata.xml
+          curl --fail --silent --show-error --location --max-time 60 https://services.gradle.org/versions/current -o .cache/java-development/gradle-current.json
+          curl --fail --silent --show-error --location --max-time 60 'https://api.adoptium.net/v3/assets/feature_releases/25/ga?architecture=x64&heap_size=normal&image_type=jdk&jvm_impl=hotspot&os=linux&page_size=1&project=jdk&sort_order=DESC&vendor=eclipse' -o .cache/java-development/temurin-release.json
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import xml.etree.ElementTree as ET
+          root = pathlib.Path('.cache/java-development')
+          print('Spring Boot 4.1:', [e.text for e in ET.parse(root / 'spring-boot-metadata.xml').findall('.//version') if e.text and e.text.startswith('4.1.')])
+          print('Gradle:', json.loads((root / 'gradle-current.json').read_text()))
+          release = json.loads((root / 'temurin-release.json').read_text())[0]
+          print('Temurin:', release['release_name'], release['version_data'])
+          print('Package:', release['binaries'][0]['package'])
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: java-development-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .cache/java-development/
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: error
