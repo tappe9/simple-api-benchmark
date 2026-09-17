@@ -8,87 +8,78 @@ concurrency:
   group: java-development-67
   cancel-in-progress: false
 jobs:
-  bootstrap:
+  unit:
     if: github.repository == 'tappe9/simple-api-benchmark' && github.ref == 'refs/heads/feat/add-java-spring-boot'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Prepare checksum-verified Java and Gradle
-        shell: bash
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '10482171726'
+          run-id: '35185291659'
+          github-token: ${{ github.token }}
+          path: .cache/java-baseline
+          merge-multiple: true
+      - name: Prepare the exact checksum-verified JDK
         run: |
           set -euo pipefail
-          mkdir -p .cache/java-development .cache/java-build-kit
-          curl --fail --silent --show-error --location --max-time 180 'https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_x64_linux_hotspot_25.0.4.1_1.tar.gz' -o .cache/java-build-kit/jdk.tar.gz
-          echo 'dbb698396d478e7fa2b1e50f4103324b2a99b90569ee27c33f2261f9215cf41e  .cache/java-build-kit/jdk.tar.gz' | sha256sum -c -
-          curl --fail --silent --show-error --location --max-time 180 https://services.gradle.org/distributions/gradle-9.7.1-bin.zip -o .cache/java-build-kit/gradle.zip
-          echo 'acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a  .cache/java-build-kit/gradle.zip' | sha256sum -c -
+          curl --fail --silent --show-error --location --max-time 180 'https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_x64_linux_hotspot_25.0.4.1_1.tar.gz' -o "$RUNNER_TEMP/java67.tar.gz"
+          echo "dbb698396d478e7fa2b1e50f4103324b2a99b90569ee27c33f2261f9215cf41e  $RUNNER_TEMP/java67.tar.gz" | sha256sum -c -
           mkdir -p "$RUNNER_TEMP/java67/jdk"
-          tar -xzf .cache/java-build-kit/jdk.tar.gz --strip-components=1 -C "$RUNNER_TEMP/java67/jdk"
-          unzip -q .cache/java-build-kit/gradle.zip -d "$RUNNER_TEMP/java67"
+          tar -xzf "$RUNNER_TEMP/java67.tar.gz" --strip-components=1 -C "$RUNNER_TEMP/java67/jdk"
           echo "JAVA_HOME=$RUNNER_TEMP/java67/jdk" >> "$GITHUB_ENV"
           echo "GRADLE_USER_HOME=$RUNNER_TEMP/java67/gradle-home" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/java67/jdk/bin" >> "$GITHUB_PATH"
-          echo "$RUNNER_TEMP/java67/gradle-9.7.1/bin" >> "$GITHUB_PATH"
-      - name: Generate dependencies for review and verify the test-first failure
-        shell: bash
+      - name: Import only the immutable bootstrap dependency candidates
         run: |
           set -euo pipefail
-          java -version 2>&1 | tee .cache/java-development/java-version.txt
-          gradle --version | tee .cache/java-development/gradle-version.txt
-          cat > "$RUNNER_TEMP/java67/resolve.gradle" <<'GRADLE'
-          allprojects {
-              tasks.register('resolveForReview') {
-                  doLast {
-                      configurations.each { if (it.canBeResolved) { it.resolve() } }
-                  }
-              }
-          }
-          GRADLE
-          cd apps/java-spring-boot
-          gradle wrapper --gradle-version 9.7.1 --gradle-distribution-sha256-sum acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a
-          echo '7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d  gradle/wrapper/gradle-wrapper.jar' | sha256sum -c -
-          ./gradlew --init-script "$RUNNER_TEMP/java67/resolve.gradle" resolveForReview --write-locks --write-verification-metadata sha256
-          set +e
-          ./gradlew test > ../../.cache/java-development/java-red.log 2>&1
-          status=$?
-          set -e
-          cat ../../.cache/java-development/java-red.log
-          test "$status" -ne 0
-          grep -q 'cannot find symbol' ../../.cache/java-development/java-red.log
-          ! find src/main -name '*.java' -print -quit 2>/dev/null | grep -q .
-      - name: Inspect official Java container candidates
-        if: always()
-        shell: bash
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          source = Path('.cache/java-baseline/generated')
+          destination = Path('apps/java-spring-boot')
+          names = ('gradlew', 'gradlew.bat', 'gradle/wrapper/gradle-wrapper.jar', 'gradle/wrapper/gradle-wrapper.properties', 'gradle.lockfile', 'gradle/verification-metadata.xml')
+          for name in names:
+              path = source / name
+              if path.is_symlink() or not path.is_file():
+                  raise RuntimeError('missing or unsafe dependency candidate: ' + name)
+              data = path.read_bytes()
+              if name.endswith('.jar') and hashlib.sha256(data).hexdigest() != '7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d':
+                  raise RuntimeError('wrapper checksum mismatch')
+              target = destination / name
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_bytes(data)
+              target.chmod(0o755 if name == 'gradlew' else 0o644)
+              print(name, hashlib.sha256(data).hexdigest())
+          print((source / 'gradle.lockfile').read_text())
+          for name in ('jdk-image.txt', 'jre-image.txt', 'jdk-java-version.txt', 'jre-java-version.txt', 'temurin-jre-x64.json', 'temurin-jre-aarch64.json'):
+              print(name, Path('.cache/java-baseline', name).read_text())
+          PY
+      - name: Execute locked Java tests and production distribution
         run: |
           set -euo pipefail
           mkdir -p .cache/java-development
-          for variant in jdk jre; do
-            tag="eclipse-temurin:25-${variant}-noble"
-            if docker buildx imagetools inspect "$tag" > ".cache/java-development/${variant}-image.txt" 2>&1; then
-              docker buildx imagetools inspect "$tag" --raw > ".cache/java-development/${variant}-image.json"
-              docker run --rm "$tag" java -version > ".cache/java-development/${variant}-java-version.txt" 2>&1
-            fi
-          done
-          for architecture in x64 aarch64; do
-            curl --fail --silent --show-error --location --max-time 60 "https://api.adoptium.net/v3/assets/feature_releases/25/ga?architecture=${architecture}&heap_size=normal&image_type=jre&jvm_impl=hotspot&os=linux&page_size=1&project=jdk&sort_order=DESC&vendor=eclipse" -o ".cache/java-development/temurin-jre-${architecture}.json"
-          done
-      - name: Export exact source and generated dependency evidence
+          cd apps/java-spring-boot
+          sha256sum gradle.lockfile gradle/verification-metadata.xml gradle/wrapper/* > ../../.cache/java-development/dependencies.before
+          ./gradlew --no-daemon test installDist 2>&1 | tee ../../.cache/java-development/java-tests.log
+          sha256sum --check ../../.cache/java-development/dependencies.before
+      - name: Export exact source and test evidence
         if: always()
-        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p .cache/java-development/generated
+          mkdir -p .cache/java-development
           git bundle create .cache/java-development/source.bundle --all
           git rev-parse HEAD HEAD^{tree} > .cache/java-development/source-identity.txt
-          cp -a apps/java-spring-boot/. .cache/java-development/generated/
-          rm -rf .cache/java-development/generated/.gradle .cache/java-development/generated/build
-          if test -d "$GRADLE_USER_HOME/caches"; then
-            tar -czf .cache/java-build-kit/gradle-cache.tar.gz -C "$GRADLE_USER_HOME" caches
+          if test -d apps/java-spring-boot/build/test-results; then
+            cp -a apps/java-spring-boot/build/test-results .cache/java-development/
           fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
@@ -98,12 +89,57 @@ jobs:
           include-hidden-files: true
           retention-days: 14
           if-no-files-found: error
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
+  import-objects:
+    needs: unit
+    if: github.repository == 'tappe9/simple-api-benchmark' && github.ref == 'refs/heads/feat/add-java-spring-boot'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: java-build-kit-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .cache/java-build-kit/
-          include-hidden-files: true
-          retention-days: 3
-          compression-level: 0
-          if-no-files-found: error
+          artifact-ids: '10482171726'
+          run-id: '35185291659'
+          github-token: ${{ github.token }}
+          path: dependency-candidates
+          merge-multiple: true
+      - name: Import six allowlisted Git blobs without executing code or updating refs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import urllib.request
+          source = Path('dependency-candidates/generated')
+          names = ('gradlew', 'gradlew.bat', 'gradle/wrapper/gradle-wrapper.jar', 'gradle/wrapper/gradle-wrapper.properties', 'gradle.lockfile', 'gradle/verification-metadata.xml')
+          candidates = []
+          for name in names:
+              path = source / name
+              if path.is_symlink() or not path.is_file() or not 0 < path.stat().st_size < 200_000:
+                  raise RuntimeError('missing or unsafe dependency candidate')
+              data = path.read_bytes()
+              digest = hashlib.sha256(data).hexdigest()
+              if name.endswith('.jar') and digest != '7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d':
+                  raise RuntimeError('wrapper checksum mismatch')
+              candidates.append((name, data, digest))
+          output = []
+          for name, data, digest in candidates:
+              request = urllib.request.Request(
+                  'https://api.github.com/repos/tappe9/simple-api-benchmark/git/blobs',
+                  data=json.dumps({'encoding': 'base64', 'content': base64.b64encode(data).decode('ascii')}).encode('utf-8'),
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json', 'X-GitHub-Api-Version': '2022-11-28'},
+                  method='POST')
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  blob = json.load(response)
+              expected = hashlib.sha1(b'blob ' + str(len(data)).encode('ascii') + b'\0' + data).hexdigest()
+              if blob.get('sha') != expected:
+                  raise RuntimeError('Git blob identity mismatch')
+              output.append({'path': 'apps/java-spring-boot/' + name, 'mode': '100755' if name == 'gradlew' else '100644', 'type': 'blob', 'sha': expected, 'sha256': digest})
+          print(json.dumps(output, indent=2))
+          PY
