@@ -37,24 +37,38 @@ jobs:
           ./gradlew --no-daemon test installDist 2>&1 | tee ../../.cache/java-development/java-tests.log
           sha256sum --check ../../.cache/java-development/dependencies.before
           git diff --exit-code -- gradle.lockfile gradle/verification-metadata.xml gradle/wrapper
+      - name: Verify acceptance regression tests are red before the harness exists
+        run: |
+          set -euo pipefail
+          set +e
+          python3 -m unittest discover -s tests -p test_java_spring_boot_acceptance.py -v > .cache/java-development/acceptance-red.log 2>&1
+          status=$?
+          set -e
+          cat .cache/java-development/acceptance-red.log
+          test "$status" -ne 0
+          grep -q "No module named 'test_java_spring_boot_service'" .cache/java-development/acceptance-red.log
+          test ! -f tests/test_java_spring_boot_service.py
       - name: Confirm exact ARM64 JDK release metadata
         if: always()
         run: |
           python3 - <<'PY'
           import json
           import urllib.request
-          url = 'https://api.adoptium.net/v3/assets/version/25.0.4.1%2B1?architecture=aarch64&heap_size=normal&image_type=jdk&jvm_impl=hotspot&os=linux&project=jdk&vendor=eclipse'
+          url = 'https://api.adoptium.net/v3/assets/feature_releases/25/ga?architecture=aarch64&heap_size=normal&image_type=jdk&jvm_impl=hotspot&os=linux&page_size=1&project=jdk&sort_order=DESC&vendor=eclipse'
           with urllib.request.urlopen(url, timeout=60) as response:
               releases = json.load(response)
           for release in releases:
+              if release['release_name'] != 'jdk-25.0.4.1+1':
+                  raise RuntimeError('unexpected upstream Java release')
               print(json.dumps({'release_name': release['release_name'], 'version': release['version_data'], 'package': release['binaries'][0]['package']}, indent=2))
+          if len(releases) != 1:
+              raise RuntimeError('expected exactly one upstream release')
           PY
       - name: Export exact source and test evidence
         if: always()
         run: |
           set -euo pipefail
           mkdir -p .cache/java-development
-          git bundle create .cache/java-development/source.bundle --all
           git rev-parse HEAD HEAD^{tree} > .cache/java-development/source-identity.txt
           if test -d apps/java-spring-boot/build/test-results; then
             cp -a apps/java-spring-boot/build/test-results .cache/java-development/
