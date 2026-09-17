@@ -35,6 +35,16 @@ The Python / FastAPI baseline uses [Python 3.14.7](https://www.python.org/downlo
 
 Uvicorn uses one worker, standard asyncio, and h11 for HTTP/1.1, without optional uvloop or httptools acceleration. FastAPI serializes ordinary Python values using its normal response handling. The asyncpg pool is capped at 10, reads the shared database settings, and is checked before HTTP startup. Each async CPU route executes direct recursive Fibonacci(30) on the event loop, occupying the process until the calculation finishes; it does not offload work to a thread or process pool. The common 1 CPU / 512 MB limits remain unchanged. Focused validation is separate from performance measurement.
 
+Current `main` uses the versioned `eight-stack-v1` cohort for official measurement;
+its membership is listed in the [registry guide](IMPLEMENTATIONS.md). Java /
+Spring Boot is the ninth registered implementation for acceptance and contract
+checks, but is outside both existing official cohorts. Its single JVM uses the
+same resource and pool limits, normal JSON serialization, JDBC and direct
+recursive Fibonacci. There is no Java result or performance claim from these
+correctness tests. Before any future cohort change, assess JVM warm-up under the
+common profile rather than silently extending Java's five-second warm-up alone.
+See the [Java implementation guide](JAVA-SPRING-BOOT.md).
+
 ## When to remeasure
 
 Official measurements are explicitly requested after performance-relevant updates
@@ -222,7 +232,7 @@ make test-rust-actix
 
 This target checks the committed source with rustfmt, locked Rust tests, and Clippy, then builds and verifies the pinned production container. Real DB updates and errors, exact numeric JSON, BIGINT boundaries, startup failure, SIGTERM exit, and DB connection/container/network cleanup are included. Run all available DB/API targets after shared Compose changes. These are implementation acceptance checks, not performance measurements.
 
-All eight registered implementations can be checked against the same documented contract:
+All nine registered implementations can be checked against the same documented contract:
 
 ```bash
 make test-contract

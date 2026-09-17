@@ -27,6 +27,7 @@ v0.1.0 release. A next release version remains an explicit maintainer decision.
 | Milestone | Status and evidence |
 | --- | --- |
 | Eight API implementations | Complete: Gin, Echo, Actix Web, Axum, Fastify, Express, FastAPI and Flask are registered and CI-covered. Axum retains its required non-publishing diagnostic. |
+| Java / Spring Boot registration | Ninth implementation with dedicated host toolchain, checksum-verified build, real-container acceptance and shared contracts ([#67](https://github.com/tappe9/simple-api-benchmark/issues/67)). Outside the active official cohort; no Java result is published. |
 | Versioned eight-stack cohort | Active: `eight-stack-v1`; the historical `four-stack-v1` remains frozen. [#50](https://github.com/tappe9/simple-api-benchmark/issues/50), [#57](https://github.com/tappe9/simple-api-benchmark/pull/57), [#58](https://github.com/tappe9/simple-api-benchmark/pull/58). |
 | Verified eight-stack publication | Complete: the first full result was published on September 15, 2026, by [run 34925168324](https://github.com/tappe9/simple-api-benchmark/actions/runs/34925168324). See [#50](https://github.com/tappe9/simple-api-benchmark/issues/50) for measured-source, publication and Pages identities. Activation alone is not measurement evidence. |
 | Result presentation | Complete: README charts, the filterable light/dark Pages dashboard and historical-run navigation. History was delivered in [#28 / #46](https://github.com/tappe9/simple-api-benchmark/pull/46); old reports retain their own cohort and provenance. |
@@ -51,9 +52,10 @@ v0.1.0 release. A next release version remains an explicit maintainer decision.
 
 ## Future candidates
 
-Java / Spring Boot and C# / ASP.NET Core may be evaluated one at a time. These are
-candidates, not commitments or implemented benchmark entries. Historical-result
-navigation is already available, not a future candidate.
+C# / ASP.NET Core may be evaluated as a separate implementation candidate, not a
+commitment. Java / Spring Boot is already registered; its inclusion in a future
+official cohort remains a separate decision that must assess the common warm-up
+and measurement profile. Historical-result navigation is already available.
 
 ## Features intentionally deferred
 

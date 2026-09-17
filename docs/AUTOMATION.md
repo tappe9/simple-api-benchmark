@@ -44,7 +44,9 @@ cohort. The `implementation (<ID>)` job names and `required` aggregate stay stab
 
 Every implementation runner explicitly installs the pinned Python harness. Only
 Go jobs additionally run `setup-go`, only Node.js jobs run `setup-node`, and only
-Rust jobs install Rust with rustfmt/Clippy. Python implementation jobs need no
+Rust jobs install Rust with rustfmt/Clippy. Only Java jobs install the exact
+Temurin JDK using its fixed release URL and verified SHA-256; Gradle is supplied
+by the committed checksum-verified Wrapper. Python implementation jobs need no
 additional language setup. The existing versions, action SHAs, acceptance/failure
 targets, shared contracts, cleanup and Axum diagnostic are unchanged. The shared
 job still explicitly installs Go for actionlint/Go-related tests and Node.js for
@@ -52,7 +54,7 @@ site tests; its Python 3.10 compatibility gate is retained.
 
 CI invokes the host acceptance, contract and Axum diagnostic commands through
 `python -m benchmark.ci run-isolated --implementation <ID> -- <command>`. This
-prepends temporary failing executables for unrelated host Go/Node/Rust tools to
+prepends temporary failing executables for unrelated host Go/Node/Rust/Java tools to
 the child PATH, so a preinstalled runner tool cannot silently satisfy an
 undeclared dependency. Actual tool use fails the gate even if its immediate
 caller ignores the exit status. The exact `rustc --version` probe is the one

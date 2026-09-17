@@ -4,9 +4,9 @@
 
 **Go vs Rust vs Node.js vs Python — same API, same limits, simple results.**
 
-Simple API Benchmark contains eight API implementations with the same endpoints, Docker resource limits, and validation rules. The goal is not to declare a universal winner. The goal is to make a small, repeatable comparison that anyone can understand.
+Simple API Benchmark contains nine API implementations with the same endpoints, Docker resource limits, and validation rules. The goal is not to declare a universal winner. The goal is to make a small, repeatable comparison that anyone can understand.
 
-> **Project status:** v0.1.0 is released as the original four-stack snapshot. Current `main` includes all eight CI-covered implementations, the active `eight-stack-v1` cohort with verified published results, and a Pages dashboard with history navigation.
+> **Project status:** v0.1.0 is released as the original four-stack snapshot. Current `main` includes nine CI-covered implementations. The active `eight-stack-v1` cohort has verified published results and a Pages dashboard with history navigation. Java / Spring Boot is registered for validation but is not part of the official cohort or published results.
 
 The first complete eight-stack official result was published on September 15, 2026
 under [Issue #50 / PR #58](https://github.com/tappe9/simple-api-benchmark/pull/58).
@@ -244,10 +244,28 @@ make test-python-fastapi PYTHON=python3.14
 
 The complete acceptance target requires Python 3.14.7 on a POSIX host, Docker Compose v2, and Make. It installs the hash-locked development dependencies in a temporary virtual environment, runs Ruff and focused pytest tests, and verifies the real Docker service, DB errors and updates, resources, one worker, startup failure, SIGTERM shutdown, and container/network cleanup. See [Contributing](CONTRIBUTING.md) for focused tests without Docker.
 
-All eight API implementations and the shared contract suite are available:
+## Java / Spring Boot implementation
+
+`apps/java-spring-boot/` uses Temurin 25.0.4.1+1, Spring Boot 4.1.1,
+Spring MVC/Tomcat, JDBC/HikariCP, and checksum-verified Gradle 9.7.1.
+It follows the same API, single-process, 1 CPU / 512 MiB and ten-connection
+limits. It is the **ninth registered implementation**, not an additional official
+result. `eight-stack-v1` and all published measurements remain unchanged.
 
 ```bash
-make test-contract                       # all eight APIs, one at a time
+make test-java-spring-boot
+make test-contract CONTRACT_IMPL=java-spring-boot
+```
+
+The acceptance target needs the exact JDK, Python 3.10+, Make and Docker Compose
+v2 on a POSIX host. The container-only contract target does not need a host JDK.
+See the [Java implementation guide](docs/JAVA-SPRING-BOOT.md) for build integrity,
+startup/shutdown behavior, supported build paths and the unmeasured boundary.
+
+All nine API implementations and the shared contract suite are available:
+
+```bash
+make test-contract                       # all nine registered APIs, one at a time
 make test-contract CONTRACT_IMPL=go-echo # one API with the same contract
 ```
 

@@ -227,6 +227,7 @@ class WorkflowTests(unittest.TestCase):
                             "Rust": "rust",
                             "Node.js": "node",
                             "Python": "python",
+                            "Java": "java",
                         }[spec["language"]],
                     }
                     for spec in current["implementations"]

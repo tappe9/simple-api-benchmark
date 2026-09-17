@@ -10,7 +10,7 @@ The architecture is intentionally small.
 1. A new reader should understand the repository quickly.
 2. Every backend should implement the same API contract.
 3. A local benchmark should run with one command.
-4. GitHub Actions should measure every backend in the same job.
+4. GitHub Actions should measure every active cohort member sequentially in the same job.
 5. README and GitHub Pages should read the same result file.
 
 ## Non-goals for v0.1
@@ -36,6 +36,8 @@ flowchart LR
     R --> A2[Rust / Actix Web and Axum]
     R --> A3[Node.js / Fastify and Express]
     R --> A4[Python / FastAPI and Flask]
+    M -. acceptance and contracts only .-> A5[Java / Spring Boot]
+    A5 --> P
     A1 --> P[(PostgreSQL)]
     A2 --> P
     A3 --> P
@@ -100,6 +102,26 @@ The lifespan creates a pool with `min_size=1` and `max_size=10`, executes `SELEC
 
 Uvicorn is the direct container process, with `--workers 1 --loop asyncio --http h11`, no access log, and a five-second graceful HTTP shutdown timeout. The lifespan closes the pool with a five-second bound and terminates remaining connections only if graceful pool closure fails or is cancelled. The production image installs only the SHA256-verified runtime lock and excludes tests and development tools. Both Docker stages use `python:3.14.7-slim-bookworm` pinned to index digest `sha256:9ab8d9c8514b44f90cf0029dd42fdd7e9e211e639c8b995304cc04568dee900f`. Compose uses non-root user `10001:10001`, 1 CPU / 512 MB, healthy PostgreSQL ordering, dropped capabilities, no privilege escalation, loopback-only port `8080`, and no restarts.
 
+#### Java / Spring Boot
+
+`apps/java-spring-boot/` uses a single Temurin 25.0.4.1+1 JVM with Spring Boot
+4.1.1, Spring MVC/Tomcat, ordinary record serialization and JDBC/HikariCP.
+`DatabaseSettings` validates the shared five `DATABASE_*` values without putting
+credentials into the JDBC URL. `DatabaseConfiguration` bounds the pool at ten
+connections and validates `SELECT 1` before startup completes. Repository reads
+use a prepared statement and try-with-resources; signed BIGINT IDs remain numeric
+JSON, missing rows return 404, and SQL failures return a sanitized 500. Each CPU
+request calculates Fibonacci(30) by direct recursion.
+
+The production image is non-root, inherits the common resource/isolation limits,
+contains only runtime libraries and shuts down HTTP and the pool on SIGTERM.
+Architecture-selected BuildKit stages checksum-verify the exact JDK/JRE archives;
+both OS base images are digest pinned. Gradle Wrapper and dependency verification
+are strict. The small standalone health probe does not start Spring or connect
+to the database. No ORM, WebFlux, native image, virtual threads or additional
+server processes are enabled. Java is CI-covered but not an official cohort
+member; see [the Java guide](docs/JAVA-SPRING-BOOT.md).
+
 ### PostgreSQL
 
 One PostgreSQL container is shared by all implementations. It runs as the `postgres` service on the project-scoped `benchmark` network without a published host port. API services connect on internal port `5432` using the common `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, and `DATABASE_PASSWORD` settings defined in the Compose extension field.
@@ -115,7 +137,7 @@ required version fields and acceptance entry points. Python reads it directly;
 `benchmark/registry.py` generates and checks the Make and JavaScript projections.
 CI invokes registry-backed sequential acceptance targets and verifies Compose
 build-context agreement. Version extraction remains language-specific.
-`registered_pinned_versions()` covers all eight registered stacks; `pinned_versions()`
+`registered_pinned_versions()` covers all nine registered stacks; `pinned_versions()`
 filters that metadata to the active official cohort. Diagnostic metadata records
 only the selected Axum stack, without expanding official reports.
 
@@ -189,7 +211,8 @@ simple-api-benchmark/
 │   ├── node-fastify/
 │   ├── node-express/
 │   ├── python-fastapi/
-│   └── python-flask/
+│   ├── python-flask/
+│   └── java-spring-boot/
 ├── benchmark/
 │   ├── config.json
 │   ├── definition.py
@@ -244,7 +267,7 @@ Cleanup must run even when a build, contract test, or benchmark fails.
 
 ### Pull requests
 
-`ci.yml` builds and checks all eight registered applications, runs the shared contract and focused tests, validates workflow syntax/security and generated README sections, validates the static Pages contracts, and executes a short non-publishing smoke benchmark. Repository permissions are read-only and checkout credentials are not persisted. The Axum matrix entry additionally runs its non-publishing diagnostic and uploads diagnostic evidence; failure blocks the existing required aggregate. The active-cohort smoke covers `eight-stack-v1` sequentially. The component diagram groups applications by language; the runner still starts and measures only one implementation at a time.
+`ci.yml` builds and checks all nine registered applications, runs the shared contract and focused tests, validates workflow syntax/security and generated README sections, validates the static Pages contracts, and executes a short non-publishing smoke benchmark. Repository permissions are read-only and checkout credentials are not persisted. The Axum matrix entry additionally runs its non-publishing diagnostic and uploads diagnostic evidence; failure blocks the existing required aggregate. The active-cohort smoke covers `eight-stack-v1` sequentially. The component diagram groups applications by language; the runner still starts and measures only one implementation at a time.
 
 <a id="scheduled-and-manual-benchmarks"></a>
 

@@ -136,6 +136,27 @@ The exact Python patch version is also recorded in `.python-version`. Tests use 
 
 When updating the Python baseline, review official releases and wheel availability for CPython 3.14, change the `.in` files and exact Python version intentionally, resolve the full runtime and development graphs in a clean environment, and record published wheel SHA256 hashes in both lock files. Review transitive changes, verify the official Docker index digest, and update the matching acceptance expectations and documentation. Never install from an unlocked `.in` file for validation or production. Rerun all DB/API acceptance targets after shared Compose changes.
 
+### Java / Spring Boot checks
+
+Install the exact Temurin JDK recorded in `apps/java-spring-boot/.java-version`
+(currently `25.0.4.1+1`), plus Python 3.10+, Make and Docker Compose v2 on a POSIX
+host. A global Gradle installation is not needed. Run the native checks without
+Docker, or the complete production acceptance target:
+
+```bash
+(cd apps/java-spring-boot && ./gradlew --no-daemon test installDist)
+make test-java-spring-boot
+make test-contract CONTRACT_IMPL=java-spring-boot
+```
+
+The committed Wrapper checksum, distribution checksum, strict dependency locks
+and artifact verification metadata are mandatory. Validation must not regenerate
+those files or download an alternative JDK silently. The production acceptance
+checks live SQL/BIGINT responses, JSON errors, pool and container limits, finite
+startup failure, SIGTERM shutdown and project-scoped cleanup. See the
+[Java guide](docs/JAVA-SPRING-BOOT.md) for the dependency-update procedure.
+Java registration does not expand the active official cohort or authorize a run.
+
 ### Shared contract checks
 
 The common suite needs Python 3.10+ on a POSIX host, Docker Compose v2 with
@@ -143,12 +164,12 @@ The common suite needs Python 3.10+ on a POSIX host, Docker Compose v2 with
 toolchains are not needed on the host for this target.
 
 ```bash
-make test-contract                         # all eight registered implementations, sequentially
+make test-contract                         # all nine registered implementations, sequentially
 make test-contract CONTRACT_IMPL=go-gin     # one implementation, same assertions
 ```
 
 `CONTRACT_IMPL` also accepts `go-echo`, `rust-actix`, `rust-axum`, `node-fastify`,
-`node-express`, `python-fastapi`, and `python-flask`.
+`node-express`, `python-fastapi`, `python-flask`, and `java-spring-boot`.
 The target first runs the suite's focused tests, then builds and starts the selected
 production services. All expected statuses and JSON objects are read from the
 paired HTTP/JSON examples in `docs/API-CONTRACT.md`; that document remains the
@@ -238,7 +259,7 @@ prerequisites plus that implementation's pinned language toolchain, not every
 language used by the repository. CI derives the language setup from the registry
 and guards unrelated host executables during acceptance, contracts and the Axum
 diagnostic. Local `make test-<ID>` commands are unchanged; `make test` still needs
-all toolchains and shared workflow/site dependencies. See the
+all toolchains, including the exact Java JDK, and shared workflow/site dependencies. See the
 [host-toolchain contract](docs/AUTOMATION.md#implementation-host-toolchains).
 
 A pull request must pass the available checks for the area it changes.
