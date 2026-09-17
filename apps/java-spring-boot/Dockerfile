@@ -1,4 +1,4 @@
-FROM eclipse-temurin:25-jdk-noble@sha256:9db2c4ebea19768ded62a4ce99d59ec5c1cc1e9753cec27c61f9d9c4c9f6f620 AS build
+FROM eclipse-temurin:25-jdk-noble@sha256:9db599e7cdf3f650ba93441ba84020808e9da4834cf079b877f8abea5888d9b7 AS build
 
 # The fixed base predates this JDK hotfix. Replace it with the exact verified
 # distribution instead of relying on a mutable tag or overlaying old JDK files.
@@ -27,7 +27,7 @@ COPY src/main/ src/main/
 RUN echo '7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d  gradle/wrapper/gradle-wrapper.jar' | sha256sum -c - \
     && ./gradlew --no-daemon installDist
 
-FROM eclipse-temurin:25-jre-noble@sha256:ae0436887d47df7799d83f822e338a38d31c9a293eb1773cc93c54a10bf09017b
+FROM eclipse-temurin:25-jre-noble@sha256:d0d42862bc6cdcb9bc01096d48753b741316f44af2022666833d94f562b58481
 RUN rm -rf /opt/java/openjdk \
     && groupadd --gid 10001 benchmark \
     && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin benchmark
