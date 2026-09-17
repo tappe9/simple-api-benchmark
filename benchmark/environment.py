@@ -22,6 +22,8 @@ from .healthcheck import (
     wait_external_readiness,
 )
 from .install_oha import SHA256, VERSION, platform_asset
+from .java_versions import JAVA_VERSION
+from .java_versions import pinned_versions as java_pinned_versions
 from .process import ROOT, execute
 from .registry import active_members, implementation, implementation_ids
 from .results import BenchmarkFailure, require, strict_json
@@ -211,6 +213,9 @@ def registered_pinned_versions() -> dict:
             **python_flask,
         },
     }
+    versions["java-spring-boot"] = java_pinned_versions(
+        ROOT / implementation("java-spring-boot")["source_path"]
+    )
     require(
         set(versions) == set(implementation_ids()),
         "version extractors must cover registered implementations",
@@ -222,8 +227,14 @@ def registered_pinned_versions() -> dict:
         )
         require(
             all(
-                type(value) is str and re.fullmatch(r"\d+\.\d+\.\d+", value)
-                for value in values.values()
+                type(value) is str
+                and re.fullmatch(
+                    JAVA_VERSION
+                    if identifier == "java-spring-boot" and field == "java"
+                    else r"\d+\.\d+\.\d+",
+                    value,
+                )
+                for field, value in values.items()
             ),
             f"unrecognized pinned versions for {identifier}",
         )
@@ -293,6 +304,10 @@ def provenance(oha: Path) -> dict:
                 "apps/*/Cargo.lock",
                 "apps/*/package-lock.json",
                 "apps/*/requirements.lock",
+                "apps/*/gradle.lockfile",
+                "apps/*/gradle/verification-metadata.xml",
+                "apps/*/gradle/wrapper/gradle-wrapper.properties",
+                "apps/*/gradle/wrapper/gradle-wrapper.jar",
             )
             for path in ROOT.glob(pattern)
         },

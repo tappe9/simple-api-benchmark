@@ -12,7 +12,13 @@ from pathlib import Path
 from . import registry
 
 # Display languages are registry data, not implementation-ID prefixes.
-_LANGUAGE_TOOLCHAINS = {"Go": "go", "Rust": "rust", "Node.js": "node", "Python": "python"}
+_LANGUAGE_TOOLCHAINS = {
+    "Go": "go",
+    "Rust": "rust",
+    "Node.js": "node",
+    "Python": "python",
+    "Java": "java",
+}
 _TOOLCHAIN_COMMANDS = {
     "go": ("go", "gofmt"),
     "rust": (
@@ -26,6 +32,7 @@ _TOOLCHAIN_COMMANDS = {
         "clippy-driver",
     ),
     "node": ("node", "nodejs", "npm", "npx", "corepack"),
+    "java": ("java", "javac", "jar", "javadoc", "gradle"),
     "python": (),  # Python is the common harness and must remain available to every job.
 }
 

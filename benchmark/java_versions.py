@@ -55,14 +55,21 @@ def pinned_versions(root: Path) -> dict[str, str]:
 
     boot = runtime("org.springframework.boot:spring-boot-dependencies")
     require(
-        unique(r"org\.springframework\.boot:spring-boot-dependencies:([0-9.]+)", read("build.gradle")) == boot,
+        unique(
+            r"org\.springframework\.boot:spring-boot-dependencies:([0-9.]+)", read("build.gradle")
+        )
+        == boot,
         "Spring Boot BOM and committed lock disagree",
     )
     wrapper = read("gradle/wrapper/gradle-wrapper.properties")
-    gradle = unique(r"^distributionUrl=https\\://services\.gradle\.org/distributions/gradle-([0-9.]+)-bin\.zip$", wrapper)
+    gradle = unique(
+        r"^distributionUrl=https\\://services\.gradle\.org/distributions/gradle-([0-9.]+)-bin\.zip$",
+        wrapper,
+    )
     unique(r"^distributionSha256Sum=([0-9a-f]{64})$", wrapper)
     require(
-        hashlib.sha256((root / "gradle/wrapper/gradle-wrapper.jar").read_bytes()).hexdigest() == WRAPPER_SHA256,
+        hashlib.sha256((root / "gradle/wrapper/gradle-wrapper.jar").read_bytes()).hexdigest()
+        == WRAPPER_SHA256,
         "Gradle wrapper checksum mismatch",
     )
     try:
@@ -83,7 +90,8 @@ def pinned_versions(root: Path) -> dict[str, str]:
     for artifact in artifacts:
         checksums = artifact.findall("v:sha256", namespace)
         require(
-            bool(checksums) and all(re.fullmatch(r"[0-9a-f]{64}", value.get("value", "")) for value in checksums),
+            bool(checksums)
+            and all(re.fullmatch(r"[0-9a-f]{64}", value.get("value", "")) for value in checksums),
             "every Java dependency artifact needs a SHA-256 checksum",
         )
     return {

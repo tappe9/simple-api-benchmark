@@ -11,13 +11,13 @@ import time
 import uuid
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from benchmark.contract_test import Case, assert_response, load_cases, read_response
 from benchmark.environment import validate_processes, validate_state
 from benchmark.java_versions import DEPENDENCY_FILES, pinned_versions
 
+ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "apps/java-spring-boot"
 SERVICE = "java-spring-boot"
 BASE_URL = "http://127.0.0.1:8080"
@@ -100,8 +100,10 @@ def dependency_hashes():
 
 def validate_distribution_pins(dockerfile):
     """Require checksum-verified, architecture-specific BuildKit downloads."""
-    require("FROM archives-${TARGETARCH} AS archives\n" in dockerfile,
-            "Java archive selection must follow the target architecture")
+    require(
+        "FROM archives-${TARGETARCH} AS archives\n" in dockerfile,
+        "Java archive selection must follow the target architecture",
+    )
     for platform, architecture in (("amd64", "x64"), ("arm64", "aarch64")):
         blocks = re.findall(
             rf"(?ms)^FROM scratch AS archives-{platform}\n(.*?)(?=^FROM )", dockerfile
@@ -120,8 +122,9 @@ def validate_distribution_pins(dockerfile):
             == [("jdk", architecture, "jdk"), ("jre", architecture, "jre")],
             "Java distribution archives must have complete SHA-256 pins and correct platforms",
         )
-        require(len(re.findall(r"(?m)^ADD ", blocks[0])) == 2,
-                "unexpected Java distribution download")
+        require(
+            len(re.findall(r"(?m)^ADD ", blocks[0])) == 2, "unexpected Java distribution download"
+        )
 
 
 def static_checks():

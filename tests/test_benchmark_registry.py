@@ -37,6 +37,7 @@ class RegistryBoundaryTests(unittest.TestCase):
                 "node-express",
                 "python-fastapi",
                 "python-flask",
+                "java-spring-boot",
             ],
         )
 

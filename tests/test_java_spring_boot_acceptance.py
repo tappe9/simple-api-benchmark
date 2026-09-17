@@ -87,6 +87,7 @@ class AcceptanceFailureTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 validate_failed_startup(value, "application startup failed")
 
+
 class DistributionPinTests(unittest.TestCase):
     @staticmethod
     def valid_manifest():
@@ -105,10 +106,12 @@ class DistributionPinTests(unittest.TestCase):
 
     def test_both_platforms_have_exactly_two_sha256_pins(self):
         from test_java_spring_boot_service import validate_distribution_pins
+
         validate_distribution_pins(self.valid_manifest())
 
     def test_bad_length_non_hex_and_missing_platform_are_rejected(self):
         from test_java_spring_boot_service import validate_distribution_pins
+
         valid = self.valid_manifest()
         for old in ("a", "b", "c", "d"):
             for bad in (old * 63, old * 65, "g" * 64, ""):
@@ -128,6 +131,7 @@ class DistributionPinTests(unittest.TestCase):
 
     def test_repository_distribution_manifest_is_well_formed(self):
         from test_java_spring_boot_service import APP, validate_distribution_pins
+
         validate_distribution_pins((APP / "Dockerfile").read_text())
 
 

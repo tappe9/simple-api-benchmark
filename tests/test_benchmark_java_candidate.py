@@ -5,8 +5,51 @@ from unittest.mock import patch
 
 from benchmark import ci, environment, registry
 
-EIGHT = ("go-gin", "go-echo", "rust-actix", "rust-axum", "node-fastify", "node-express", "python-fastapi", "python-flask")
-BASELINE_VERSIONS = {'go-gin': {'go': '1.27.1', 'gin': '1.12.0', 'pgx': '5.10.0'}, 'go-echo': {'go': '1.27.1', 'echo': '5.3.1', 'pgx': '5.10.0'}, 'rust-actix': {'rust': '1.98.1', 'actix-web': '4.15.0', 'sqlx': '0.9.0', 'serde': '1.0.228', 'serde_json': '1.0.145'}, 'rust-axum': {'rust': '1.98.1', 'axum': '0.8.9', 'tokio': '1.53.1', 'sqlx': '0.9.0', 'serde': '1.0.228', 'serde_json': '1.0.145'}, 'node-fastify': {'node': '24.20.0', 'fastify': '5.12.3', 'pg': '8.23.0'}, 'node-express': {'node': '24.20.0', 'express': '5.2.1', 'pg': '8.23.0'}, 'python-fastapi': {'python': '3.14.7', 'fastapi': '0.141.1', 'uvicorn': '0.52.4', 'asyncpg': '0.31.0'}, 'python-flask': {'python': '3.14.7', 'flask': '3.1.3', 'waitress': '3.0.2', 'psycopg': '3.3.5', 'psycopg-binary': '3.3.5', 'psycopg-pool': '3.3.1'}}
+EIGHT = (
+    "go-gin",
+    "go-echo",
+    "rust-actix",
+    "rust-axum",
+    "node-fastify",
+    "node-express",
+    "python-fastapi",
+    "python-flask",
+)
+BASELINE_VERSIONS = {
+    "go-gin": {"go": "1.27.1", "gin": "1.12.0", "pgx": "5.10.0"},
+    "go-echo": {"go": "1.27.1", "echo": "5.3.1", "pgx": "5.10.0"},
+    "rust-actix": {
+        "rust": "1.98.1",
+        "actix-web": "4.15.0",
+        "sqlx": "0.9.0",
+        "serde": "1.0.228",
+        "serde_json": "1.0.145",
+    },
+    "rust-axum": {
+        "rust": "1.98.1",
+        "axum": "0.8.9",
+        "tokio": "1.53.1",
+        "sqlx": "0.9.0",
+        "serde": "1.0.228",
+        "serde_json": "1.0.145",
+    },
+    "node-fastify": {"node": "24.20.0", "fastify": "5.12.3", "pg": "8.23.0"},
+    "node-express": {"node": "24.20.0", "express": "5.2.1", "pg": "8.23.0"},
+    "python-fastapi": {
+        "python": "3.14.7",
+        "fastapi": "0.141.1",
+        "uvicorn": "0.52.4",
+        "asyncpg": "0.31.0",
+    },
+    "python-flask": {
+        "python": "3.14.7",
+        "flask": "3.1.3",
+        "waitress": "3.0.2",
+        "psycopg": "3.3.5",
+        "psycopg-binary": "3.3.5",
+        "psycopg-pool": "3.3.1",
+    },
+}
 
 
 class JavaCandidateTests(unittest.TestCase):
