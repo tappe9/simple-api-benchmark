@@ -12,8 +12,6 @@ jobs:
     if: github.repository == 'tappe9/simple-api-benchmark' && github.ref == 'refs/heads/feat/add-java-spring-boot'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    outputs:
-      artifact_id: ${{ steps.evidence.outputs.artifact-id }}
     env:
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
@@ -22,6 +20,12 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Inspect candidate base images without changing source
+        run: |
+          set -euo pipefail
+          mkdir -p .cache/java-development
+          docker buildx imagetools inspect eclipse-temurin:25-jdk-noble | tee .cache/java-development/jdk-image.txt
+          docker buildx imagetools inspect eclipse-temurin:25-jre-noble | tee .cache/java-development/jre-image.txt
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version-file: apps/python-fastapi/.python-version
@@ -62,17 +66,18 @@ jobs:
           set -euo pipefail
           make test-benchmark 2>&1 | tee .cache/java-development/shared.log
           python -m benchmark.ci run-isolated --implementation java-spring-boot -- make test-contract CONTRACT_IMPL=java-spring-boot 2>&1 | tee .cache/java-development/contract.log
-          git diff --exit-code 2a515cf8d839d5a81c356f8a1ef0b9e376666d92 -- results apps/go-gin apps/go-echo apps/rust-actix apps/rust-axum apps/node-fastify apps/node-express apps/python-fastapi apps/python-flask .github/workflows/benchmark.yml .github/workflows/pages.yml .github/workflows/pages-deploy.yml
+          git diff --exit-code 6e25eb07759bd6eed4de9ab9ee3d1dd35562932b -- results apps/go-gin apps/go-echo apps/rust-actix apps/rust-axum apps/node-fastify apps/node-express apps/python-fastapi apps/python-flask .github/workflows/benchmark.yml .github/workflows/pages.yml .github/workflows/pages-deploy.yml
       - name: Export exact source and gate evidence
         if: always()
         run: |
+          set -euo pipefail
           mkdir -p .cache/java-development
-          git rev-parse HEAD HEAD^{tree} > .cache/java-development/source-identity.txt
+          git rev-parse HEAD HEAD^{tree} refs/remotes/origin/main > .cache/java-development/source-identity.txt
+          git bundle create .cache/java-development/source.bundle HEAD refs/remotes/origin/main
           if test -d apps/java-spring-boot/build/test-results; then
             cp -a apps/java-spring-boot/build/test-results .cache/java-development/
           fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        id: evidence
         if: always()
         with:
           name: java-development-${{ github.run_id }}-${{ github.run_attempt }}
@@ -80,55 +85,3 @@ jobs:
           include-hidden-files: true
           retention-days: 14
           if-no-files-found: error
-  import-objects:
-    needs: integration
-    if: github.repository == 'tappe9/simple-api-benchmark' && github.ref == 'refs/heads/feat/add-java-spring-boot'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: write
-      actions: read
-    steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.integration.outputs.artifact_id }}
-          path: verified-integration
-          merge-multiple: true
-      - name: Import explicit reviewed-source candidates as blobs only
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 - <<'PY'
-          import base64
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
-          import urllib.request
-          names = ('benchmark/environment.py', 'benchmark/ci.py', 'benchmark/java_versions.py', 'tests/test_benchmark_registry.py', 'tests/test_benchmark_ci.py', 'tests/test_benchmark_java_candidate.py', 'tests/test_benchmark_java_versions.py', 'tests/test_workflows.py', 'tests/test_java_spring_boot_service.py', 'tests/test_java_spring_boot_acceptance.py', 'benchmark/implementations.json', 'benchmark/implementations.mk', 'site/registry.mjs', 'docker-compose.yml', '.github/workflows/ci.yml')
-          source = Path('verified-integration/files')
-          if {str(path.relative_to(source)) for path in source.rglob('*') if path.is_file()} != set(names):
-              raise RuntimeError('unexpected prepared-file manifest')
-          candidates = []
-          for name in names:
-              path = source / name
-              if path.is_symlink() or any(parent.is_symlink() for parent in path.parents) or not path.is_file() or not 0 < path.stat().st_size < 200_000:
-                  raise RuntimeError('unsafe prepared file')
-              data = path.read_bytes()
-              data.decode('utf-8')
-              candidates.append((name, data))
-          output = []
-          for name, data in candidates:
-              request = urllib.request.Request(
-                  'https://api.github.com/repos/tappe9/simple-api-benchmark/git/blobs',
-                  data=json.dumps({'encoding': 'base64', 'content': base64.b64encode(data).decode('ascii')}).encode('utf-8'),
-                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json', 'X-GitHub-Api-Version': '2022-11-28'},
-                  method='POST')
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  blob = json.load(response)
-              expected = hashlib.sha1(b'blob ' + str(len(data)).encode('ascii') + b'\0' + data).hexdigest()
-              if blob.get('sha') != expected:
-                  raise RuntimeError('Git blob identity mismatch')
-              output.append({'path': name, 'mode': '100644', 'type': 'blob', 'sha': expected, 'sha256': hashlib.sha256(data).hexdigest()})
-          print(json.dumps(output, indent=2))
-          PY
