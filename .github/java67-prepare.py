@@ -73,6 +73,8 @@ replace("tests/test_workflows.py", '        rust = next(step for step in steps i
         self.assertIn("jdk-25.0.4.1%2B1", java["run"])
         self.assertNotIn("continue-on-error", java)
         rust = next(step for step in steps if step.get("name") == "Install pinned Rust toolchain")''')
+replace("tests/test_java_spring_boot_service.py", 'ROOT = Path(__file__).resolve().parents[1]\nsys.path.insert(0, str(ROOT))', 'sys.path.insert(0, str(Path(__file__).resolve().parents[1]))')
+replace("tests/test_java_spring_boot_service.py", 'APP = ROOT / "apps/java-spring-boot"', 'ROOT = Path(__file__).resolve().parents[1]\nAPP = ROOT / "apps/java-spring-boot"')
 subprocess.run([sys.executable, "-m", "benchmark.registry", "--write"], cwd=ROOT, check=True)
 files = ["benchmark/environment.py", "benchmark/ci.py", "benchmark/java_versions.py", "tests/test_benchmark_registry.py", "tests/test_benchmark_ci.py", "tests/test_benchmark_java_candidate.py", "tests/test_benchmark_java_versions.py", "tests/test_workflows.py", "tests/test_java_spring_boot_service.py", "tests/test_java_spring_boot_acceptance.py"]
 subprocess.run([sys.executable, "-m", "ruff", "check", "--fix", "--target-version", "py310", "--config", "apps/python-fastapi/pyproject.toml", *files], cwd=ROOT, check=True)
