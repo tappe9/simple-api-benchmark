@@ -8,37 +8,84 @@ concurrency:
   group: java-development-67
   cancel-in-progress: false
 jobs:
-  inspect:
+  bootstrap:
     if: github.repository == 'tappe9/simple-api-benchmark' && github.ref == 'refs/heads/feat/add-java-spring-boot'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Export exact source and public upstream metadata
+      - name: Prepare checksum-verified Java and Gradle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .cache/java-development .cache/java-build-kit
+          curl --fail --silent --show-error --location --max-time 180 'https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_x64_linux_hotspot_25.0.4.1_1.tar.gz' -o .cache/java-build-kit/jdk.tar.gz
+          echo 'dbb698396d478e7fa2b1e50f4103324b2a99b90569ee27c33f2261f9215cf41e  .cache/java-build-kit/jdk.tar.gz' | sha256sum -c -
+          curl --fail --silent --show-error --location --max-time 180 https://services.gradle.org/distributions/gradle-9.7.1-bin.zip -o .cache/java-build-kit/gradle.zip
+          echo 'acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a  .cache/java-build-kit/gradle.zip' | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/java67/jdk"
+          tar -xzf .cache/java-build-kit/jdk.tar.gz --strip-components=1 -C "$RUNNER_TEMP/java67/jdk"
+          unzip -q .cache/java-build-kit/gradle.zip -d "$RUNNER_TEMP/java67"
+          echo "JAVA_HOME=$RUNNER_TEMP/java67/jdk" >> "$GITHUB_ENV"
+          echo "GRADLE_USER_HOME=$RUNNER_TEMP/java67/gradle-home" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/java67/jdk/bin" >> "$GITHUB_PATH"
+          echo "$RUNNER_TEMP/java67/gradle-9.7.1/bin" >> "$GITHUB_PATH"
+      - name: Generate dependencies for review and verify the test-first failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version 2>&1 | tee .cache/java-development/java-version.txt
+          gradle --version | tee .cache/java-development/gradle-version.txt
+          cat > "$RUNNER_TEMP/java67/resolve.gradle" <<'GRADLE'
+          allprojects {
+              tasks.register('resolveForReview') {
+                  doLast {
+                      configurations.findAll { it.canBeResolved }.each { it.resolve() }
+                  }
+              }
+          }
+          GRADLE
+          cd apps/java-spring-boot
+          gradle wrapper --gradle-version 9.7.1 --gradle-distribution-sha256-sum acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a
+          echo '7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d  gradle/wrapper/gradle-wrapper.jar' | sha256sum -c -
+          ./gradlew --init-script "$RUNNER_TEMP/java67/resolve.gradle" resolveForReview --write-locks --write-verification-metadata sha256
+          set +e
+          ./gradlew test > ../../.cache/java-development/java-red.log 2>&1
+          status=$?
+          set -e
+          cat ../../.cache/java-development/java-red.log
+          test "$status" -ne 0
+          grep -q 'cannot find symbol' ../../.cache/java-development/java-red.log
+          ! find src/main -name '*.java' -print -quit 2>/dev/null | grep -q .
+      - name: Inspect official Java container candidates
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p .cache/java-development
+          for variant in jdk jre; do
+            tag="eclipse-temurin:25.0.4.1_1-${variant}-noble"
+            if docker buildx imagetools inspect "$tag" > ".cache/java-development/${variant}-image.txt" 2>&1; then
+              docker buildx imagetools inspect "$tag" --raw > ".cache/java-development/${variant}-image.json"
+            fi
+          done
+      - name: Export exact source and generated dependency evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .cache/java-development/generated
           git bundle create .cache/java-development/source.bundle --all
           git rev-parse HEAD HEAD^{tree} > .cache/java-development/source-identity.txt
-          curl --fail --silent --show-error --location --max-time 60 https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-dependencies/maven-metadata.xml -o .cache/java-development/spring-boot-metadata.xml
-          curl --fail --silent --show-error --location --max-time 60 https://services.gradle.org/versions/current -o .cache/java-development/gradle-current.json
-          curl --fail --silent --show-error --location --max-time 60 'https://api.adoptium.net/v3/assets/feature_releases/25/ga?architecture=x64&heap_size=normal&image_type=jdk&jvm_impl=hotspot&os=linux&page_size=1&project=jdk&sort_order=DESC&vendor=eclipse' -o .cache/java-development/temurin-release.json
-          python3 - <<'PY'
-          import json
-          import pathlib
-          import xml.etree.ElementTree as ET
-          root = pathlib.Path('.cache/java-development')
-          print('Spring Boot 4.1:', [e.text for e in ET.parse(root / 'spring-boot-metadata.xml').findall('.//version') if e.text and e.text.startswith('4.1.')])
-          print('Gradle:', json.loads((root / 'gradle-current.json').read_text()))
-          release = json.loads((root / 'temurin-release.json').read_text())[0]
-          print('Temurin:', release['release_name'], release['version_data'])
-          print('Package:', release['binaries'][0]['package'])
-          PY
+          cp -a apps/java-spring-boot/. .cache/java-development/generated/
+          rm -rf .cache/java-development/generated/.gradle .cache/java-development/generated/build
+          if test -d "$GRADLE_USER_HOME/caches"; then
+            tar -czf .cache/java-build-kit/gradle-cache.tar.gz -C "$GRADLE_USER_HOME" caches
+          fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -46,4 +93,13 @@ jobs:
           path: .cache/java-development/
           include-hidden-files: true
           retention-days: 14
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: java-build-kit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .cache/java-build-kit/
+          include-hidden-files: true
+          retention-days: 3
+          compression-level: 0
           if-no-files-found: error

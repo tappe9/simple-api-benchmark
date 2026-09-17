@@ -1,0 +1,58 @@
+plugins {
+    id 'application'
+}
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+def pinnedJava = file('.java-version').text.trim()
+if (Runtime.version().toString() != pinnedJava && Runtime.version().toString() != pinnedJava + '-LTS') {
+    throw new GradleException("Expected Java ${pinnedJava}; found ${Runtime.version()}")
+}
+
+dependencies {
+    implementation platform('org.springframework.boot:spring-boot-dependencies:4.1.1')
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    runtimeOnly 'org.postgresql:postgresql'
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.springframework:spring-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+dependencyLocking {
+    lockAllConfigurations()
+    lockMode = LockMode.STRICT
+}
+
+configurations.configureEach {
+    resolutionStrategy {
+        failOnDynamicVersions()
+        failOnChangingVersions()
+    }
+}
+
+application {
+    mainClass = 'dev.simpleapibenchmark.BenchmarkApplication'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 25
+    options.compilerArgs += ['-Xlint:all', '-Werror']
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    maxParallelForks = 1
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+    }
+}
