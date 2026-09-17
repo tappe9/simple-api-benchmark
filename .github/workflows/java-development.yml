@@ -12,22 +12,12 @@ jobs:
     if: github.repository == 'tappe9/simple-api-benchmark' && github.ref == 'refs/heads/feat/add-java-spring-boot'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    permissions:
-      contents: read
-      actions: read
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: '10482171726'
-          run-id: '35185291659'
-          github-token: ${{ github.token }}
-          path: .cache/java-baseline
-          merge-multiple: true
       - name: Prepare the exact checksum-verified JDK
         run: |
           set -euo pipefail
@@ -38,32 +28,7 @@ jobs:
           echo "JAVA_HOME=$RUNNER_TEMP/java67/jdk" >> "$GITHUB_ENV"
           echo "GRADLE_USER_HOME=$RUNNER_TEMP/java67/gradle-home" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/java67/jdk/bin" >> "$GITHUB_PATH"
-      - name: Import only the immutable bootstrap dependency candidates
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import hashlib
-          source = Path('.cache/java-baseline/generated')
-          destination = Path('apps/java-spring-boot')
-          names = ('gradlew', 'gradlew.bat', 'gradle/wrapper/gradle-wrapper.jar', 'gradle/wrapper/gradle-wrapper.properties', 'gradle.lockfile', 'gradle/verification-metadata.xml')
-          for name in names:
-              path = source / name
-              if path.is_symlink() or not path.is_file():
-                  raise RuntimeError('missing or unsafe dependency candidate: ' + name)
-              data = path.read_bytes()
-              if name.endswith('.jar') and hashlib.sha256(data).hexdigest() != '7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d':
-                  raise RuntimeError('wrapper checksum mismatch')
-              target = destination / name
-              target.parent.mkdir(parents=True, exist_ok=True)
-              target.write_bytes(data)
-              target.chmod(0o755 if name == 'gradlew' else 0o644)
-              print(name, hashlib.sha256(data).hexdigest())
-          print((source / 'gradle.lockfile').read_text())
-          for name in ('jdk-image.txt', 'jre-image.txt', 'jdk-java-version.txt', 'jre-java-version.txt', 'temurin-jre-x64.json', 'temurin-jre-aarch64.json'):
-              print(name, Path('.cache/java-baseline', name).read_text())
-          PY
-      - name: Execute locked Java tests and production distribution
+      - name: Execute committed locked Java tests and production distribution
         run: |
           set -euo pipefail
           mkdir -p .cache/java-development
@@ -71,6 +36,19 @@ jobs:
           sha256sum gradle.lockfile gradle/verification-metadata.xml gradle/wrapper/* > ../../.cache/java-development/dependencies.before
           ./gradlew --no-daemon test installDist 2>&1 | tee ../../.cache/java-development/java-tests.log
           sha256sum --check ../../.cache/java-development/dependencies.before
+          git diff --exit-code -- gradle.lockfile gradle/verification-metadata.xml gradle/wrapper
+      - name: Confirm exact ARM64 JDK release metadata
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          import urllib.request
+          url = 'https://api.adoptium.net/v3/assets/version/25.0.4.1%2B1?architecture=aarch64&heap_size=normal&image_type=jdk&jvm_impl=hotspot&os=linux&project=jdk&vendor=eclipse'
+          with urllib.request.urlopen(url, timeout=60) as response:
+              releases = json.load(response)
+          for release in releases:
+              print(json.dumps({'release_name': release['release_name'], 'version': release['version_data'], 'package': release['binaries'][0]['package']}, indent=2))
+          PY
       - name: Export exact source and test evidence
         if: always()
         run: |
@@ -89,57 +67,3 @@ jobs:
           include-hidden-files: true
           retention-days: 14
           if-no-files-found: error
-  import-objects:
-    needs: unit
-    if: github.repository == 'tappe9/simple-api-benchmark' && github.ref == 'refs/heads/feat/add-java-spring-boot'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: write
-      actions: read
-    steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: '10482171726'
-          run-id: '35185291659'
-          github-token: ${{ github.token }}
-          path: dependency-candidates
-          merge-multiple: true
-      - name: Import six allowlisted Git blobs without executing code or updating refs
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 - <<'PY'
-          import base64
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
-          import urllib.request
-          source = Path('dependency-candidates/generated')
-          names = ('gradlew', 'gradlew.bat', 'gradle/wrapper/gradle-wrapper.jar', 'gradle/wrapper/gradle-wrapper.properties', 'gradle.lockfile', 'gradle/verification-metadata.xml')
-          candidates = []
-          for name in names:
-              path = source / name
-              if path.is_symlink() or not path.is_file() or not 0 < path.stat().st_size < 200_000:
-                  raise RuntimeError('missing or unsafe dependency candidate')
-              data = path.read_bytes()
-              digest = hashlib.sha256(data).hexdigest()
-              if name.endswith('.jar') and digest != '7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d':
-                  raise RuntimeError('wrapper checksum mismatch')
-              candidates.append((name, data, digest))
-          output = []
-          for name, data, digest in candidates:
-              request = urllib.request.Request(
-                  'https://api.github.com/repos/tappe9/simple-api-benchmark/git/blobs',
-                  data=json.dumps({'encoding': 'base64', 'content': base64.b64encode(data).decode('ascii')}).encode('utf-8'),
-                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json', 'X-GitHub-Api-Version': '2022-11-28'},
-                  method='POST')
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  blob = json.load(response)
-              expected = hashlib.sha1(b'blob ' + str(len(data)).encode('ascii') + b'\0' + data).hexdigest()
-              if blob.get('sha') != expected:
-                  raise RuntimeError('Git blob identity mismatch')
-              output.append({'path': 'apps/java-spring-boot/' + name, 'mode': '100755' if name == 'gradlew' else '100644', 'type': 'blob', 'sha': expected, 'sha256': digest})
-          print(json.dumps(output, indent=2))
-          PY
