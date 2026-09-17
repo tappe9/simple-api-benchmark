@@ -1,0 +1,130 @@
+name: Verify manual benchmark policy
+on:
+  push:
+    branches: [ops/verify-manual-benchmark-65]
+    paths: [.github/workflows/verify-manual-benchmark-65.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: 2a515cf8d839d5a81c356f8a1ef0b9e376666d92
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.10'
+      - name: Build unchanged verified results without measurement
+        run: python -m benchmark.site
+      - name: Read-only CI, Pages and public-byte verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, subprocess, time
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+          from urllib.error import HTTPError, URLError
+
+          repo = 'tappe9/simple-api-benchmark'
+          target = '2a515cf8d839d5a81c356f8a1ef0b9e376666d92'
+          tree = 'f40d95b7e3e75b9f9855d9021180563138811ac6'
+          ci_id = 35172561157
+          out = Path('.cache/manual-policy-verification')
+          out.mkdir(parents=True, exist_ok=True)
+          def require(ok, message):
+              if not ok:
+                  raise RuntimeError(message)
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True).strip()
+          def api(path):
+              request = Request('https://api.github.com/repos/' + repo + '/' + path,
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                           'Accept': 'application/vnd.github+json',
+                           'X-GitHub-Api-Version': '2022-11-28'})
+              with urlopen(request, timeout=30) as response:
+                  data = response.read(16 * 1024 * 1024 + 1)
+              require(len(data) <= 16 * 1024 * 1024, 'API response too large')
+              return json.loads(data)
+          def current():
+              require(api('git/ref/heads/main')['object']['sha'] == target, 'Main advanced')
+          def jobs(run, count):
+              payload = api('actions/runs/' + str(run['id']) + '/jobs?per_page=100')
+              entries = payload['jobs']
+              require(payload['total_count'] == len(entries) == count, 'Unexpected job count')
+              require(all(j['status'] == 'completed' and j['conclusion'] == 'success' for j in entries), 'A required job did not succeed')
+              return [{'id': j['id'], 'name': j['name'], 'conclusion': j['conclusion']} for j in entries]
+          require(git('rev-parse', 'HEAD') == target, 'Checkout identity mismatch')
+          require(git('rev-parse', 'HEAD^{tree}') == tree, 'Tree mismatch')
+          require(git('hash-object', '.github/workflows/benchmark.yml') == 'c0a37684a60686628b9773e26347e1bbcf1cbb84', 'Manual-only workflow mismatch')
+          deadline = time.monotonic() + 900
+          while True:
+              current()
+              ci = api('actions/runs/' + str(ci_id))
+              require(ci['head_sha'] == target and ci['head_branch'] == 'main' and ci['event'] == 'push', 'CI identity mismatch')
+              if ci['status'] == 'completed':
+                  require(ci['conclusion'] == 'success', 'Main CI failed')
+                  break
+              require(time.monotonic() < deadline, 'CI verification deadline exceeded')
+              time.sleep(15)
+          ci_jobs = jobs(ci, 12)
+          require('required' in {j['name'] for j in ci_jobs}, 'Missing required gate')
+          while True:
+              current()
+              payload = api('actions/runs?head_sha=' + target + '&event=workflow_run&per_page=100')
+              require(payload['total_count'] == len(payload['workflow_runs']), 'Incomplete Pages listing')
+              candidates = [r for r in payload['workflow_runs'] if r['name'] == 'Pages' and r['path'] == '.github/workflows/pages.yml']
+              require(len(candidates) <= 1, 'Ambiguous Pages run')
+              if candidates and candidates[0]['status'] == 'completed':
+                  pages = candidates[0]
+                  require(pages['conclusion'] == 'success' and pages['head_sha'] == target, 'Pages did not succeed on target')
+                  break
+              require(time.monotonic() < deadline, 'Pages verification deadline exceeded')
+              time.sleep(15)
+          pages_jobs = jobs(pages, 2)
+          files = {}
+          site = Path('.cache/site')
+          for path in sorted(site.rglob('*')):
+              if not path.is_file() or path.name == '.nojekyll':
+                  continue
+              relative = path.relative_to(site).as_posix()
+              expected = path.read_bytes()
+              url = 'https://tappe9.github.io/simple-api-benchmark/' + relative
+              matched = False
+              for attempt in range(8):
+                  try:
+                      # Public requests deliberately contain NO API authorization header.
+                      with urlopen(Request(url, headers={'Cache-Control': 'no-cache'}), timeout=30) as response:
+                          status = response.status
+                          actual = response.read(2 * 1024 * 1024 + 1)
+                      if status == 200 and actual == expected:
+                          matched = True
+                          break
+                  except (HTTPError, URLError, TimeoutError):
+                      pass
+                  time.sleep(5)
+              require(matched, 'Public file mismatch: ' + relative)
+              files[relative] = {'http_status': 200, 'bytes': len(expected), 'sha256': hashlib.sha256(expected).hexdigest()}
+          require(len(files) == 9, 'Unexpected public file count')
+          current()
+          summary = {'target_sha': target, 'tree': tree, 'ci_run_id': ci_id,
+                     'ci_jobs': ci_jobs, 'pages_run_id': pages['id'], 'pages_jobs': pages_jobs,
+                     'verified_at_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                     'public_files': files, 'official_measurement_executed': False}
+          (out / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+          subprocess.run(['git', 'bundle', 'create', str(out / 'source.bundle'), 'HEAD'], check=True)
+          print(json.dumps(summary, indent=2))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: manual-policy-postmerge
+          path: .cache/manual-policy-verification/
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: error
