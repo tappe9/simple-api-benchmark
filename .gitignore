@@ -2,3 +2,7 @@
 __pycache__/
 *.py[cod]
 /results/latest.json
+
+# Local-only investigation notes and Superpowers planning artifacts.
+/docs/investigations/
+/docs/superpowers/

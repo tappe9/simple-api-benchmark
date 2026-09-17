@@ -5,8 +5,8 @@ FROM eclipse-temurin:25-jdk-noble@sha256:9db599e7cdf3f650ba93441ba84020808e9da48
 ARG TARGETARCH
 RUN set -eu; \
     case "$TARGETARCH" in \
-      amd64) arch=x64; jdk_sha=dbb698396d478e7fa2b1e50f4103324b2a99b90569ee27c33f2261f9215cf41e; jre_sha=ebb67d70e5e7cfbe21f3771a40cfe1b2b448c3509ea0a60b75dd54cbdc79b9f69 ;; \
-      arm64) arch=aarch64; jdk_sha=69df11a02cfa3ef7d7ca645e03edce6778ec090e100f6ae2b42097865730ac52; jre_sha=4124caf2b6c9c6d5babdfa2f3df795852b80748317890e471d051d0a4793a677b ;; \
+      amd64) arch=x64; jdk_sha=dbb698396d478e7fa2b1e50f4103324b2a99b90569ee27c33f2261f9215cf41e; jre_sha=1731a34baadec5479258ea0202e4d5d865d2efeee60cb0c7d7eb056fe96ca219 ;; \
+      arm64) arch=aarch64; jdk_sha=69df11a02cfa3ef7d7ca645e03edce6778ec090e100f6ae2b42097865730ac52; jre_sha=34828cbb93ed31c281c84ecb31ddab655d11a802f263c1fc019d42e9e0230fed ;; \
       *) echo 'unsupported Java container architecture' >&2; exit 1 ;; \
     esac; \
     base='https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1'; \
