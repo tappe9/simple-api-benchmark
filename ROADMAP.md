@@ -14,7 +14,7 @@ Simple API Benchmark is developed in small stages. The v0.1 goal is a complete, 
 6. Implement Python / FastAPI.
 7. Add contract tests for all implementations.
 8. Add the simple benchmark runner.
-9. Add pull request CI and weekly benchmark automation.
+9. Add pull request CI and the original weekly benchmark automation (replaced by explicit invocation on current main; see #65 below).
 10. Add the GitHub Pages result view and publish v0.1.0.
 
 The completed work and acceptance criteria are recorded in the `v0.1.0` GitHub milestone.
@@ -32,6 +32,7 @@ v0.1.0 release. A next release version remains an explicit maintainer decision.
 | Result presentation | Complete: README charts, the filterable light/dark Pages dashboard and historical-run navigation. History was delivered in [#28 / #46](https://github.com/tappe9/simple-api-benchmark/pull/46); old reports retain their own cohort and provenance. |
 | Focused CI toolchains | Complete: registry-derived setup with all existing gates retained. [#51 / #61](https://github.com/tappe9/simple-api-benchmark/pull/61). |
 | Pages/release separation | Routine Pages deployment cannot create a product release. Use the explicit [release procedure](docs/RELEASING.md), tracked in [#53](https://github.com/tappe9/simple-api-benchmark/issues/53). |
+| Explicit official measurement | [#65](https://github.com/tappe9/simple-api-benchmark/issues/65): weekly invocation removed; request a complete trusted-main run after performance-relevant changes or for a justified investigation. No automatic change trigger is added. Existing publication, CI and historical results are preserved. |
 
 ## Remaining tracked work
 
@@ -39,11 +40,14 @@ v0.1.0 release. A next release version remains an explicit maintainer decision.
   official-publication-to-Pages dependency was implemented by
   [#60](https://github.com/tappe9/simple-api-benchmark/pull/60). Ordinary Pages and
   live-file verification passed, but a new real official producer followed by its
-  dependent deployment still needs end-to-end evidence. Fixture tests and manual
-  recovery do not close that boundary; do not rerun measurement just for display.
-- [#52](https://github.com/tappe9/simple-api-benchmark/issues/52): design and obtain
-  maintainer approval for main protection compatible with trusted result
-  publication before changing settings, credentials or result storage.
+  dependent deployment still needs end-to-end evidence from the next justified,
+  explicitly authorized official run. Fixture tests and manual recovery do not
+  close that boundary; do not rerun measurement just for display or to close #59.
+- [#52](https://github.com/tappe9/simple-api-benchmark/issues/52): deferred.
+  Publication automation and main protection are separate future decisions, not
+  prerequisites for explicit measurement. The App/result-PR proposals #63/#64
+  were withdrawn unmerged. Obtain a fresh proportionate design approval before
+  adding credentials, controller code, protection rules or result storage.
 
 ## Future candidates
 

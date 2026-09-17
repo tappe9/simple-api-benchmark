@@ -256,7 +256,13 @@ repeated responses, and cleans up its isolated environments even after failure.
 See [the shared contract guide](CONTRIBUTING.md#shared-contract-checks) for
 requirements, standalone base-URL checks, and cleanup limits. The local benchmark runner
 is available, and pull requests run the same checks plus a non-publishing smoke benchmark.
-Official results come only from the trusted-main [weekly/manual workflow](docs/AUTOMATION.md).
+Official benchmarks are [explicitly requested on trusted main](docs/AUTOMATION.md#when-to-request-an-official-benchmark)
+after performance-relevant changes, or for a justified reproducibility investigation.
+There is no weekly or automatic change-triggered measurement. Updating upstream
+packages alone does not update this repository's pinned versions. Each dispatch
+still includes the existing audited automatic publication and Pages deployment;
+it is not a measurement-only operation. Publication redesign and main protection
+remain separate decisions.
 The active official cohort is `eight-stack-v1`, with its first verified publication
 completed under Issue #50. Each subsequent result update still requires a new,
 complete, verified official run; historical four-stack reports are not rewritten.

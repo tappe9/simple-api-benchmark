@@ -1,7 +1,11 @@
 # Benchmark results
 
 Official `latest.json` and unique `history/<UTC-completion>-<run_id>-<attempt>.json`
-are generated only by successful trusted-main weekly/manual benchmark automation.
+are generated only by successful, explicitly requested trusted-main official
+benchmarks after performance-relevant changes or justified investigations. There
+is no weekly or automatic change-triggered measurement. Explicit invocation still
+includes automatic audited publication and Pages. Historical scheduled reports
+remain valid records and keep their original events and measured values.
 The same JSON generates both README result sections in one atomic Git commit.
 A failed, partial, invalid or stale-source run never replaces the published state.
 There is no fabricated placeholder result before the first official success.

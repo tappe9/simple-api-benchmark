@@ -224,7 +224,14 @@ Run all existing DB/API acceptance targets and `make test-contract` after change
 to shared execution. `make test` runs the project-wide gates sequentially, including
 workflow checks, active-cohort smoke, and the separate Axum-only diagnostic. Install the pinned workflow tools as described in
 [automation](docs/AUTOMATION.md). PR CI runs all gates with read-only permissions.
-Official publication is reserved for complete trusted-main Actions runs.
+Official publication is reserved for complete trusted-main Actions runs. After
+performance-relevant changes are merged and CI succeeds, obtain an explicit
+maintainer request for a full official measurement; there is no weekly or
+change-triggered automatic measurement. A dispatch still includes audited
+automatic result publication and Pages, not measurement alone. See
+[when to request an official benchmark](docs/AUTOMATION.md#when-to-request-an-official-benchmark).
+Documentation/presentation-only or test-tool changes normally do not need one.
+PR/main CI and non-publishing smoke/diagnostics remain unchanged.
 
 For focused implementation acceptance, install the common Python/Make/Docker
 prerequisites plus that implementation's pinned language toolchain, not every

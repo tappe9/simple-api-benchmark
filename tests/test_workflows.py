@@ -295,11 +295,10 @@ class WorkflowTests(unittest.TestCase):
             context = build["context"] if isinstance(build, dict) else build
             self.assertEqual(context.removeprefix("./"), spec["source_path"])
 
-    def test_official_workflow_has_no_pr_or_push_trigger_and_only_default_ref(self):
+    def test_official_workflow_is_manual_only_on_the_trusted_default_ref(self):
         workflow = load("benchmark.yml")
         self.assertEqual(workflow["permissions"], {"contents": "read"})
-        self.assertEqual(set(workflow.get("on", {})), {"schedule", "workflow_dispatch"})
-        self.assertEqual(workflow["on"]["schedule"], [{"cron": "27 14 * * 6"}])
+        self.assertEqual(set(workflow.get("on", {})), {"workflow_dispatch"})
         self.assertIn(workflow["on"]["workflow_dispatch"], ("", {}))
         self.assertEqual(workflow["concurrency"]["cancel-in-progress"], "false")
         self.assertEqual(set(workflow["jobs"]), {"measure", "publish", "pages"})
@@ -314,6 +313,39 @@ class WorkflowTests(unittest.TestCase):
                 s for s in job["steps"] if s.get("uses", "").startswith("actions/checkout@")
             )
             self.assertEqual(checkout["with"]["ref"], "${{ github.sha }}")
+
+    def test_official_jobs_require_dispatch_and_preserve_success_guards(self):
+        workflow = load("benchmark.yml")
+        trust = (
+            "github.repository == 'tappe9/simple-api-benchmark' && "
+            "github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && "
+            "github.event_name == 'workflow_dispatch'"
+        )
+        # Compare the actual YAML conditions, not a substitute expression evaluator.
+        # Extra OR/always clauses or a schedule path must not widen authorization.
+        for name, upstream in (("measure", None), ("publish", "measure"), ("pages", "publish")):
+            job = workflow["jobs"][name]
+            expected = (
+                trust if upstream is None else f"needs.{upstream}.result == 'success' && {trust}"
+            )
+            with self.subTest(job=name):
+                self.assertEqual(" ".join(job["if"].split()), expected)
+
+    def test_manual_benchmark_policy_is_linked_and_distinguishes_publication(self):
+        guide = (ROOT / "docs/AUTOMATION.md").read_text()
+        self.assertIn("## When to request an official benchmark", guide)
+        self.assertIn(
+            "gh workflow run benchmark.yml --repo tappe9/simple-api-benchmark --ref main", guide
+        )
+        self.assertIn("not a measurement-only operation", guide)
+        self.assertIn("not automatic triggers", guide)
+        self.assertIn("historical", guide.lower())
+        for document in ("README.md", "README.ja.md", "CONTRIBUTING.md", "ARCHITECTURE.md"):
+            with self.subTest(document=document):
+                self.assertIn(
+                    "docs/AUTOMATION.md#when-to-request-an-official-benchmark",
+                    (ROOT / document).read_text(),
+                )
 
     def test_measurement_is_one_read_only_job_using_existing_runner(self):
         workflow = load("benchmark.yml")

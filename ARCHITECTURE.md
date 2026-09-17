@@ -246,9 +246,19 @@ Cleanup must run even when a build, contract test, or benchmark fails.
 
 `ci.yml` builds and checks all eight registered applications, runs the shared contract and focused tests, validates workflow syntax/security and generated README sections, validates the static Pages contracts, and executes a short non-publishing smoke benchmark. Repository permissions are read-only and checkout credentials are not persisted. The Axum matrix entry additionally runs its non-publishing diagnostic and uploads diagnostic evidence; failure blocks the existing required aggregate. The active-cohort smoke covers `eight-stack-v1` sequentially. The component diagram groups applications by language; the runner still starts and measures only one implementation at a time.
 
-### Scheduled and manual benchmarks
+<a id="scheduled-and-manual-benchmarks"></a>
 
-`benchmark.yml` runs weekly and through `workflow_dispatch`, only for trusted default-branch code. All eight active backends are measured sequentially in one GitHub Actions job so that they use the same runner. Historical four-stack reports retain their original membership and measured-source identity.
+### Explicit official benchmarks
+
+`benchmark.yml` accepts only an explicitly requested `workflow_dispatch` on trusted
+main after performance-relevant changes or a justified investigation. There is
+no weekly or automatic change-triggered measurement; see
+[when to request a run](docs/AUTOMATION.md#when-to-request-an-official-benchmark).
+All eight active backends are measured sequentially in one GitHub Actions job,
+retaining three samples per endpoint. Historical reports, including scheduled
+four-stack reports, retain their original membership, event and measured-source
+identity. Invocation policy is separate from the unchanged publication path and
+any future main-protection design.
 
 The read-only measurement job calls `benchmark/official.py`, which reuses the existing runner and audits raw results. A separate successful-run-only publishing job uses `benchmark/publish.py` and `benchmark/generate_readme.py` to create one fast-forward commit for latest JSON, unique dated history, both README sections and three SVG charts. A failed, incomplete or stale-source run cannot replace the latest verified result. `benchmark/report.py` owns publication validation, not measurement. See [automation](docs/AUTOMATION.md) for trust and transaction boundaries.
 
