@@ -44,7 +44,7 @@ jobs:
           allprojects {
               tasks.register('resolveForReview') {
                   doLast {
-                      configurations.findAll { it.canBeResolved }.each { it.resolve() }
+                      configurations.each { if (it.canBeResolved) { it.resolve() } }
                   }
               }
           }
@@ -68,10 +68,14 @@ jobs:
           set -euo pipefail
           mkdir -p .cache/java-development
           for variant in jdk jre; do
-            tag="eclipse-temurin:25.0.4.1_1-${variant}-noble"
+            tag="eclipse-temurin:25-${variant}-noble"
             if docker buildx imagetools inspect "$tag" > ".cache/java-development/${variant}-image.txt" 2>&1; then
               docker buildx imagetools inspect "$tag" --raw > ".cache/java-development/${variant}-image.json"
+              docker run --rm "$tag" java -version > ".cache/java-development/${variant}-java-version.txt" 2>&1
             fi
+          done
+          for architecture in x64 aarch64; do
+            curl --fail --silent --show-error --location --max-time 60 "https://api.adoptium.net/v3/assets/feature_releases/25/ga?architecture=${architecture}&heap_size=normal&image_type=jre&jvm_impl=hotspot&os=linux&page_size=1&project=jdk&sort_order=DESC&vendor=eclipse" -o ".cache/java-development/temurin-jre-${architecture}.json"
           done
       - name: Export exact source and generated dependency evidence
         if: always()

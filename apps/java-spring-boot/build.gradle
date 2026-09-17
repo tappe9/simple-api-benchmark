@@ -32,13 +32,6 @@ dependencyLocking {
     lockMode = LockMode.STRICT
 }
 
-configurations.configureEach {
-    resolutionStrategy {
-        failOnDynamicVersions()
-        failOnChangingVersions()
-    }
-}
-
 application {
     mainClass = 'dev.simpleapibenchmark.BenchmarkApplication'
 }
