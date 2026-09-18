@@ -51,3 +51,10 @@ The gates cover unit behavior, dependency/hash locks, real PostgreSQL and Docker
 ## Publication boundary
 
 Python / Flask is registered and CI-covered, but Issue #32 does not activate a new official benchmark cohort. `active_cohort` remains the frozen `four-stack-v1`; expanded-cohort activation and new official measurements are separate work.
+
+## JSON performance diagnostic
+
+The [Flask diagnostic guide](FLASK-DIAGNOSTIC.md) records Issue #70's controlled
+non-publishing experiments, CPU-placement sensitivity, evidence limits and
+reproduction commands. Diagnostic values do not replace the official results or
+approve a Flask-specific runtime/CPU tuning change.

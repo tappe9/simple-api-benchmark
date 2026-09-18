@@ -74,19 +74,29 @@ class FlaskDiagnosticTests(unittest.TestCase):
         def contract(url, *, implementation):
             return self.environments[-1].contract(url, implementation=implementation)
 
-        return self.module.run_diagnostic(factory, self.output, metadata=self.metadata, contract=contract, phase=phase)
+        return self.module.run_diagnostic(
+            factory, self.output, metadata=self.metadata, contract=contract, phase=phase
+        )
 
     def test_fixed_counterbalanced_plan_and_every_sample_are_preserved(self):
         result = self.run_diagnostic()
-        self.assertEqual([cell["arm"] for cell in result["cells"]],
-                         ["baseline", "switch-1ms", "queue-quiet", "queue-quiet", "switch-1ms", "baseline"])
+        self.assertEqual(
+            [cell["arm"] for cell in result["cells"]],
+            ["baseline", "switch-1ms", "queue-quiet", "queue-quiet", "switch-1ms", "baseline"],
+        )
         self.assertEqual(len(self.environments), 6)
         for position, (cell, environment) in enumerate(zip(result["cells"], self.environments)):
             endpoints = ["/json", "/db/42"] if position < 3 else ["/db/42", "/json"]
             self.assertEqual([item["endpoint"] for item in cell["endpoints"]], endpoints)
             measured = [event for event in environment.events if isinstance(event, tuple)]
-            self.assertEqual(measured, [("python-flask", endpoint, 5 if index == 0 else 10, index)
-                                       for endpoint in endpoints for index in (0, 1, 2, 3)])
+            self.assertEqual(
+                measured,
+                [
+                    ("python-flask", endpoint, 5 if index == 0 else 10, index)
+                    for endpoint in endpoints
+                    for index in (0, 1, 2, 3)
+                ],
+            )
             self.assertEqual(environment.events.count("cleanup"), 1)
             self.assertIsNone(environment.active)
             self.assertEqual(cell["readiness"], {"attempts": 1})
@@ -99,7 +109,17 @@ class FlaskDiagnosticTests(unittest.TestCase):
             validate_report(result)
 
     def test_all_failure_stages_clean_and_never_write_partial_success(self):
-        for stage in ("build", "startup", "contract", "state", "warmup", "measurement", "metric", "observe", "cleanup"):
+        for stage in (
+            "build",
+            "startup",
+            "contract",
+            "state",
+            "warmup",
+            "measurement",
+            "metric",
+            "observe",
+            "cleanup",
+        ):
             for folder in self.cache.iterdir():
                 if folder.is_dir():
                     shutil.rmtree(folder)
@@ -113,18 +133,23 @@ class FlaskDiagnosticTests(unittest.TestCase):
     def test_cleanup_precedes_successful_output_and_retains_readiness(self):
         def alter(environment):
             original = environment.cleanup
+
             def cleanup():
                 self.assertEqual(self.output.read_bytes(), b"previous diagnostic")
                 original()
                 environment.readiness = None
+
             environment.cleanup = cleanup
+
         self.run_diagnostic(alter=alter)
 
     def test_interruption_cleans_and_does_not_retry(self):
         def alter(environment):
             def interrupted(*args):
                 raise KeyboardInterrupt
+
             environment.measure = interrupted
+
         with self.assertRaises(KeyboardInterrupt):
             self.run_diagnostic(alter=alter)
         self.assertEqual(len(self.environments), 1)
@@ -134,12 +159,17 @@ class FlaskDiagnosticTests(unittest.TestCase):
     def test_incomplete_contract_cannot_start_load(self):
         def alter(environment):
             environment.contract = lambda *args, **kwargs: True
+
         with self.assertRaisesRegex(BenchmarkFailure, "contract"):
             self.run_diagnostic(alter=alter)
         self.assertEqual(self.environments[0].measures, 0)
 
     def test_invalid_profile_or_metadata_prevents_load(self):
-        for field, value in (("connections", 2), ("request_timeout", 1), ("health_policy", "container-healthcheck")):
+        for field, value in (
+            ("connections", 2),
+            ("request_timeout", 1),
+            ("health_policy", "container-healthcheck"),
+        ):
             with self.subTest(field=field), self.assertRaises(BenchmarkFailure):
                 self.run_diagnostic(alter=lambda environment: setattr(environment, field, value))
             self.assertNotIn("build", self.environments[-1].events)
@@ -166,6 +196,34 @@ class FlaskDiagnosticTests(unittest.TestCase):
         self.assertEqual(progress["failed_cell"], "block-1-switch-1ms")
         self.assertEqual(len(progress["cells"]), 1)
         self.assertEqual(self.output.read_bytes(), b"previous diagnostic")
+
+    def test_image_drift_stops_before_loading_the_next_cell(self):
+        count = 0
+
+        def alter(environment):
+            nonlocal count
+            count += 1
+            if count == 2:
+                original = environment.start
+
+                def changed_image(identifier):
+                    result = original(identifier)
+                    result["image_id"] = "sha256:changed-test-image"
+                    return result
+
+                environment.start = changed_image
+
+        with self.assertRaisesRegex(BenchmarkFailure, "image changed"):
+            self.run_diagnostic(alter=alter, phase="scheduling")
+        self.assertEqual(len(self.environments), 2)
+        self.assertEqual(self.environments[0].measures, 6)
+        self.assertEqual(self.environments[1].measures, 0)
+        self.assertTrue(all(e.events.count("cleanup") == 1 for e in self.environments))
+        self.assertEqual(self.output.read_bytes(), b"previous diagnostic")
+        self.assertEqual(self.published.read_bytes(), b"previous official result")
+        progress = json.loads((self.cache / "progress.json").read_bytes())
+        self.assertEqual(progress["status"], "failed")
+        self.assertEqual(len(progress["cells"]), 1)
 
     def test_invalid_measurement_is_not_retried_or_selected(self):
         def alter(environment):
@@ -201,11 +259,16 @@ class FlaskDiagnosticTests(unittest.TestCase):
     def test_startup_hooks_change_only_the_declared_factor(self):
         for arm in ("baseline", "switch-1ms", "queue-quiet"):
             code = self.module.hook_source(arm)
-            probe = ('import sys, logging, json\n' + code +
-                     '\nprint(json.dumps({"interval":sys.getswitchinterval(),"queue":logging.getLogger("waitress.queue").disabled,"root":logging.getLogger().disabled}))')
+            probe = (
+                "import sys, logging, json\n"
+                + code
+                + '\nprint(json.dumps({"interval":sys.getswitchinterval(),"queue":logging.getLogger("waitress.queue").disabled,"root":logging.getLogger().disabled}))'
+            )
             output = subprocess.check_output([sys.executable, "-c", probe], text=True, timeout=5)
             observed = json.loads(output.splitlines()[-1])
-            self.assertEqual(observed["interval"], 0.001 if arm == "switch-1ms" else sys.getswitchinterval())
+            self.assertEqual(
+                observed["interval"], 0.001 if arm == "switch-1ms" else sys.getswitchinterval()
+            )
             self.assertEqual(observed["queue"], arm == "queue-quiet")
             self.assertFalse(observed["root"])
         with self.assertRaises(BenchmarkFailure):
@@ -240,7 +303,10 @@ class FlaskDiagnosticTests(unittest.TestCase):
     def test_help_and_invalid_arguments_never_start_measurement(self):
         for args, code in ((["--help"], 0), (["--unknown"], 2)):
             with self.subTest(args=args), patch.object(sys, "argv", ["flask-diagnostic", *args]):
-                with patch("benchmark.install_oha.ensure_oha", side_effect=AssertionError("load must not start")):
+                with patch(
+                    "benchmark.install_oha.ensure_oha",
+                    side_effect=AssertionError("load must not start"),
+                ):
                     with self.assertRaises(SystemExit) as stopped:
                         self.module.main()
                     self.assertEqual(stopped.exception.code, code)

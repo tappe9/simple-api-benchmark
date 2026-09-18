@@ -29,9 +29,15 @@ def diagnostic_plan(phase: str = "initial") -> list[dict]:
     """Fix order before collecting data; reverse arms and endpoints in block two."""
     require(phase in ("initial", "scheduling"), "unknown diagnostic phase")
     if phase == "scheduling":
-        return [{"id": f"block-{index}-{arm}", "block": index, "arm": arm,
-                 "endpoints": ["/json", "/db/42"]}
-                for index, arm in enumerate(("baseline", "affinity-one", "baseline"), 1)]
+        return [
+            {
+                "id": f"block-{index}-{arm}",
+                "block": index,
+                "arm": arm,
+                "endpoints": ["/json", "/db/42"],
+            }
+            for index, arm in enumerate(("baseline", "affinity-one", "baseline"), 1)
+        ]
     return [
         {
             "id": f"block-{block}-{arm}",
@@ -69,7 +75,7 @@ def hook_source(arm: str) -> str:
         "import json, logging, os, sys\n"
         "allowed_before = sorted(os.sched_getaffinity(0))\n"
         + intervention
-        + '\nif os.getpid() == 1:\n'
+        + "\nif os.getpid() == 1:\n"
         + '    print("FLASK_DIAGNOSTIC " + json.dumps({"arm": '
         + repr(arm)
         + ', "pid": os.getpid(), "interval": sys.getswitchinterval(), '
@@ -122,16 +128,25 @@ class FlaskEnvironment(DockerEnvironment):
         result = super().start(identifier)
         if self.arm != "baseline":
             logs = execute(["docker", "logs", "--tail", "100", self.container], timeout=10)
-            markers = [line.removeprefix("FLASK_DIAGNOSTIC ") for line in logs.splitlines()
-                       if line.startswith("FLASK_DIAGNOSTIC ")]
+            markers = [
+                line.removeprefix("FLASK_DIAGNOSTIC ")
+                for line in logs.splitlines()
+                if line.startswith("FLASK_DIAGNOSTIC ")
+            ]
             require(len(markers) == 1, "diagnostic startup hook was not observed exactly once")
             observed = strict_json(markers[0].encode())
-            require(observed.get("arm") == self.arm and observed.get("pid") == 1,
-                    "hook belongs to wrong process/arm")
-            require(observed.get("queue_disabled") is (self.arm == "queue-quiet"),
-                    "queue logger intervention mismatch")
-            require(observed.get("interval") == (0.001 if self.arm == "switch-1ms" else 0.005),
-                    "thread interval intervention mismatch")
+            require(
+                observed.get("arm") == self.arm and observed.get("pid") == 1,
+                "hook belongs to wrong process/arm",
+            )
+            require(
+                observed.get("queue_disabled") is (self.arm == "queue-quiet"),
+                "queue logger intervention mismatch",
+            )
+            require(
+                observed.get("interval") == (0.001 if self.arm == "switch-1ms" else 0.005),
+                "thread interval intervention mismatch",
+            )
             before = observed.get("allowed_before")
             require(type(before) is list and bool(before), "missing allowed CPU set")
             expected = before[:1] if self.arm == "affinity-one" else before
@@ -165,16 +180,31 @@ print(json.dumps(result))
 """
         raw = execute(["docker", "exec", self.container, "python", "-c", script], timeout=10)
         counters = strict_json(raw.encode())
-        logs = execute(["docker", "logs", "--timestamps", "--since", self.since,
-                        "--tail", "10000", self.container], timeout=10)
+        logs = execute(
+            [
+                "docker",
+                "logs",
+                "--timestamps",
+                "--since",
+                self.since,
+                "--tail",
+                "10000",
+                self.container,
+            ],
+            timeout=10,
+        )
         encoded = logs.encode()
-        limited = encoded[-2 * 1024 * 1024:]
+        limited = encoded[-2 * 1024 * 1024 :]
         log_path = self.artifacts / f"{label}.server.log"
         log_path.write_bytes(limited)
         snapshot = {
-            "at": now(), "container_id": self.container, "counters": counters,
-            "server_log": log_path.name, "log_tail_limit_lines": 10000,
-            "log_tail_may_be_truncated": len(logs.splitlines()) >= 10000 or len(limited) != len(encoded),
+            "at": now(),
+            "container_id": self.container,
+            "counters": counters,
+            "server_log": log_path.name,
+            "log_tail_limit_lines": 10000,
+            "log_tail_may_be_truncated": len(logs.splitlines()) >= 10000
+            or len(limited) != len(encoded),
             "queue_warning_lines_in_tail": limited.count(b"Task queue depth is"),
         }
         atomic_json(self.artifacts / f"{label}.observation.json", snapshot)
@@ -182,7 +212,7 @@ print(json.dumps(result))
         return snapshot
 
 
-def run_cell(environment, cell: dict, *, contract=run_contract) -> dict:
+def run_cell(environment, cell: dict, *, contract=run_contract, expected_image=None) -> dict:
     failure = None
     try:
         require(environment.health_policy == EXTERNAL_READINESS, "diagnostic health policy differs")
@@ -190,8 +220,15 @@ def run_cell(environment, cell: dict, *, contract=run_contract) -> dict:
         require(environment.request_timeout == 15, "diagnostic request timeout must be 15s")
         environment.build(IMPLEMENTATION)
         container = environment.start(IMPLEMENTATION)
+        if expected_image is not None:
+            require(
+                container.get("image_id") == expected_image,
+                "diagnostic image changed between cells",
+            )
         checks = contract("http://127.0.0.1:8080", implementation=IMPLEMENTATION)
-        require(type(checks) is int and checks == 2 * len(load_cases()), "incomplete shared contract")
+        require(
+            type(checks) is int and checks == 2 * len(load_cases()), "incomplete shared contract"
+        )
         environment.check()
         endpoints = []
         for endpoint in cell["endpoints"]:
@@ -205,8 +242,16 @@ def run_cell(environment, cell: dict, *, contract=run_contract) -> dict:
                 validate_run(observed)
                 runs.append(observed)
             after = environment.observe(label + "-after")
-            endpoints.append({"endpoint": endpoint, "warmup": warmup, "runs": runs,
-                              "selected": select_run(runs), "before": before, "after": after})
+            endpoints.append(
+                {
+                    "endpoint": endpoint,
+                    "warmup": warmup,
+                    "runs": runs,
+                    "selected": select_run(runs),
+                    "before": before,
+                    "after": after,
+                }
+            )
         environment.check()
         readiness = copy.deepcopy(environment.readiness)
     except BaseException as error:
@@ -220,50 +265,109 @@ def run_cell(environment, cell: dict, *, contract=run_contract) -> dict:
             if failure is not None:
                 raise BenchmarkFailure(f"{failure}; cleanup also failed: {error}") from failure
             raise
-    return {**cell, "container": container, "readiness": readiness, "contract_checks": checks,
-            "artifact_directory": str(environment.artifacts), "endpoints": endpoints}
+    return {
+        **cell,
+        "container": container,
+        "readiness": readiness,
+        "contract_checks": checks,
+        "artifact_directory": str(environment.artifacts),
+        "endpoints": endpoints,
+    }
 
 
-def run_diagnostic(factory, output: Path, *, metadata: dict, contract=run_contract, phase="initial") -> dict:
+def run_diagnostic(
+    factory, output: Path, *, metadata: dict, contract=run_contract, phase="initial"
+) -> dict:
     output = validate_output_path(output)
     for key in ("source_commit", "source_tree"):
-        require(type(metadata.get(key)) is str and re.fullmatch(r"[0-9a-f]{40}", metadata[key]),
-                "diagnostic source metadata missing " + key)
+        require(
+            type(metadata.get(key)) is str and re.fullmatch(r"[0-9a-f]{40}", metadata[key]),
+            "diagnostic source metadata missing " + key,
+        )
     versions = metadata.get("versions", {})
-    require(set(versions) == {IMPLEMENTATION} and
-            set(implementation(IMPLEMENTATION)["version_fields"]) <= set(versions[IMPLEMENTATION]),
-            "diagnostic requires Flask version metadata")
+    require(
+        set(versions) == {IMPLEMENTATION}
+        and set(implementation(IMPLEMENTATION)["version_fields"]) <= set(versions[IMPLEMENTATION]),
+        "diagnostic requires Flask version metadata",
+    )
     plan = diagnostic_plan(phase)
     started_at = now()
     cells = []
     progress = output.parent / "progress.json"
     for cell in plan:
-        atomic_json(progress, {"status": "running", "official": False, "publishable": False,
-                               "metadata": metadata, "plan": plan, "active_cell": cell["id"], "cells": cells})
+        atomic_json(
+            progress,
+            {
+                "status": "running",
+                "official": False,
+                "publishable": False,
+                "metadata": metadata,
+                "plan": plan,
+                "active_cell": cell["id"],
+                "cells": cells,
+            },
+        )
         print(f"Flask diagnostic {cell['id']}", flush=True)
         try:
             environment = factory(cell)
-            cells.append(run_cell(environment, cell, contract=contract))
+            expected_image = cells[0]["container"]["image_id"] if cells else None
+            cells.append(
+                run_cell(environment, cell, contract=contract, expected_image=expected_image)
+            )
         except BaseException as error:
-            atomic_json(progress, {"status": "failed", "official": False, "publishable": False,
-                                   "metadata": metadata, "plan": plan, "failed_cell": cell["id"],
-                                   "error_type": type(error).__name__, "cells": cells})
+            atomic_json(
+                progress,
+                {
+                    "status": "failed",
+                    "official": False,
+                    "publishable": False,
+                    "metadata": metadata,
+                    "plan": plan,
+                    "failed_cell": cell["id"],
+                    "error_type": type(error).__name__,
+                    "cells": cells,
+                },
+            )
             raise
     result = {
-        "schema_version": 1, "mode": "flask-diagnostic", "status": "verified",
-        "official": False, "publishable": False, "implementation": IMPLEMENTATION,
-        "started_at": started_at, "completed_at": now(), "metadata": copy.deepcopy(metadata), "phase": phase,
-        "conditions": {"connections": 50, "warmup_seconds": 5, "duration_seconds": 10,
-                       "runs": 3, "api_health_policy": EXTERNAL_READINESS},
-        "limitations": ["Non-publishing diagnostic, not an official result or framework ranking.",
-                        "CPU snapshots span warm-up and measurement plus observation overhead.",
-                        "Server logs are bounded tails; warning counts may be lower bounds.",
-                        "Two blocks do not establish cross-host or universal performance effects."],
-        "plan": plan, "cells": cells,
+        "schema_version": 1,
+        "mode": "flask-diagnostic",
+        "status": "verified",
+        "official": False,
+        "publishable": False,
+        "implementation": IMPLEMENTATION,
+        "started_at": started_at,
+        "completed_at": now(),
+        "metadata": copy.deepcopy(metadata),
+        "phase": phase,
+        "conditions": {
+            "connections": 50,
+            "warmup_seconds": 5,
+            "duration_seconds": 10,
+            "runs": 3,
+            "api_health_policy": EXTERNAL_READINESS,
+        },
+        "limitations": [
+            "Non-publishing diagnostic, not an official result or framework ranking.",
+            "CPU snapshots span warm-up and measurement plus observation overhead.",
+            "Server logs are bounded tails; warning counts may be lower bounds.",
+            "A bounded diagnostic matrix does not establish cross-host or universal performance effects.",
+        ],
+        "plan": plan,
+        "cells": cells,
     }
     atomic_json(output, result)
-    atomic_json(progress, {"status": "completed", "official": False, "publishable": False,
-                           "metadata": metadata, "plan": plan, "cells": cells})
+    atomic_json(
+        progress,
+        {
+            "status": "completed",
+            "official": False,
+            "publishable": False,
+            "metadata": metadata,
+            "plan": plan,
+            "cells": cells,
+        },
+    )
     return result
 
 
@@ -286,9 +390,14 @@ def main(argv: list[str] | None = None) -> int:
         metadata = provenance(oha)
         metadata["versions"] = {IMPLEMENTATION: registered_pinned_versions()[IMPLEMENTATION]}
         metadata["diagnostic_plan_sha256"] = hashlib.sha256(
-            json.dumps(diagnostic_plan(args.phase), sort_keys=True).encode()).hexdigest()
-        run_diagnostic(lambda cell: FlaskEnvironment(oha, directory / cell["id"], cell["arm"]),
-                       output, metadata=metadata, phase=args.phase)
+            json.dumps(diagnostic_plan(args.phase), sort_keys=True).encode()
+        ).hexdigest()
+        run_diagnostic(
+            lambda cell: FlaskEnvironment(oha, directory / cell["id"], cell["arm"]),
+            output,
+            metadata=metadata,
+            phase=args.phase,
+        )
         print(f"Flask diagnostic complete: {output}; no results published.")
         return 0
     except (BenchmarkFailure, ContractFailure, OSError, ValueError, KeyboardInterrupt) as error:
