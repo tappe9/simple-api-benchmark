@@ -1,0 +1,31 @@
+name: Flask investigation
+on:
+  push:
+    branches: [investigate/flask-json-70]
+permissions:
+  contents: read
+concurrency:
+  group: flask-investigation-70
+  cancel-in-progress: false
+jobs:
+  snapshot:
+    if: github.repository == 'tappe9/simple-api-benchmark'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Export exact source for offline verification
+        run: |
+          mkdir -p .cache/flask-investigation-source
+          git bundle create .cache/flask-investigation-source/source.bundle HEAD
+          git rev-parse HEAD HEAD^{tree} > .cache/flask-investigation-source/identity.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: flask-investigation-source-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .cache/flask-investigation-source/
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: error
