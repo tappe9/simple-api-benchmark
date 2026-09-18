@@ -1,5 +1,6 @@
 """Counterbalanced Flask hypothesis probes; never an official performance result."""
 
+import argparse
 import copy
 import hashlib
 import json
@@ -20,11 +21,17 @@ from .run import now
 
 CACHE_ROOT = ROOT / ".cache" / "flask-diagnostic"
 IMPLEMENTATION = "python-flask"
-ARMS = ("baseline", "switch-1ms", "queue-quiet")
+INITIAL_ARMS = ("baseline", "switch-1ms", "queue-quiet")
+ARMS = (*INITIAL_ARMS, "affinity-one")
 
 
-def diagnostic_plan() -> list[dict]:
+def diagnostic_plan(phase: str = "initial") -> list[dict]:
     """Fix order before collecting data; reverse arms and endpoints in block two."""
+    require(phase in ("initial", "scheduling"), "unknown diagnostic phase")
+    if phase == "scheduling":
+        return [{"id": f"block-{index}-{arm}", "block": index, "arm": arm,
+                 "endpoints": ["/json", "/db/42"]}
+                for index, arm in enumerate(("baseline", "affinity-one", "baseline"), 1)]
     return [
         {
             "id": f"block-{block}-{arm}",
@@ -32,7 +39,7 @@ def diagnostic_plan() -> list[dict]:
             "arm": arm,
             "endpoints": ["/json", "/db/42"] if block == 1 else ["/db/42", "/json"],
         }
-        for block, arms in ((1, ARMS), (2, tuple(reversed(ARMS))))
+        for block, arms in ((1, INITIAL_ARMS), (2, tuple(reversed(INITIAL_ARMS))))
         for arm in arms
     ]
 
@@ -53,19 +60,22 @@ def hook_source(arm: str) -> str:
     require(arm in ARMS, "unknown diagnostic arm")
     if arm == "baseline":
         return ""
-    intervention = (
-        "sys.setswitchinterval(0.001)"
-        if arm == "switch-1ms"
-        else 'logging.getLogger("waitress.queue").disabled = True'
-    )
+    intervention = {
+        "switch-1ms": "sys.setswitchinterval(0.001)",
+        "queue-quiet": 'logging.getLogger("waitress.queue").disabled = True',
+        "affinity-one": "os.sched_setaffinity(0, {allowed_before[0]})",
+    }[arm]
     return (
         "import json, logging, os, sys\n"
+        "allowed_before = sorted(os.sched_getaffinity(0))\n"
         + intervention
         + '\nif os.getpid() == 1:\n'
         + '    print("FLASK_DIAGNOSTIC " + json.dumps({"arm": '
         + repr(arm)
         + ', "pid": os.getpid(), "interval": sys.getswitchinterval(), '
-        + '"queue_disabled": logging.getLogger("waitress.queue").disabled}), flush=True)\n'
+        + '"queue_disabled": logging.getLogger("waitress.queue").disabled, '
+        + '"allowed_before": allowed_before, "allowed_after": sorted(os.sched_getaffinity(0)), '
+        + '"gil_enabled": getattr(sys, "_is_gil_enabled", lambda: None)()}), flush=True)\n'
     )
 
 
@@ -122,6 +132,10 @@ class FlaskEnvironment(DockerEnvironment):
                     "queue logger intervention mismatch")
             require(observed.get("interval") == (0.001 if self.arm == "switch-1ms" else 0.005),
                     "thread interval intervention mismatch")
+            before = observed.get("allowed_before")
+            require(type(before) is list and bool(before), "missing allowed CPU set")
+            expected = before[:1] if self.arm == "affinity-one" else before
+            require(observed.get("allowed_after") == expected, "CPU affinity intervention mismatch")
             self.hook_evidence["observed"] = observed
         result["diagnostic_hook"] = self.hook_evidence
         return result
@@ -130,12 +144,25 @@ class FlaskEnvironment(DockerEnvironment):
         """Snapshots include collection overhead; no exec/polling runs during oha."""
         self.check()
         require(re.fullmatch(r"[a-z0-9-]+", label) is not None, "invalid observation label")
-        script = (
-            "import json; from pathlib import Path; "
-            "paths=['/sys/fs/cgroup/cpu.stat','/proc/1/stat','/proc/1/status']; "
-            "print(json.dumps({p:Path(p).read_text()[:16384] if Path(p).is_file() "
-            "else None for p in paths}))"
-        )
+        script = """import json, os, sys
+from pathlib import Path
+paths = ['/sys/fs/cgroup/cpu.stat', '/proc/1/stat', '/proc/1/status']
+result = {p: Path(p).read_text()[:16384] if Path(p).is_file() else None for p in paths}
+threads = {}
+vanished = []
+for path in sorted(Path('/proc/1/task').glob('[0-9]*'))[:64]:
+    try:
+        threads[path.name] = {name: (path / name).read_text()[:16384]
+                              for name in ('comm', 'stat', 'schedstat', 'status')}
+    except FileNotFoundError:
+        vanished.append(path.name)
+result['threads'] = threads
+result['vanished_threads'] = vanished
+result['helper_runtime_not_pid1'] = {'version': sys.version,
+    'gil_enabled': getattr(sys, '_is_gil_enabled', lambda: None)(),
+    'affinity': sorted(os.sched_getaffinity(0))}
+print(json.dumps(result))
+"""
         raw = execute(["docker", "exec", self.container, "python", "-c", script], timeout=10)
         counters = strict_json(raw.encode())
         logs = execute(["docker", "logs", "--timestamps", "--since", self.since,
@@ -197,7 +224,7 @@ def run_cell(environment, cell: dict, *, contract=run_contract) -> dict:
             "artifact_directory": str(environment.artifacts), "endpoints": endpoints}
 
 
-def run_diagnostic(factory, output: Path, *, metadata: dict, contract=run_contract) -> dict:
+def run_diagnostic(factory, output: Path, *, metadata: dict, contract=run_contract, phase="initial") -> dict:
     output = validate_output_path(output)
     for key in ("source_commit", "source_tree"):
         require(type(metadata.get(key)) is str and re.fullmatch(r"[0-9a-f]{40}", metadata[key]),
@@ -206,7 +233,7 @@ def run_diagnostic(factory, output: Path, *, metadata: dict, contract=run_contra
     require(set(versions) == {IMPLEMENTATION} and
             set(implementation(IMPLEMENTATION)["version_fields"]) <= set(versions[IMPLEMENTATION]),
             "diagnostic requires Flask version metadata")
-    plan = diagnostic_plan()
+    plan = diagnostic_plan(phase)
     started_at = now()
     cells = []
     progress = output.parent / "progress.json"
@@ -225,7 +252,7 @@ def run_diagnostic(factory, output: Path, *, metadata: dict, contract=run_contra
     result = {
         "schema_version": 1, "mode": "flask-diagnostic", "status": "verified",
         "official": False, "publishable": False, "implementation": IMPLEMENTATION,
-        "started_at": started_at, "completed_at": now(), "metadata": copy.deepcopy(metadata),
+        "started_at": started_at, "completed_at": now(), "metadata": copy.deepcopy(metadata), "phase": phase,
         "conditions": {"connections": 50, "warmup_seconds": 5, "duration_seconds": 10,
                        "runs": 3, "api_health_policy": EXTERNAL_READINESS},
         "limitations": ["Non-publishing diagnostic, not an official result or framework ranking.",
@@ -240,9 +267,13 @@ def run_diagnostic(factory, output: Path, *, metadata: dict, contract=run_contra
     return result
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     from .environment import provenance, registered_pinned_versions
     from .install_oha import ensure_oha
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--phase", choices=("initial", "scheduling"), default="initial")
+    args = parser.parse_args(argv)
 
     def interrupted(signum, _frame):
         raise KeyboardInterrupt(f"received signal {signum}")
@@ -255,9 +286,9 @@ def main() -> int:
         metadata = provenance(oha)
         metadata["versions"] = {IMPLEMENTATION: registered_pinned_versions()[IMPLEMENTATION]}
         metadata["diagnostic_plan_sha256"] = hashlib.sha256(
-            json.dumps(diagnostic_plan(), sort_keys=True).encode()).hexdigest()
+            json.dumps(diagnostic_plan(args.phase), sort_keys=True).encode()).hexdigest()
         run_diagnostic(lambda cell: FlaskEnvironment(oha, directory / cell["id"], cell["arm"]),
-                       output, metadata=metadata)
+                       output, metadata=metadata, phase=args.phase)
         print(f"Flask diagnostic complete: {output}; no results published.")
         return 0
     except (BenchmarkFailure, ContractFailure, OSError, ValueError, KeyboardInterrupt) as error:
