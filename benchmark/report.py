@@ -180,8 +180,9 @@ def validate_report(report: dict, *, expected_context: dict | None = None) -> No
     text(metadata.get("docker_compose"), "Docker Compose version required")
     versions = object_fields(metadata.get("versions"), members, "versions")
     for implementation in members:
+        keys = registry.implementation(implementation)["version_fields"]
         values = versions[implementation]
-        registry.validate_version_fields(implementation, values)
+        require(type(values) is dict and set(keys) <= set(values), "missing stack versions")
         for value in values.values():
             require(
                 type(value) is str and re.fullmatch(r"\d+\.\d+\.\d+", value) is not None,
