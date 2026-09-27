@@ -29,19 +29,19 @@ def validate_registry(data: dict) -> dict:
     identifiers = []
     sources = []
     for spec in specs:
-        object_fields(
-            spec,
-            (
-                "id",
-                "language",
-                "framework",
-                "display_name",
-                "source_path",
-                "version_fields",
-                "acceptance_test",
-                "failure_test",
-            ),
-            "implementation registration",
+        required_spec_fields = {
+            "id",
+            "language",
+            "framework",
+            "display_name",
+            "source_path",
+            "version_fields",
+            "acceptance_test",
+            "failure_test",
+        }
+        require(
+            set(spec) in (required_spec_fields, required_spec_fields | {"version_any_of"}),
+            "unexpected implementation registration fields",
         )
         identifier = spec["id"]
         require(
@@ -78,6 +78,20 @@ def validate_registry(data: dict) -> dict:
             "invalid version field",
         )
         require(len(fields) == len(set(fields)), "duplicate version fields")
+        alternatives = spec.get("version_any_of", [])
+        require(type(alternatives) is list, "invalid version alternatives")
+        for group in alternatives:
+            require(
+                type(group) is list
+                and len(group) >= 2
+                and len(group) == len(set(group))
+                and all(
+                    type(key) is str and re.fullmatch(r"[a-z][a-z0-9_-]*", key)
+                    for key in group
+                )
+                and not (set(group) & set(fields)),
+                "invalid version alternative group",
+            )
     require(len(identifiers) == len(set(identifiers)), "duplicate implementation ID")
     require(len(sources) == len(set(sources)), "implementations must have independent source paths")
     cohorts = data["cohorts"]
@@ -121,6 +135,17 @@ def implementation(identifier: str) -> dict:
         if spec["id"] == identifier:
             return spec
     raise BenchmarkFailure("unknown implementation ID")
+
+
+def validate_version_fields(identifier: str, values: dict) -> None:
+    spec = implementation(identifier)
+    require(type(values) is dict, "missing stack versions")
+    require(set(spec["version_fields"]) <= set(values), "missing stack versions")
+    for group in spec.get("version_any_of", []):
+        require(
+            sum(key in values for key in group) == 1,
+            "expected exactly one alternative stack version",
+        )
 
 
 def active_members() -> tuple[str, ...]:
