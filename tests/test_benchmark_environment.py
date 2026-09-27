@@ -170,9 +170,7 @@ class ProcessValidationTests(unittest.TestCase):
         value["Path"] = "python"
         value["Args"] = ["-m", "benchmark_api.server"]
         output = (
-            "PID COMMAND\n"
-            "10 python -m benchmark_api.server\n"
-            "11 python -m benchmark_api.server\n"
+            "PID COMMAND\n10 python -m benchmark_api.server\n11 python -m benchmark_api.server\n"
         )
         environment.validate_processes(value, output, allow_health_probe=False)
 
