@@ -16,7 +16,7 @@ jobs:
         run: python -m unittest tests.test_python_flask_acceptance tests.test_benchmark_environment
       - name: Generate runtime lock
         run: |
-          python -m pip install pip-tools==7.5.2
+          python -m pip install pip==25.3 pip-tools==7.5.2
           python -m piptools compile --generate-hashes --output-file=apps/python-flask/requirements.lock apps/python-flask/requirements.in
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
