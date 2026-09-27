@@ -142,6 +142,12 @@ export const REGISTRY = {
       "id": "python-flask",
       "language": "Python",
       "source_path": "apps/python-flask",
+      "version_any_of": [
+        [
+          "waitress",
+          "gunicorn"
+        ]
+      ],
       "version_fields": [
         "python",
         "flask",
