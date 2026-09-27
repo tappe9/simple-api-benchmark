@@ -19,3 +19,33 @@ jobs:
           python -m unittest discover -s tests -p 'test_benchmark_registry.py'
       - name: Real Flask container acceptance
         run: python tests/test_python_flask_service.py
+      - name: Non-publishing production-profile confirmation
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from benchmark.contract_test import run_contract
+          from benchmark.environment import DockerEnvironment
+          from benchmark.healthcheck import EXTERNAL_READINESS
+          from benchmark.install_oha import ensure_oha
+
+          out = Path(".cache/flask-gunicorn-confirmation")
+          env = DockerEnvironment(ensure_oha(), out, health_policy=EXTERNAL_READINESS)
+          try:
+              env.build("python-flask")
+              identity = env.start("python-flask")
+              checks = run_contract("http://127.0.0.1:8080", implementation="python-flask")
+              results = {
+                  endpoint: env.measure(endpoint, 10, 1)
+                  for endpoint in ("/json", "/db/42", "/cpu")
+              }
+              print("FLASK_GUNICORN_CONFIRMATION=" + json.dumps({
+                  "official": False,
+                  "publishable": False,
+                  "contract_checks": checks,
+                  "container": identity,
+                  "results": results,
+              }, sort_keys=True))
+          finally:
+              env.cleanup()
+          PY
