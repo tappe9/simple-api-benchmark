@@ -145,7 +145,6 @@ export const REGISTRY = {
       "version_fields": [
         "python",
         "flask",
-        "waitress",
         "psycopg",
         "psycopg-binary",
         "psycopg-pool"

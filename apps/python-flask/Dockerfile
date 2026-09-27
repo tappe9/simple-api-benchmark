@@ -16,4 +16,5 @@ COPY --from=dependencies /opt/venv /opt/venv
 COPY benchmark_api ./benchmark_api
 USER 10001:10001
 EXPOSE 8080
-ENTRYPOINT ["python", "-m", "benchmark_api.server"]
+ENTRYPOINT ["python", "-m", "gunicorn.app.wsgiapp"]
+CMD ["--bind", "0.0.0.0:8080", "--workers", "1", "--worker-class", "gthread", "--threads", "1", "--keep-alive", "5", "--timeout", "30", "--graceful-timeout", "5", "--worker-tmp-dir", "/dev/shm", "benchmark_api.server:create_server_app()"]

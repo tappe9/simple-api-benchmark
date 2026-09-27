@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
+import { REGISTRY } from '../site/registry.mjs';
+
 const members = ['go-gin', 'go-echo', 'rust-actix', 'rust-axum', 'node-fastify', 'node-express', 'python-fastapi', 'python-flask'];
 const legacyMembers = ['go-gin', 'rust-actix', 'node-fastify', 'python-fastapi'];
 
@@ -91,7 +93,8 @@ export function registerEightStackTests() {
         r => { r.implementations[index].endpoints.reverse(); },
         r => { r.implementations[index].endpoints[0].runs.pop(); },
       );
-      for (const field of Object.keys(eight.metadata.versions[members[index]])) {
+      const spec = REGISTRY.implementations.find(item => item.id === members[index]);
+      for (const field of spec.version_fields) {
         changes.push(r => { delete r.metadata.versions[members[index]][field]; });
       }
     }

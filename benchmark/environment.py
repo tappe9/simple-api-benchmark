@@ -128,12 +128,15 @@ def validate_processes(state: dict, output: str, *, allow_health_probe: bool = T
         pieces = row.strip().split(None, 1)
         require(len(pieces) == 2 and pieces[0].isdigit(), "invalid process list row")
         commands.append(normalized(shlex.split(pieces[1])))
+    service = state.get("Config", {}).get("Labels", {}).get("com.docker.compose.service")
+    expected_servers = 2 if service == "python-flask" else 1
     require(
-        commands.count(server) == 1 and all(command in allowed for command in commands),
+        commands.count(server) == expected_servers
+        and all(command in allowed for command in commands),
         (
-            "expected one server process and only independent health probes"
+            f"expected {expected_servers} server process(es) and only independent health probes"
             if allow_health_probe
-            else "expected exactly one server process"
+            else f"expected exactly {expected_servers} server process(es)"
         ),
     )
 

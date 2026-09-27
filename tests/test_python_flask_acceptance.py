@@ -13,14 +13,17 @@ class PythonFlaskAcceptanceTests(unittest.TestCase):
         self.assertEqual((APP / ".python-version").read_text().strip(), "3.14.7")
         requirements = set((APP / "requirements.in").read_text().splitlines())
         self.assertIn("flask==3.1.3", requirements)
-        self.assertIn("waitress==3.0.2", requirements)
+        self.assertIn("gunicorn==26.0.0", requirements)
+        self.assertNotIn("waitress==3.0.2", requirements)
         self.assertIn("psycopg==3.3.5", requirements)
         self.assertIn("psycopg-binary==3.3.5", requirements)
         self.assertIn("psycopg-pool==3.3.1", requirements)
-        server = (APP / "benchmark_api" / "server.py").read_text()
-        self.assertIn("threads=1", server)
-        self.assertIn("create_server", server)
-        self.assertNotIn("gunicorn", server.lower())
+        dockerfile = (APP / "Dockerfile").read_text()
+        self.assertIn('"--workers", "1"', dockerfile)
+        self.assertIn('"--threads", "1"', dockerfile)
+        self.assertIn('"--worker-class", "gthread"', dockerfile)
+        self.assertIn('"--keep-alive", "5"', dockerfile)
+        self.assertNotIn("waitress", dockerfile.lower())
 
     def test_pool_and_container_limits_are_not_weakened(self):
         database = (APP / "benchmark_api" / "database.py").read_text()
@@ -28,7 +31,7 @@ class PythonFlaskAcceptanceTests(unittest.TestCase):
         dockerfile = (APP / "Dockerfile").read_text()
         self.assertEqual(dockerfile.count("python:3.14.7-slim-bookworm@sha256:"), 2)
         self.assertIn("USER 10001:10001", dockerfile)
-        self.assertIn('ENTRYPOINT ["python", "-m", "benchmark_api.server"]', dockerfile)
+        self.assertIn('ENTRYPOINT ["python", "-m", "gunicorn.app.wsgiapp"]', dockerfile)
 
     def test_registration_preserves_the_frozen_legacy_cohort(self):
         registry = json.loads((ROOT / "benchmark" / "implementations.json").read_text())
