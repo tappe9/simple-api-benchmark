@@ -131,7 +131,8 @@ def validate_processes(state: dict, output: str, *, allow_health_probe: bool = T
     service = state.get("Config", {}).get("Labels", {}).get("com.docker.compose.service")
     expected_servers = 2 if service == "python-flask" else 1
     require(
-        commands.count(server) == expected_servers and all(command in allowed for command in commands),
+        commands.count(server) == expected_servers
+        and all(command in allowed for command in commands),
         (
             f"expected {expected_servers} server process(es) and only independent health probes"
             if allow_health_probe
