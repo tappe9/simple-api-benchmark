@@ -163,6 +163,34 @@ class StateTests(unittest.TestCase):
             self.assertEqual(result["memory_samples"], 1)
 
 
+class ProcessValidationTests(unittest.TestCase):
+    def test_flask_gunicorn_allows_exactly_one_arbiter_and_one_worker(self):
+        value = state()
+        value["Config"]["Labels"]["com.docker.compose.service"] = "python-flask"
+        value["Path"] = "python"
+        value["Args"] = ["-m", "benchmark_api.server"]
+        output = (
+            "PID COMMAND\n"
+            "10 python -m benchmark_api.server\n"
+            "11 python -m benchmark_api.server\n"
+        )
+        environment.validate_processes(value, output, allow_health_probe=False)
+
+    def test_flask_gunicorn_rejects_extra_worker(self):
+        value = state()
+        value["Config"]["Labels"]["com.docker.compose.service"] = "python-flask"
+        value["Path"] = "python"
+        value["Args"] = ["-m", "benchmark_api.server"]
+        output = (
+            "PID COMMAND\n"
+            "10 python -m benchmark_api.server\n"
+            "11 python -m benchmark_api.server\n"
+            "12 python -m benchmark_api.server\n"
+        )
+        with self.assertRaises(BenchmarkFailure):
+            environment.validate_processes(value, output, allow_health_probe=False)
+
+
 class InstallerTests(unittest.TestCase):
     def test_cached_checksum_is_checked_before_executing_binary(self):
         with tempfile.TemporaryDirectory() as directory:
