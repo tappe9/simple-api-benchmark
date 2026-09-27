@@ -128,7 +128,7 @@ def validate_processes(state: dict, output: str, *, allow_health_probe: bool = T
         pieces = row.strip().split(None, 1)
         require(len(pieces) == 2 and pieces[0].isdigit(), "invalid process list row")
         commands.append(normalized(shlex.split(pieces[1])))
-    service = state["Config"]["Labels"]["com.docker.compose.service"]
+    service = state.get("Config", {}).get("Labels", {}).get("com.docker.compose.service")
     expected_servers = 2 if service == "python-flask" else 1
     require(
         commands.count(server) == expected_servers and all(command in allowed for command in commands),
