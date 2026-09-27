@@ -1,0 +1,15 @@
+name: Temporary Flask Gunicorn TDD red
+on:
+  push:
+    branches: [fix/flask-gunicorn-70]
+permissions:
+  contents: read
+jobs:
+  red:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version-file: apps/python-flask/.python-version
+      - run: python -m unittest tests.test_python_flask_acceptance
