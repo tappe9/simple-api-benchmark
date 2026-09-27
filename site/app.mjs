@@ -150,10 +150,6 @@ function validateReport(report) {
     for (const key of STACKS[id].version_fields) {
       assert(typeof versionSet[key] === "string" && /^\d+\.\d+\.\d+$/.test(versionSet[key]), `invalid ${id} ${key} version`);
     }
-    for (const group of STACKS[id].version_any_of ?? []) {
-      const present = group.filter((key) => Object.hasOwn(versionSet, key));
-      assert(present.length === 1, `expected exactly one ${id} alternative stack version`);
-    }
     assert(Object.values(versionSet).every((value) => typeof value === "string" && /^\d+\.\d+\.\d+$/.test(value)), "invalid stack version");
     assert(Array.isArray(backend.endpoints) && backend.endpoints.length === ENDPOINTS.length, "three endpoints required");
     backend.endpoints.forEach((entry, endpointIndex) => {
