@@ -6,13 +6,13 @@
 
 - CPython 3.14.7, matching the FastAPI baseline.
 - Flask 3.1.3.
-- Waitress 3.0.2 as the production WSGI server.
-- One server OS process and exactly one Waitress worker thread.
+- Gunicorn 26.0.0 as the production WSGI server, using one `gthread` request worker with one thread.
+- One Gunicorn arbiter plus exactly one request-processing worker and one request thread.
 - psycopg 3.3.5 with the binary implementation package pinned to the same version.
 - psycopg-pool 3.3.1 with `min_size=1`, `max_size=10`.
 - The same PostgreSQL fixture, parameterized lookup SQL, 1 CPU / 512 MiB container budget, loopback-only host publication, dropped capabilities, no-new-privileges policy, and non-root runtime used by the other implementations.
 
-Flask's development server, Gunicorn master/worker processes, gevent/event-loop monkey patching, extra middleware, response caches, and precomputed CPU results are not used.
+Flask's development server, gevent/event-loop monkey patching, extra middleware, response caches, and precomputed CPU results are not used.
 
 ## HTTP behavior
 
@@ -27,15 +27,15 @@ The implementation provides the unchanged shared contract:
 
 ## Startup and shutdown
 
-PostgreSQL pool creation and a real `SELECT 1` readiness query complete before Waitress begins accepting HTTP traffic. SIGINT and SIGTERM close the listener, Waitress drains/shuts down its single task-dispatcher thread with a bounded timeout, and the PostgreSQL pool is then closed.
+Each Gunicorn worker creates its own PostgreSQL pool and proves readiness with a real `SELECT 1` before its Flask application is returned. Gunicorn handles SIGTERM and bounded graceful worker shutdown; worker-local pool cleanup is registered with Python `atexit`.
 
 The production image starts directly with:
 
 ```text
-python -m benchmark_api.server
+python -m gunicorn.app.wsgiapp --workers 1 --worker-class gthread --threads 1 … 'benchmark_api.server:create_server_app()'
 ```
 
-There is no supervisor or second worker process.
+Gunicorn uses one arbiter process and one request-processing worker; it does not add request workers beyond the benchmark profile's single worker.
 
 ## Verification
 
