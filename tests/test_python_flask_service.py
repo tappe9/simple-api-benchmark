@@ -121,8 +121,15 @@ def running_service() -> str:
     require(state["HostConfig"]["Memory"] == 536_870_912, "memory limit differs")
     require(state["Config"]["User"] == "10001:10001", "runtime user differs")
     require(
-        state["Path"] == "python" and state["Args"] == ["-m", "benchmark_api.server"],
-        "unexpected server wrapper",
+        state["Path"] == "python"
+        and state["Args"][:2] == ["-m", "gunicorn.app.wsgiapp"]
+        and "--workers" in state["Args"]
+        and state["Args"][state["Args"].index("--workers") + 1] == "1"
+        and "--worker-class" in state["Args"]
+        and state["Args"][state["Args"].index("--worker-class") + 1] == "gthread"
+        and "--threads" in state["Args"]
+        and state["Args"][state["Args"].index("--threads") + 1] == "1",
+        "unexpected Gunicorn runtime profile",
     )
     require(state["HostConfig"]["CapDrop"] == ["ALL"], "capabilities not dropped")
     require(
@@ -133,8 +140,11 @@ def running_service() -> str:
         ["docker", "top", container, "-eo", "pid,args"]
     ).stdout.splitlines()[1:]
     commands = [line.split(maxsplit=1)[1] for line in processes if line.strip()]
-    servers = [command for command in commands if "benchmark_api.server" in command]
-    require(len(servers) == 1, f"expected one Waitress server process, got {servers!r}")
+    servers = [command for command in commands if "gunicorn" in command]
+    require(
+        len(servers) == 2,
+        f"expected one Gunicorn arbiter and one request worker, got {servers!r}",
+    )
     return container
 
 
