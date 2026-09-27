@@ -84,7 +84,7 @@ jobs:
       - name: make test-registry
         run: make test-registry
       - name: make test-site
-        run: make test-site > .cache/ci/site.log 2>&1
+        run: make test-site
       - name: make test-db
         run: make test-db
       - name: make test-benchmark
@@ -99,9 +99,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: formatting-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            .cache/ci/format.patch
-            .cache/ci/site.log
+          path: .cache/ci/format.patch
           include-hidden-files: true
           retention-days: 7
           if-no-files-found: ignore
