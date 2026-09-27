@@ -1,29 +1,19 @@
-name: Temporary Flask Gunicorn TDD
+name: Temporary Flask Gunicorn acceptance
 on:
   push:
     branches: [fix/flask-gunicorn-70]
 permissions:
-  contents: write
+  contents: read
 jobs:
-  verify:
+  acceptance:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version-file: apps/python-flask/.python-version
-      - name: Unit acceptance
-        run: python -m unittest tests.test_python_flask_acceptance tests.test_benchmark_environment
-      - name: Generate runtime lock
-        run: |
-          python -m pip install pip==25.3 pip-tools==7.5.2
-          python -m piptools compile --generate-hashes --output-file=apps/python-flask/requirements.lock apps/python-flask/requirements.in
-      - name: Commit generated runtime lock
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/python-flask/requirements.lock
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: refresh Flask runtime lock"
-            git push origin HEAD:fix/flask-gunicorn-70
-          fi
+      - name: Static and shared regression tests
+        run: python -m unittest tests.test_python_flask_acceptance tests.test_benchmark_environment tests.test_benchmark_registry
+      - name: Real Flask container acceptance
+        run: python tests/test_python_flask_service.py
