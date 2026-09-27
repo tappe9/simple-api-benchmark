@@ -91,7 +91,9 @@ class ImplementationDocumentationTests(unittest.TestCase):
         self.assertRegex(boundary, r"(?i)not.*Gunicorn.*measurement")
         self.assertIn("results/history/2026-09-15T04-14-09Z-34925168324-1.json", boundary)
         flask = section((DOCS / "FLASK.md").read_text(), "Publication boundary")
-        self.assert_canonical_link(flask, "IMPLEMENTATIONS.md#published-results-and-runtime-changes")
+        self.assert_canonical_link(
+            flask, "IMPLEMENTATIONS.md#published-results-and-runtime-changes"
+        )
 
     def test_java_boundary_does_not_claim_official_results(self):
         java = " ".join(section(self.canonical, "Java registration boundary (#67)").split())
