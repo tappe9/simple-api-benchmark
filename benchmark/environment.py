@@ -224,10 +224,9 @@ def registered_pinned_versions() -> dict:
         "version extractors must cover registered implementations",
     )
     for identifier, values in versions.items():
-        require(
-            set(implementation(identifier)["version_fields"]) <= set(values),
-            "missing required stack versions",
-        )
+        from .registry import validate_version_fields
+
+        validate_version_fields(identifier, values)
         require(
             all(
                 type(value) is str
