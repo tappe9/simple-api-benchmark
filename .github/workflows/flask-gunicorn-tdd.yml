@@ -14,6 +14,8 @@ jobs:
         with:
           python-version-file: apps/python-flask/.python-version
       - name: Static and shared regression tests
-        run: python -m unittest tests.test_python_flask_acceptance tests.test_benchmark_environment tests.test_benchmark_registry
+        run: |
+          python -m unittest tests.test_python_flask_acceptance tests.test_benchmark_environment
+          python -m unittest discover -s tests -p 'test_benchmark_registry.py'
       - name: Real Flask container acceptance
         run: python tests/test_python_flask_service.py
