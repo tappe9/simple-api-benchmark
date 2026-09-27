@@ -2,8 +2,8 @@
 
 ## Sources of truth
 
-`benchmark/implementations.json` is the small, versioned registry for implemented
-stacks. An entry contains the stable implementation ID, language, framework,
+[`benchmark/implementations.json`](../benchmark/implementations.json) is the small,
+versioned registry for implemented stacks. An entry contains the stable implementation ID, language, framework,
 display name, source/build directory, required version fields, service acceptance
 test, and optional focused acceptance-failure test. The Compose service name is
 the implementation ID; its build context must equal the registered source path.
@@ -36,40 +36,81 @@ plugin dependency is introduced.
 
 ## Registered and measured implementations
 
-The nine registered implementations, in deterministic registry order, are:
+The registered implementations, in deterministic registry order, are:
 Go / Gin, Go / Echo, Rust / Actix Web, Rust / Axum, Node.js / Fastify,
-Node.js / Express, Python / FastAPI, Python / Flask, and Java / Spring Boot. Registration enables
-source checks, real-container acceptance and unchanged shared contracts; it does
-not by itself activate a benchmark cohort or create measured results.
+Node.js / Express, Python / FastAPI, Python / Flask, and Java / Spring Boot.
+Registration means a stack has source and validation entries in the registry;
+it does not by itself activate a benchmark cohort or create measured results.
+Cohort membership selects the complete group for official measurement. Actual
+publication is separate evidence, tied to the measured source rather than to
+current registration or CI success.
 
 | Cohort | Ordered members | Current role |
 | --- | --- | --- |
 | `four-stack-v1` | `go-gin`, `rust-actix`, `node-fastify`, `python-fastapi` | Frozen historical cohort; existing reports remain readable |
 | `eight-stack-v1` | `go-gin`, `go-echo`, `rust-actix`, `rust-axum`, `node-fastify`, `node-express`, `python-fastapi`, `python-flask` | Active official cohort; complete verified runs are eligible for publication |
 
-`registered_pinned_versions()` in `benchmark/environment.py` extracts all nine
-stacks, while `pinned_versions()` includes only the active cohort's metadata.
-Axum additionally records its explicit Tokio version. The
+`registered_pinned_versions()` in `benchmark/environment.py` extracts all
+registered stacks, while `pinned_versions()` includes only the active cohort's
+metadata. Axum additionally records its explicit Tokio version. The
 [Axum-only diagnostic](AXUM.md) consumes registered Axum metadata separately and
 does not introduce partial official reports.
 
+### CI coverage
+
+The normal CI matrix covers all registered implementations, not just members of
+the active official cohort. `python -m benchmark.ci matrix` derives each entry
+from the registry. Each implementation job runs its acceptance/failure gates and
+focused shared API contract; Axum also runs its required non-publishing load
+diagnostic. The separate smoke job selects the active cohort and cannot publish.
+The `required` aggregate rejects failed, cancelled or skipped dependencies; CI
+success proves those checks passed, not official measured performance. See the
+[CI workflow](../.github/workflows/ci.yml) for the executable gates.
+
+### Published results and runtime changes
+
+The [verified report published on 2026-09-15](../results/history/2026-09-15T04-14-09Z-34925168324-1.json)
+contains Axum and Flask, with Flask measured using Waitress 3.0.2. It is still the
+[latest published result](../results/latest.json) at this documentation update.
+The report's `metadata.source_commit`, runtime versions and conditions describe
+that measurement, not whichever code is now on main.
+
+Current Flask uses Gunicorn with one `gthread` request worker and one request
+thread, plus its arbiter process; see the [Flask runtime guide](FLASK.md).
+The recorded Waitress result is not a Gunicorn performance measurement.
+The runtime change in PR #77 did not rerun the official benchmark. Never replace
+recorded server/version metadata with current pins, relabel old measurements or
+infer a performance change from CI. A new official result requires a separately
+authorized complete run and validated publication. README and Pages continue to
+display the selected report's measured configuration until then.
+
 ### Java registration boundary (#67)
 
-`java-spring-boot` is registered with a Java-only host toolchain, real-container
-acceptance and the unchanged shared contract. Its static version extractor reads
-the committed JDK build, Gradle Wrapper, strict lockfile and SHA-256 verification
+`java-spring-boot` is registered and CI-covered with a Java-only host toolchain,
+real-container acceptance and the unchanged shared contract. Its static version
+extractor reads the committed JDK build, Gradle Wrapper, strict lockfile and SHA-256 verification
 metadata without executing Java or Gradle. Other implementation jobs do not need
 a host JDK. See [Java / Spring Boot](JAVA-SPRING-BOOT.md).
 
-Neither cohort changes membership or order. Official metadata still contains
-only the eight active implementations; Java is not filled into old reports with
-zeroes or missing values. A future Java-inclusive cohort and any official run
-need a separate decision, including an assessment of JVM warm-up under the common
-profile. Registration and passing tests are not measured performance evidence.
+Java is not a member of either official cohort in the table above, and there is
+no official Java performance result. Official metadata includes only the selected
+cohort; Java is not filled into existing reports with zeroes or missing values.
+A future Java-inclusive cohort and any official run need a separate decision,
+including an assessment of JVM warm-up under the common profile. Registration
+and passing tests are not measured performance evidence.
+
+### Historical introduction and releases
+
+The original Axum, Express and Flask registration work preceded the expanded
+cohort's activation. The `four-stack-v1` boundary described at introduction was
+historical rollout context, not a current exclusion from official comparison.
+The v0.1.0 release remains the original four-stack snapshot; later registration,
+activation and publication on main do not rewrite that release or its results.
+See [release snapshots](RELEASING.md) and the frozen historical cohort below.
 
 ### Eight-stack rollout boundary (#50)
 
-The approved activation sets `active_cohort: eight-stack-v1`. Both readers accept
+The approved activation in Issue #50 set `active_cohort: eight-stack-v1`. Both readers accept
 complete four/eight-stack reports, but no synthetic fixture is published and the
 active pointer is not evidence of a real eight-stack measurement.
 README and Pages identify the selected report's cohort, definition and API

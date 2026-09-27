@@ -2,11 +2,13 @@
 
 ## Registration is not official measurement
 
-`java-spring-boot` is the ninth registered implementation. CI builds it and checks
-it against the same API contract as the other implementations. It is **not** a
-member of `eight-stack-v1` or frozen `four-stack-v1`. Neither historical data nor
-the current result receives synthetic Java values. There is no official Java
-performance result from adding or testing this implementation.
+`java-spring-boot` is registered and CI-covered under the same API contract as the
+other implementations. See the shared
+[registration, CI and cohort status](IMPLEMENTATIONS.md#registered-and-measured-implementations)
+and [Java registration boundary](IMPLEMENTATIONS.md#java-registration-boundary-67).
+Java is not in an official cohort and has no official performance result.
+Neither historical data nor the current result receives synthetic Java values;
+adding or testing an implementation is not official measurement.
 
 ## Fixed build inputs
 
@@ -106,7 +108,7 @@ The CI matrix derives `java` from the registry language. Only its Java entry
 installs the pinned JDK. Other language acceptance jobs guard Java executables
 alongside their other unrelated host toolchains. Shared version extraction reads
 committed files without invoking Java or Gradle. The existing fail-closed
-`required` aggregate must include the new implementation; no gate is optional.
+`required` aggregate includes Java; no gate is optional.
 
 ## Updating dependencies or measuring Java
 

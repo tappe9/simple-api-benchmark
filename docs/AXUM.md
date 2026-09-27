@@ -2,17 +2,17 @@
 
 ## Status and comparison boundary
 
-`rust-axum` is an independent implementation under `apps/rust-axum/`, registered
-for normal CI and the unchanged shared API contract. It is **not** a member of the
-active `four-stack-v1` cohort. Adding it does not change `results/latest.json`,
-historical results, numeric README blocks, or the existing Actix application.
-Activating a complete expanded cohort requires a separate reviewed change; see
-[implementation registration](IMPLEMENTATIONS.md).
+`rust-axum` is an independent implementation under `apps/rust-axum/`, with the
+unchanged shared API contract. See the shared
+[registration, CI and cohort status](IMPLEMENTATIONS.md#registered-and-measured-implementations)
+for its current comparison and publication boundaries. Registration, cohort
+activation and verified publication are separate milestones; published reports
+retain their original measured source and versions.
 
 Axum uses its own router, Hyper HTTP server, Tower service integration and Tokio
 executor. Actix uses its Actix server/worker model. Their complete runtime and
 HTTP stacks differ even with the same compiler, SQLx, serializer and resource
-limits. A future comparison is not a language-only or framework-only ranking.
+limits. A comparison is not a language-only or framework-only ranking.
 The short diagnostic below cannot establish an official performance ordering.
 
 ## Pinned build and runtime
@@ -127,7 +127,8 @@ the printed project name and remove only that owned project manually.
 
 ## Normal CI integration
 
-The registry generates the normal six-implementation CI matrix. Axum's job runs
+The normal matrix follows the shared [CI coverage](IMPLEMENTATIONS.md#ci-coverage),
+not a fixed implementation count or an official-cohort-only list. Axum's job runs
 its acceptance, focused shared contract and then this diagnostic as required
 steps, with read-only repository permissions. The existing `required` aggregate
 rejects any failed, cancelled or skipped matrix job. The Axum job additionally

@@ -50,4 +50,9 @@ The gates cover unit behavior, dependency/hash locks, real PostgreSQL and Docker
 
 ## Publication boundary
 
-Python / Flask is registered and CI-covered, but Issue #32 does not activate a new official benchmark cohort. `active_cohort` remains the frozen `four-stack-v1`; expanded-cohort activation and new official measurements are separate work.
+See the shared [registration, CI and cohort status](IMPLEMENTATIONS.md#registered-and-measured-implementations)
+for Flask's place in the comparison. The production profile above describes
+current main, not the server used in older measurements. The
+[published-result boundary](IMPLEMENTATIONS.md#published-results-and-runtime-changes)
+distinguishes the recorded Waitress result from the current Gunicorn runtime;
+changing the runtime does not update or relabel published measurements.
