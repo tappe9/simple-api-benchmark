@@ -44,7 +44,7 @@ BASELINE_VERSIONS = {
     "python-flask": {
         "python": "3.14.7",
         "flask": "3.1.3",
-        "waitress": "3.0.2",
+        "gunicorn": "26.0.0",
         "psycopg": "3.3.5",
         "psycopg-binary": "3.3.5",
         "psycopg-pool": "3.3.1",
