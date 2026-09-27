@@ -25,7 +25,7 @@ from .install_oha import SHA256, VERSION, platform_asset
 from .java_versions import JAVA_VERSION
 from .java_versions import pinned_versions as java_pinned_versions
 from .process import ROOT, execute
-from .registry import active_members, implementation, implementation_ids
+from .registry import active_members, implementation, implementation_ids, validate_version_fields
 from .results import BenchmarkFailure, require, strict_json
 
 
@@ -224,8 +224,6 @@ def registered_pinned_versions() -> dict:
         "version extractors must cover registered implementations",
     )
     for identifier, values in versions.items():
-        from .registry import validate_version_fields
-
         validate_version_fields(identifier, values)
         require(
             all(
