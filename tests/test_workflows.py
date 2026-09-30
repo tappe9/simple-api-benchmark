@@ -22,10 +22,11 @@ def load(name):
 
 
 class WorkflowTests(unittest.TestCase):
-    def test_only_four_permanent_workflows_use_pinned_actions_and_safe_checkouts(self):
+    def test_only_approved_workflows_use_pinned_actions_and_safe_checkouts(self):
         paths = list((ROOT / ".github/workflows").glob("*.yml"))
         self.assertEqual(
-            {p.name for p in paths}, {"ci.yml", "benchmark.yml", "pages.yml", "pages-deploy.yml"}
+            {p.name for p in paths},
+            {"ci.yml", "benchmark.yml", "jvm-diagnostic.yml", "pages.yml", "pages-deploy.yml"},
         )
         for path in paths:
             workflow = load(path.name)
@@ -43,6 +44,62 @@ class WorkflowTests(unittest.TestCase):
                         if step["uses"].startswith("actions/checkout@"):
                             self.assertEqual(step["with"]["persist-credentials"], "false")
                     self.assertNotIn("${{", step.get("run", ""), "pass expression data through env")
+
+    def test_jvm_diagnostic_is_manual_trusted_read_only_and_sequential(self):
+        workflow = load("jvm-diagnostic.yml")
+        self.assertEqual(workflow.get("on"), {"workflow_dispatch": ""})
+        self.assertEqual(workflow["permissions"], {"contents": "read"})
+        self.assertEqual(
+            workflow["concurrency"], {"group": "jvm-diagnostic", "cancel-in-progress": "false"}
+        )
+        self.assertEqual(set(workflow["jobs"]), {"diagnose"})
+        job = workflow["jobs"]["diagnose"]
+        self.assertEqual(
+            job["if"],
+            "github.repository == 'tappe9/simple-api-benchmark' && "
+            "github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && "
+            "github.event_name == 'workflow_dispatch'",
+        )
+        self.assertEqual(job["runs-on"], "ubuntu-24.04")
+        self.assertEqual(job["timeout-minutes"], "120")
+        self.assertNotIn("strategy", job)
+        self.assertNotIn("permissions", job)
+        self.assertNotIn("continue-on-error", job)
+        self.assertEqual(job["env"], {"PYTHONDONTWRITEBYTECODE": "1"})
+
+    def test_jvm_diagnostic_actions_match_existing_pins_and_upload_failures(self):
+        workflow = load("jvm-diagnostic.yml")
+        self.assertIn("jobs", workflow, "the manual JVM diagnostic workflow is required")
+        steps = workflow["jobs"]["diagnose"]["steps"]
+        self.assertEqual(len(steps), 4)
+        official_steps = load("benchmark.yml")["jobs"]["measure"]["steps"]
+        self.assertEqual(steps[0]["uses"], official_steps[0]["uses"])
+        self.assertEqual(steps[0]["with"], official_steps[0]["with"])
+        self.assertEqual(steps[1]["uses"], official_steps[1]["uses"])
+        self.assertEqual(steps[1]["with"], official_steps[1]["with"])
+        for step in steps[:2]:
+            self.assertGreater(int(step["timeout-minutes"]), 0)
+            self.assertLessEqual(int(step["timeout-minutes"]), 3)
+        self.assertEqual(
+            steps[2]["run"],
+            "timeout --signal=TERM --kill-after=120s 104m python -m benchmark.jvm_diagnostic",
+        )
+        self.assertNotIn("if", steps[2])
+        self.assertEqual(steps[3]["if"], "always()")
+        self.assertEqual(steps[3]["uses"], official_steps[3]["uses"])
+        self.assertEqual(steps[3]["timeout-minutes"], "7")
+        self.assertEqual(
+            steps[3]["with"],
+            {
+                "name": "jvm-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}",
+                "path": ".cache/jvm-diagnostic/",
+                "include-hidden-files": "true",
+                "retention-days": "90",
+                "if-no-files-found": "error",
+            },
+        )
+        for step in steps:
+            self.assertNotIn("continue-on-error", step)
 
     def test_pr_ci_is_split_read_only_and_never_publishes(self):
         ci = load("ci.yml")
