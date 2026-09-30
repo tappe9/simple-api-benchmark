@@ -8,6 +8,7 @@ from . import registry
 from .contract_test import load_cases
 from .definition import PROFILE
 from .healthcheck import CONTAINER_HEALTHCHECK, validate_policy
+from .java_versions import JAVA_VERSION
 from .results import (
     number,
     object_fields,
@@ -183,9 +184,15 @@ def validate_report(report: dict, *, expected_context: dict | None = None) -> No
         keys = registry.implementation(implementation)["version_fields"]
         values = versions[implementation]
         require(type(values) is dict and set(keys) <= set(values), "missing stack versions")
-        for value in values.values():
+        for key, value in values.items():
+            # Only the Java runtime uses an exact build; dependencies stay triplets.
+            pattern = (
+                JAVA_VERSION
+                if implementation == "java-spring-boot" and key == "java"
+                else r"[0-9]+\.[0-9]+\.[0-9]+"
+            )
             require(
-                type(value) is str and re.fullmatch(r"\d+\.\d+\.\d+", value) is not None,
+                type(value) is str and re.fullmatch(pattern, value) is not None,
                 "invalid stack version",
             )
     backends = report["implementations"]

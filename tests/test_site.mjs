@@ -366,3 +366,68 @@ print(json.dumps({"legacy": legacy, "expanded": expanded}))
 
 // Exercise real cohort IDs without substituting the production viewer registry.
 registerEightStackTests();
+
+test('shared version conformance and exact Java rendering use only a synthetic trusted cohort', async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'sab-java-version-fixture-'));
+  try {
+    await cp(new URL('../site/app.mjs', import.meta.url), join(temporary, 'app.mjs'));
+    const source = `
+import json, sys
+from pathlib import Path
+from unittest.mock import patch
+sys.path.insert(0, 'tests')
+from registry_fixtures import java_registry, java_report
+from test_benchmark_publication import synthetic_report
+from benchmark import registry
+root = Path(sys.argv[1])
+legacy = synthetic_report(root)
+data = java_registry()
+with patch.object(registry, 'REGISTRY', data):
+    (root / 'registry.mjs').write_text(registry.generated_files()['site/registry.mjs'])
+print(json.dumps({'legacy': legacy, 'java': java_report(legacy)}))
+`;
+    const fixtures = JSON.parse(execFileSync(process.env.PYTHON || 'python3', ['-c', source, temporary], {
+      cwd: fileURLToPath(new URL('..', import.meta.url)), encoding: 'utf8',
+      env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+    }));
+    const { viewModel, renderReport } = await import(pathToFileURL(join(temporary, 'app.mjs')).href);
+    const cases = JSON.parse(await readFile(new URL('./fixtures/stack-versions.json', import.meta.url), 'utf8'));
+    for (const entry of cases) {
+      const report = structuredClone(entry.implementation === 'java-spring-boot' ? fixtures.java : fixtures.legacy);
+      report.metadata.versions[entry.implementation][entry.field] = entry.value;
+      const before = structuredClone(report);
+      if (entry.valid) {
+        assert.doesNotThrow(() => viewModel(report), entry.name);
+        assert.ok(renderReport(report).includes(entry.value), entry.name);
+      } else {
+        assert.throws(() => viewModel(report), undefined, entry.name);
+      }
+      assert.deepEqual(report, before, entry.name);
+    }
+    const model = viewModel(fixtures.java);
+    assert.equal(model.versions['java-spring-boot'].java, '25.0.4.1+1');
+    assert.equal(model.rows.length, 3);
+    const escaped = structuredClone(fixtures.java);
+    escaped.metadata.versions['java-spring-boot']['<script>extra</script>'] = '1.2.3';
+    const html = renderReport(escaped);
+    assert.ok(html.includes('25.0.4.1+1'));
+    assert.ok(html.includes('&lt;script&gt;extra&lt;/script&gt;'));
+    assert.ok(!html.includes('<script>extra'));
+    const production = await subject();
+    assert.throws(() => production.viewModel(fixtures.java));
+    for (const change of [
+      r => { r.mode = 'smoke'; }, r => { r.official = false; }, r => { r.status = 'failed'; },
+      r => { r.benchmark.cohort = 'unknown-v1'; }, r => { r.benchmark.definition = 'unknown-v1'; },
+      r => { r.implementations.pop(); }, r => { r.implementations[0].endpoints.pop(); },
+      r => { r.implementations[0].endpoints[0].runs.pop(); },
+      r => { delete r.metadata.versions['java-spring-boot'].java; },
+      r => { delete r.metadata.versions['java-spring-boot']['spring-boot']; },
+    ]) {
+      const report = structuredClone(fixtures.java);
+      change(report);
+      assert.throws(() => viewModel(report));
+    }
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});

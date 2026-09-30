@@ -119,6 +119,15 @@ function validateMeasuredRun(run, expectedRun) {
   return { run: run.run, rps, mean, memory: memoryBytes / 1048576 };
 }
 
+function validStackVersion(id, key, value) {
+  // Match java_versions.py's exact runtime build, never arbitrary dependency suffixes.
+  const pattern = id === "java-spring-boot" && key === "java"
+    ? /^[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?\+[0-9]+$/
+    : /^[0-9]+\.[0-9]+\.[0-9]+$/;
+  // JavaScript's $ also matches before a final newline; require the whole string.
+  return typeof value === "string" && pattern.exec(value)?.[0] === value;
+}
+
 function validateReport(report) {
   object(report, "report");
   const cohort = reportCohort(report);
@@ -148,9 +157,9 @@ function validateReport(report) {
     assert(id === members[backendIndex], "implementation identity/order mismatch");
     const versionSet = object(versions[id], `versions for ${id}`);
     for (const key of STACKS[id].version_fields) {
-      assert(typeof versionSet[key] === "string" && /^\d+\.\d+\.\d+$/.test(versionSet[key]), `invalid ${id} ${key} version`);
+      assert(Object.hasOwn(versionSet, key) && validStackVersion(id, key, versionSet[key]), `invalid ${id} ${key} version`);
     }
-    assert(Object.values(versionSet).every((value) => typeof value === "string" && /^\d+\.\d+\.\d+$/.test(value)), "invalid stack version");
+    assert(Object.entries(versionSet).every(([key, value]) => validStackVersion(id, key, value)), "invalid stack version");
     assert(Array.isArray(backend.endpoints) && backend.endpoints.length === ENDPOINTS.length, "three endpoints required");
     backend.endpoints.forEach((entry, endpointIndex) => {
       object(entry, "endpoint result");
