@@ -127,3 +127,6 @@ five-second warm-up or change existing eight-stack results. Any justified real
 official run, automatic audited publication and Pages update still require
 explicit authorization. Publication/protection redesign and Issue #59's live
 producer-to-Pages verification remain separate work.
+
+The bounded [JVM warm-up diagnostic](JVM-DIAGNOSTIC.md) records the predeclared
+Issue #73 experiment, interpretation rules and remaining decision boundary.
