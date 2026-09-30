@@ -87,3 +87,29 @@ def real_eight_report(report, root=None):
                 target = directory / path.name.replace(original["implementation"], identifier, 1)
                 target.write_bytes(path.read_bytes())
     return result
+
+
+def java_registry():
+    """Trust a Java-only cohort in isolated tests, never in production projections."""
+    from benchmark.registry import load_registry
+
+    result = copy.deepcopy(load_registry())
+    result["cohorts"]["synthetic-java-v1"] = {
+        "definition": "simple-api-v1",
+        "members": ["java-spring-boot"],
+    }
+    return result
+
+
+def java_report(report):
+    """Use synthetic measurements and actual extracted pins, without publication inputs."""
+    from benchmark.java_versions import pinned_versions
+
+    result = explicit_report(report, "synthetic-java-v1")
+    backend = copy.deepcopy(result["implementations"][0])
+    backend["implementation"] = "java-spring-boot"
+    result["implementations"] = [backend]
+    result["metadata"]["versions"] = {
+        "java-spring-boot": pinned_versions(ROOT / "apps/java-spring-boot")
+    }
+    return result

@@ -228,6 +228,20 @@ implementations, while official measurement selects the active cohort. Local or
 partial data cannot become a complete official result by setting a flag or
 supplying a smaller list. No partial benchmark publication mode is introduced.
 
+Stack version values are preserved as strings, never normalized or truncated.
+The `java-spring-boot` runtime field `java` follows the extractor's exact-build
+contract: three or four dot-separated ASCII digit components, then `+` and an
+ASCII digit build number (for example, `25.0.4.1+1` or `25.0.4+1`). The build is
+mandatory. This intentionally narrow release format excludes early-access/vendor
+suffixes, whitespace and control characters; it is not a general Java version
+parser. Existing numeric spelling, including leading zeroes, is preserved.
+All other required and additional version fields keep the three-component ASCII
+numeric contract, including Java dependencies. A `java` key on a different stack
+does not enable the Java exception. Both validators exercise the same valid and
+invalid cases in `tests/fixtures/stack-versions.json`. Java-inclusive validation
+and rendering tests use only a synthetic trusted cohort, which production rejects;
+this support neither admits Java to an official cohort nor publishes a result.
+
 JavaScript performs presentation validation, not publication authorization. It
 renders the report's known cohort rather than the current active list. Missing or
 invalid results remain empty/unavailable, never zero. The result JSON link stays
