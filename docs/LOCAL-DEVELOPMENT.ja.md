@@ -219,4 +219,3 @@ SHA256とversionを固定したoha 1.16.0を検証・導入し、APIを1つず�
 focused testsは`make test-benchmark`、短縮診断は`make benchmark-smoke`です。
 短縮診断は`latest.json`を更新しません。必要環境、単位、結果形式、期限、メモリサンプリングの制約は
 [実行・結果形式ガイド](BENCHMARK.md)を参照してください。
-

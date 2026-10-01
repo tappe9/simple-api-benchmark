@@ -225,4 +225,3 @@ is a local result, not an official publication.
 Use `make test-benchmark` for focused tests or `make benchmark-smoke` for a short
 diagnostic that never replaces `latest.json`. See [the benchmark guide](BENCHMARK.md)
 for requirements, exact units, result schema, deadlines and memory-sampling limitations.
-
