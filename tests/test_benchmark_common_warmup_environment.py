@@ -273,7 +273,7 @@ class CommonWarmupEnvironmentTests(unittest.TestCase):
         self.assertAlmostEqual(second["gap_since_previous_window_seconds"], expected_gap)
         expected_age = (
             datetime.fromisoformat(first["started_at"])
-            - datetime.fromisoformat(context["container_started_at"])
+            - datetime.fromisoformat(context["container_started_at"].replace("Z", "+00:00"))
         ).total_seconds()
         self.assertAlmostEqual(first["process_age_seconds_at_start"], expected_age)
         self.assertGreaterEqual(
