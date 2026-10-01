@@ -26,7 +26,14 @@ class WorkflowTests(unittest.TestCase):
         paths = list((ROOT / ".github/workflows").glob("*.yml"))
         self.assertEqual(
             {p.name for p in paths},
-            {"ci.yml", "benchmark.yml", "jvm-diagnostic.yml", "pages.yml", "pages-deploy.yml"},
+            {
+                "ci.yml",
+                "benchmark.yml",
+                "jvm-diagnostic.yml",
+                "common-warmup-screen.yml",
+                "pages.yml",
+                "pages-deploy.yml",
+            },
         )
         for path in paths:
             workflow = load(path.name)
@@ -93,6 +100,44 @@ class WorkflowTests(unittest.TestCase):
             {
                 "name": "jvm-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}",
                 "path": ".cache/jvm-diagnostic/",
+                "include-hidden-files": "true",
+                "retention-days": "90",
+                "if-no-files-found": "error",
+            },
+        )
+        for step in steps:
+            self.assertNotIn("continue-on-error", step)
+
+    def test_common_warmup_screen_is_separate_manual_bounded_and_nonpublishing(self):
+        workflow = load("common-warmup-screen.yml")
+        self.assertEqual(workflow.get("on"), {"workflow_dispatch": ""})
+        self.assertEqual(workflow["permissions"], {"contents": "read"})
+        self.assertEqual(
+            workflow["concurrency"],
+            {"group": "common-warmup-screen", "cancel-in-progress": "false"},
+        )
+        self.assertEqual(set(workflow["jobs"]), {"screen"})
+        job = workflow["jobs"]["screen"]
+        previous = load("jvm-diagnostic.yml")["jobs"]["diagnose"]
+        self.assertEqual(job["if"], previous["if"])
+        self.assertEqual(job["timeout-minutes"], "120")
+        self.assertNotIn("strategy", job)
+        self.assertNotIn("permissions", job)
+        self.assertEqual(job["env"], {"PYTHONDONTWRITEBYTECODE": "1"})
+        steps = job["steps"]
+        self.assertEqual(len(steps), 4)
+        self.assertEqual(steps[:2], previous["steps"][:2])
+        self.assertEqual(
+            steps[2]["run"],
+            "timeout --signal=TERM --kill-after=120s 104m python -m benchmark.common_warmup_screen",
+        )
+        self.assertEqual(steps[3]["if"], "always()")
+        self.assertEqual(steps[3]["timeout-minutes"], "7")
+        self.assertEqual(
+            steps[3]["with"],
+            {
+                "name": "common-warmup-screen-${{ github.run_id }}-${{ github.run_attempt }}",
+                "path": ".cache/common-warmup-screen/",
                 "include-hidden-files": "true",
                 "retention-days": "90",
                 "if-no-files-found": "error",
