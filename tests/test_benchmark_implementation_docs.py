@@ -95,6 +95,14 @@ class ImplementationDocumentationTests(unittest.TestCase):
             flask, "IMPLEMENTATIONS.md#published-results-and-runtime-changes"
         )
 
+    def test_publication_guidance_does_not_freeze_a_historical_report_as_latest(self):
+        boundary = section(self.canonical, "Published results and runtime changes")
+        self.assertIn("latest verified publication", boundary)
+        self.assertIn("../results/latest.json", boundary)
+        self.assertIn("historical", boundary)
+        self.assertNotIn("It is still the", boundary)
+        self.assertNotIn("until then", boundary)
+
     def test_java_boundary_does_not_claim_official_results(self):
         java = " ".join(section(self.canonical, "Java registration boundary (#67)").split())
         self.assertIn("`java-spring-boot`", java)

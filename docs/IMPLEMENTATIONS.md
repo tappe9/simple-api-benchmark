@@ -69,20 +69,22 @@ success proves those checks passed, not official measured performance. See the
 
 ### Published results and runtime changes
 
-The [verified report published on 2026-09-15](../results/history/2026-09-15T04-14-09Z-34925168324-1.json)
-contains Axum and Flask, with Flask measured using Waitress 3.0.2. It is still the
-[latest published result](../results/latest.json) at this documentation update.
-The report's `metadata.source_commit`, runtime versions and conditions describe
-that measurement, not whichever code is now on main.
+The [latest verified publication](../results/latest.json) is identified by the
+[generated README results](../README.md#results) and [Japanese results](../README.ja.md#結果).
+Use that report's `metadata.source_commit`, runtime versions and conditions,
+not whichever code is now on main, to identify what was actually measured.
 
+The [historical report published on 2026-09-15](../results/history/2026-09-15T04-14-09Z-34925168324-1.json)
+contains Axum and Flask, with Flask measured using Waitress 3.0.2.
+That dated Waitress result is not a Gunicorn performance measurement.
 Current Flask uses Gunicorn with one `gthread` request worker and one request
 thread, plus its arbiter process; see the [Flask runtime guide](FLASK.md).
-The recorded Waitress result is not a Gunicorn performance measurement.
-The runtime change in PR #77 did not rerun the official benchmark. Never replace
-recorded server/version metadata with current pins, relabel old measurements or
-infer a performance change from CI. A new official result requires a separately
-authorized complete run and validated publication. README and Pages continue to
-display the selected report's measured configuration until then.
+The runtime change in PR #77 did not itself rerun the official benchmark; later
+publications record their own measured server and version. Never replace recorded
+metadata with current pins, relabel old measurements or infer a performance change
+from CI. A new official result requires a separately authorized complete run and
+validated publication. README and Pages display the selected report's measured
+configuration, while historical reports retain their original configuration.
 
 ### Java registration boundary (#67)
 
